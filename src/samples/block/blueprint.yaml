@@ -1,0 +1,58 @@
+docVersion: v1
+id: "database.postgres.schema"
+version: "1.0.0"
+name: "PostgreSQL Schema Manager"
+owner: "data-team"
+
+environment:
+  required:
+    - POSTGRES_HOST
+    - POSTGRES_PORT
+    - POSTGRES_USER
+    - POSTGRES_PASSWORD
+  optional:
+    - POSTGRES_SSL:
+        default: "true"
+    - POSTGRES_DB:
+        default: "postgres"
+
+
+documentation:
+  - name: "schema"
+    path: "schema.md"
+    description: "Describing postgres Schema and its tables"
+
+
+specification:
+    - name: "schema_change"
+      description: "Schema change instructions"
+      prompt: "schema_change.md"
+
+
+
+
+actions:
+  setup:
+    prompt: "setup.md"
+    steps:
+      - operation: "pre_setup/validate_connection.py"
+        name: validate_connection
+      - operation: "setup/create_schema.py"
+        name: create_schema
+  destroy:
+    prompt: "destroy.md"
+    steps:
+      - operation: "destroy/drop_schema.py"
+        name: drop_schema
+      
+
+
+workspace:
+  files:
+    - path: "schema.sql" # schema file managed by agent
+      description: "SQL file containing schema"
+       
+
+  
+
+

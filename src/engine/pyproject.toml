@@ -1,0 +1,25 @@
+[project]
+name = "engine"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "Utkarsh Kanwat", email = "utkarshkanwat@gmail.com"},
+]
+
+
+
+dependencies = ["GitPython>=3.1.44", "pydantic>=2.10.5", "whoosh>=2.7.4", "fastapi>=0.115.6", "uvicorn>=0.34.0", "python-multipart>=0.0.20", "networkx>=3.4.2", "PyYAML>=6.0.2"]
+requires-python = "==3.12.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+[tool.pdm]
+distribution = false
+package-dir = "src"   # Add this line if not present
+
+[tool.pdm.scripts]
+start =  {env = {"PYTHONPATH" = "src"}, cmd = "python src/engine/main.py"}
+test = "pytest tests/"
+lint = "ruff check src/ tests/"
+format = "black src/ tests/"
+dev = {composite = ["format", "lint", "test"]}

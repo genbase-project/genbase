@@ -26,6 +26,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       theme="vs-dark"
       onChange={handleEditorChange}
       options={{
+        readOnly: true,
         minimap: { enabled: false },
         fontSize: 14,
         scrollBeyondLastLine: false,

@@ -57,7 +57,7 @@ interface Message {
   currentVariation: number;
 }
 
-const BottomPanel = () => {
+const BottomPanel = ({selectedModule}: any) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -216,22 +216,22 @@ const BottomPanel = () => {
   const visibleMessages = getVisibleMessages();
 
   return (
-    <div className="bg-background border-t border-gray-800 h-full flex flex-col">
+    <div className="h-full flex flex-col border-t text-black">
       <ScrollArea className="flex-1 px-4 py-4">
         {visibleMessages.map((message) => (
           <div
             key={message.id}
             className={`group mb-6 ${
-              message.role === 'assistant' ? 'bg-background-secondary' : ''
+              message.role === 'assistant' ? 'bg-slate-50' : ''
             } rounded-lg`}
           >
-      <div className="p-4">
-  <div className="text-sm text-gray-200">
-    <Markdown options={markdownOptions}>
-      {message.variations[message.currentVariation].text}
-    </Markdown>
-  </div>
-</div>
+            <div className="p-4">
+              <div className="text-sm">
+                <Markdown options={markdownOptions}>
+                  {message.variations[message.currentVariation].text}
+                </Markdown>
+              </div>
+            </div>
 
             <div className="flex items-center gap-2 px-4 pb-2 opacity-0 group-hover:opacity-100 transition-opacity">
               {message.variations.length > 1 && (
@@ -244,7 +244,7 @@ const BottomPanel = () => {
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs ">
                     {message.currentVariation + 1} / {message.variations.length}
                   </span>
                   <Button 
@@ -294,14 +294,14 @@ const BottomPanel = () => {
         ))}
       </ScrollArea>
       
-      <div className="p-4 border-t border-gray-800">
+      <div className="p-4 border-t">
         <div className="max-w-3xl mx-auto flex gap-2">
           <Input
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSend(inputValue, editingMessageId)}
             placeholder={editingMessageId ? "Edit your message..." : "Send a message..."}
-            className="flex-1 bg-background-secondary border-gray-800"
+            className="flex-1"
           />
           <Button 
             onClick={() => handleSend(inputValue, editingMessageId)}

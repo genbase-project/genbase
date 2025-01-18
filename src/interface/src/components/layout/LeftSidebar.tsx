@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Tree, NodeRendererProps } from 'react-arborist';
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronDown, Folder, File, Plus, FolderPlus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -15,306 +13,294 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Module, MoveParams, TreeNode, TreeView } from '../TreeView';
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from '@/hooks/use-toast';
+import { TreeView, Module, RuntimeModule, TreeNode, MoveParams } from '../TreeView';
+import { useRuntimeModuleStore } from '../../store';
+import { 
+  DEFAULT_PROJECT_ID, 
+  buildTreeFromModules, 
+  getNewPath
+} from '../../lib/tree';
 
-
-
-interface SidebarProps {
-  initialTree?: TreeNode[];
+interface LeftSidebarProps {
   initialModules?: Module[];
 }
 
+const API_BASE = 'http://localhost:8000';
 
-// Default modules for testing if none provided
-const DEFAULT_MODULES: Module[] = [
-  {
-    name: "Module 1",
-    version: "1.0.0",
-    created_at: "2023-01-01",
-    size: 1024,
-    owner: "John Doe"
-  },
-  {
-    name: "Module 2",
-    version: "2.0.0",
-    created_at: "2023-01-02",
-    size: 2048,
-    owner: "Jane Doe"
-  },
-  {
-    name: "Module 3",
-    version: "1.1.0",
-    created_at: "2023-01-03",
-    size: 3072,
-    owner: "Jim Smith"
-  }
-];
-
-// Default tree structure for testing if none provided
-const DEFAULT_TREE: TreeNode[] = [
-  {
-    id: "folder-1",
-    name: "Folder 1",
-    isFolder: true,
-    children: [
-      {
-        id: "item-1",
-        name: "Module 1",
-        module: DEFAULT_MODULES[0]
-      }
-    ]
-  },
-  {
-    id: "folder-2",
-    name: "Folder 2",
-    isFolder: true,
-    children: []
-  }
-];
-
-const Sidebar: React.FC<SidebarProps> = ({ 
-  initialTree = DEFAULT_TREE,
-  initialModules = DEFAULT_MODULES 
-}) => {
-  const [data, setData] = useState<TreeNode[]>(initialTree);
+const LeftSidebar: React.FC<LeftSidebarProps> = ({ initialModules = [] }) => {
+  // Local state
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [modules, setModules] = useState<Module[]>(initialModules);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  const [selectedModule, setSelectedModule] = useState<Module | null>(null);
   const [currentParentId, setCurrentParentId] = useState<string | null>(null);
-  
+  const [envVars, setEnvVars] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Global state from Zustand
+  const { selectedModuleId, setSelectedModule: setGlobalSelectedModule } = useRuntimeModuleStore();
+
+  // Toast hook
+  const { toast } = useToast();
+
+  // Fetch modules and runtime modules on mount
+  useEffect(() => {
+    Promise.all([
+      fetchModules(),
+      fetchRuntimeModules()
+    ]).finally(() => setIsLoading(false));
+  }, []);
 
   const fetchModules = async () => {
     try {
-      const response = await fetch('http://localhost:8000/module');
+      const response = await fetch(`${API_BASE}/module`);
+      if (!response.ok) throw new Error('Failed to fetch modules');
       const result = await response.json();
       setModules(result.modules);
     } catch (error) {
       console.error('Error fetching modules:', error);
-      // Keep using initial modules if fetch fails
-      setModules(initialModules);
-    }
-  };
-
-  const handleModuleClick = (module: Module) => {
-    console.log('Selected module:', module);
-  };
-
-  const createFolder = (parentId: string | null) => {
-    const newFolder: TreeNode = {
-      id: `folder-${Date.now()}`,
-      name: 'New Folder',
-      children: [],
-      isFolder: true
-    };
-
-    if (parentId === null) {
-      setData([...data, newFolder]);
-    } else {
-      setData(prev => {
-        const updateNodes = (nodes: TreeNode[]): TreeNode[] => {
-          return nodes.map(node => {
-            if (node.id === parentId) {
-              return {
-                ...node,
-                children: [...(node.children || []), newFolder]
-              };
-            }
-            if (node.children) {
-              return {
-                ...node,
-                children: updateNodes(node.children)
-              };
-            }
-            return node;
-          });
-        };
-        return updateNodes(prev);
+      toast({
+        title: "Error",
+        description: "Failed to fetch available modules",
+        variant: "destructive"
       });
     }
   };
 
+  const fetchRuntimeModules = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/runtime/project/${DEFAULT_PROJECT_ID}/modules`);
+      if (!response.ok) throw new Error('Failed to fetch runtime modules');
+      const runtimeModules: RuntimeModule[] = await response.json();
+      setTreeData(buildTreeFromModules(runtimeModules));
+    } catch (error) {
+      console.error('Error fetching runtime modules:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch runtime modules",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleModuleClick = (runtimeModule: RuntimeModule) => {
+    setGlobalSelectedModule(runtimeModule);
+  };
+
   const handleCreateModule = (parentId: string | null) => {
-
-
-    fetchModules();
     setCurrentParentId(parentId);
     setIsDialogOpen(true);
   };
 
-  const createItem = (parentId: string | null, selectedModule: string) => {
-    const module = modules.find(m => m.name === selectedModule);
-    if (!module) return;
-
-    const newNode: TreeNode = {
-      id: `item-${Date.now()}`,
-      name: module.name,
-      module: module,
-      isFolder: false
-    };
-
-    if (parentId === null) {
-      setData([...data, newNode]);
-    } else {
-      setData(prev => {
-        const updateNodes = (nodes: TreeNode[]): TreeNode[] => {
-          return nodes.map(node => {
-            if (node.id === parentId) {
-              return {
-                ...node,
-                children: [...(node.children || []), newNode]
-              };
-            }
-            if (node.children) {
-              return {
-                ...node,
-                children: updateNodes(node.children)
-              };
-            }
-            return node;
-          });
-        };
-        return updateNodes(prev);
+  const createRuntimeModule = async (
+    moduleId: string,
+    version: string,
+    owner: string,
+    envVars: Record<string, string>,
+    path: string
+  ) => {
+    try {
+      const response = await fetch(`${API_BASE}/runtime/module`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          project_id: DEFAULT_PROJECT_ID,
+          module_id: moduleId,
+          version: version,
+          owner: owner,
+          env_vars: envVars,
+          path: path
+        }),
       });
+
+      if (!response.ok) throw new Error('Failed to create runtime module');
+      
+      const result = await response.json();
+      toast({
+        title: "Success",
+        description: "Runtime module created successfully"
+      });
+      return result;
+    } catch (error) {
+      console.error('Error creating runtime module:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create runtime module",
+        variant: "destructive"
+      });
+      return null;
     }
   };
 
-  const handleMove = ({ dragIds, parentId, index }: MoveParams) => {
-    setData(prev => {
-      const findNodeById = (nodes: TreeNode[], id: string): TreeNode | null => {
-        for (const node of nodes) {
-          if (node.id === id) return node;
-          if (node.children) {
-            const found = findNodeById(node.children, id);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
+  const handleCreateConfirm = async () => {
+    if (!selectedModule) return;
 
-      const removeNodeById = (nodes: TreeNode[], id: string): [TreeNode[], TreeNode | null] => {
-        let removedNode: TreeNode | null = null;
-        
-        const filterNodes = (nodes: TreeNode[]): TreeNode[] => {
-          return nodes.reduce((acc: TreeNode[], node) => {
-            if (node.id === id) {
-              removedNode = node;
-              return acc;
-            }
-            
-            if (node.children) {
-              const filteredChildren = filterNodes(node.children);
-              if (filteredChildren.length !== node.children.length || removedNode) {
-                acc.push({ ...node, children: filteredChildren });
-              } else {
-                acc.push(node);
-              }
-            } else {
-              acc.push(node);
-            }
-            return acc;
-          }, []);
-        };
+    try {
+      // Get the path based on current folder structure
+      const path = currentParentId ? 
+        getNewPath(treeData, '', currentParentId, 0) : 
+        'root';
 
-        const updatedNodes = filterNodes(nodes);
-        return [updatedNodes, removedNode];
-      };
+      const runtimeModule = await createRuntimeModule(
+        selectedModule.module_id,
+        selectedModule.version,
+        selectedModule.owner,
+        envVars,
+        path
+      );
 
-      const insertNodesAt = (nodes: TreeNode[], targetParentId: string | null, targetIndex: number, nodesToInsert: TreeNode[]): TreeNode[] => {
-        if (targetParentId === null) {
-          const result = [...nodes];
-          result.splice(targetIndex, 0, ...nodesToInsert);
-          return result;
-        }
-
-        return nodes.map(node => {
-          if (node.id === targetParentId) {
-            const children = [...(node.children || [])];
-            children.splice(targetIndex, 0, ...nodesToInsert);
-            return { ...node, children };
-          }
-          if (node.children) {
-            return {
-              ...node,
-              children: insertNodesAt(node.children, targetParentId, targetIndex, nodesToInsert)
-            };
-          }
-          return node;
-        });
-      };
-
-      const isDescendant = (nodeId: string, potentialAncestorId: string): boolean => {
-        const node = findNodeById(prev, potentialAncestorId);
-        if (!node || !node.children) return false;
-
-        return node.children.some(child => 
-          child.id === nodeId || (child.children && isDescendant(nodeId, child.id))
-        );
-      };
-
-      if (parentId && dragIds.some(dragId => isDescendant(parentId, dragId))) {
-        return prev;
+      if (runtimeModule) {
+        // Refresh the tree to show the new module
+        await fetchRuntimeModules();
       }
+    } finally {
+      setIsDialogOpen(false);
+      setSelectedModule(null);
+      setEnvVars({});
+    }
+  };
 
-      let intermediate = [...prev];
-      const nodesToMove: TreeNode[] = [];
+  const updateModulePath = async (runtimeId: string, newPath: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/runtime/module/${runtimeId}/path`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          project_id: DEFAULT_PROJECT_ID,
+          path: newPath
+        }),
+      });
 
+      if (!response.ok) throw new Error('Failed to update module path');
+
+      toast({
+        title: "Success",
+        description: "Module path updated successfully"
+      });
+    } catch (error) {
+      console.error('Error updating module path:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update module path",
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
+
+  const handleMove = async (params: MoveParams) => {
+    const { dragIds, parentId, index } = params;
+
+    try {
+      // Calculate new path based on target location
+      const newPath = getNewPath(treeData, dragIds[0], parentId, index);
+
+      // Update the path for each dragged module
       for (const dragId of dragIds) {
-        const [updatedNodes, removedNode] = removeNodeById(intermediate, dragId);
-        if (removedNode) {
-          nodesToMove.push(removedNode);
-          intermediate = updatedNodes;
+        if (dragId.startsWith('runtime-')) {
+          const runtimeId = dragId.replace('runtime-', '');
+          await updateModulePath(runtimeId, newPath);
         }
       }
 
-      return insertNodesAt(intermediate, parentId, index, nodesToMove);
-    });
-  };
-
-  const handleCreateConfirm = () => {
-    if (selectedModule) {
-      createItem(currentParentId, selectedModule);
+      // Refresh the tree to show updated structure
+      await fetchRuntimeModules();
+    } catch (error) {
+      // If there's an error, refresh the tree to restore the original state
+      await fetchRuntimeModules();
     }
-    setIsDialogOpen(false);
-    setSelectedModule(null);
   };
 
   return (
     <>
-     
-
       <TreeView
-        data={data}
+        data={treeData}
         modules={modules}
         allowDrag={true}
-        onCreateFolder={createFolder}
         onCreateModule={handleCreateModule}
         onModuleClick={handleModuleClick}
         onMove={handleMove}
+        isLoading={isLoading}
+        selectedModuleId={selectedModuleId}
       />
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Select Module</DialogTitle>
+            <DialogTitle>Create Runtime Module Instance</DialogTitle>
           </DialogHeader>
-          <Select value={selectedModule || ''} onValueChange={setSelectedModule}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a module" />
-            </SelectTrigger>
-            <SelectContent>
-              {modules.map((module) => (
-                <SelectItem key={module.name} value={module.name}>
-                  {module.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Select Module</Label>
+              <Select
+                value={selectedModule?.name || ''}
+                onValueChange={(value) => {
+                  const module = modules.find(m => m.name === value);
+                  setSelectedModule(module || null);
+                  if (module) {
+                    const initialEnvVars: Record<string, string> = {};
+                    module.environment.forEach((env: any) => {
+                      if (env.default !== undefined) {
+                        initialEnvVars[env.name] = String(env.default);
+                      }
+                    });
+                    setEnvVars(initialEnvVars);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a module" />
+                </SelectTrigger>
+                <SelectContent>
+                  {modules.map((module) => (
+                    <SelectItem key={module.name} value={module.name}>
+                      {module.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedModule && (
+              <div className="grid gap-4">
+                <h4 className="font-medium">Environment Variables</h4>
+                {selectedModule.environment.map((env: any) => (
+                  <div key={env.name} className="grid gap-2">
+                    <Label>
+                      {env.name}
+                      {env.optional && ' (Optional)'}
+                    </Label>
+                    <Input
+                      type="text"
+                      value={envVars[env.name] || ''}
+                      onChange={(e) => setEnvVars(prev => ({
+                        ...prev,
+                        [env.name]: e.target.value
+                      }))}
+                      placeholder={env.default !== undefined ? String(env.default) : ''}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateConfirm} disabled={!selectedModule}>
+            <Button 
+              onClick={handleCreateConfirm}
+              disabled={!selectedModule || Object.keys(envVars).length === 0}
+            >
               Create
             </Button>
           </div>
@@ -324,4 +310,4 @@ const Sidebar: React.FC<SidebarProps> = ({
   );
 };
 
-export default Sidebar;
+export default LeftSidebar;

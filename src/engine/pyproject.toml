@@ -8,7 +8,7 @@ authors = [
 
 
 
-dependencies = ["GitPython>=3.1.44", "pydantic>=2.10.5", "whoosh>=2.7.4", "fastapi>=0.115.6", "uvicorn>=0.34.0", "python-multipart>=0.0.20", "networkx>=3.4.2", "PyYAML>=6.0.2"]
+dependencies = ["GitPython>=3.1.44", "pydantic>=2.10.5", "whoosh>=2.7.4", "fastapi>=0.115.6", "uvicorn>=0.34.0", "python-multipart>=0.0.20", "networkx>=3.4.2", "PyYAML>=6.0.2", "litellm>=1.58.4", "python-dotenv>=1.0.1", "RestrictedPython>=7.4", "cloudpickle>=3.1.1"]
 requires-python = "==3.12.*"
 readme = "README.md"
 license = {text = "MIT"}

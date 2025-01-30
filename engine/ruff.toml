@@ -1,0 +1,38 @@
+# ruff.toml
+line-length = 120
+
+# Basic excludes
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pypackages__",
+    "build",
+    "dist",
+]
+
+[lint]
+# Only select specific rules you want
+select = [
+    "F401",    # unused imports
+    "F841",    # unused variables
+    "E711",    # comparisons to None should use 'is'
+    "E712",    # comparisons to True/False should use 'is'
+    "E713",    # test for membership should use 'not in'
+    "F821",    # undefined names
+]
+
+# Ignore everything else
+ignore = ["E", "F", "W", "C", "B", "I"]  # Ignore all rules by default except those explicitly selected
+
+# Don't auto-fix anything
+fixable = []  # Empty list means nothing will be auto-fixed
+unfixable = ["E", "F", "W", "C", "B", "I"]  # Prevent fixing for all rule categories
+
+[format]
+# Keep formatting minimal
+quote-style = "preserve"  # keep existing quotes
+indent-style = "tab"  # keep existing indentation
+skip-magic-trailing-comma = true
+line-ending = "auto"

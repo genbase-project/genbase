@@ -2,3 +2,12 @@
 .env
 .venv
 node_modules
+.venvs
+.venvstest
+.working
+.ruff_cache/
+.test-kits/
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class

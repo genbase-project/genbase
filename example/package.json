@@ -1,0 +1,28 @@
+{
+  "name": "example",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "firebase": "9.17.1",
+    "firebase-admin": "^11.9.0",
+    "firebaseui": "^6.1.0",
+    "next": "13.4.9",
+    "next-absolute-url": "^1.2.2",
+    "next-firebase-auth": "1.0.2",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@next/bundle-analyzer": "^13.4.9",
+    "@types/node": "^20.4.1",
+    "@types/react": "^18.2.14",
+    "eslint-config-next": "^13.4.9",
+    "typescript": "^5.1.6"
+  }
+}

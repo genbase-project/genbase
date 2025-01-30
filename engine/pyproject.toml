@@ -1,0 +1,62 @@
+[project]
+name = "engine"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "Utkarsh Kanwat", email = "utkarshkanwat@gmail.com"},
+]
+
+
+
+dependencies = ["GitPython>=3.1.44", "pydantic>=2.10.5", "whoosh>=2.7.4", "fastapi>=0.115.6", "uvicorn>=0.34.0", "python-multipart>=0.0.20", "networkx>=3.4.2", "PyYAML>=6.0.2", "litellm>=1.58.4", "python-dotenv>=1.0.1", "RestrictedPython>=7.4", "cloudpickle>=3.1.1", "SQLAlchemy>=2.0.37", "psycopg2-binary>=2.9.10", "alembic>=1.14.1", "aider-install>=0.1.3", "bigtree>=0.23.1", "sentence-transformers>=3.4.0", "faiss-cpu>=1.9.0.post1"]
+requires-python = "==3.12.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.2",
+    "pytest>=8.3.4",
+    "pdm[pytest]>=2.22.2",
+    "pytest-asyncio>=0.25.2",
+    "numpy>=2.2.2",
+]
+
+
+[pytest]
+addopts = "--cov=src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-ra -q"
+pythonpath = ["src"]
+asyncio_default_fixture_loop_scope = "function"  # Add this line
+
+
+
+[tool.coverage.run]
+source = ["engine"]
+omit = ["tests/*"]
+
+
+
+[tool.pdm]
+distribution = false
+package-dir = "src"   # Add this line if not present
+
+[tool.pdm.scripts]
+start =  {env = {"PYTHONPATH" = "src"}, cmd = "python src/engine/main.py"}
+test = "pytest tests/"
+lint = "ruff check src/ tests/"
+format = "black src/ tests/"
+dev = {composite = ["format", "lint", "test"]}
+fix = "ruff check --fix src/"
+
+migrate = "alembic upgrade head"                           # Apply all pending migrations
+makemigrations = "alembic revision --autogenerate -m"      # Generate new migration
+downgrade = "alembic downgrade -1"                         # Rollback last migration
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"

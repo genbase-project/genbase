@@ -2,8 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Allotment } from "allotment";
 import { Tree, NodeRendererProps } from 'react-arborist';
 import CodeEditor from '../components/CodeEditor';
-import { ChevronRight, ChevronDown, Box } from 'lucide-react';
+import { ChevronRight, ChevronDown, Box, RefreshCw } from 'lucide-react';
 import { Module } from '../components/TreeView';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface TreeItem {
   id: string;
@@ -21,7 +28,7 @@ interface ApiResponse {
   description: string;
 }
 
-const TABS = ['documentation', 'specification', 'workspace'];
+const RESOURCE_TYPES = ['documentation', 'specification', 'workspace'];
 
 const buildTreeFromPaths = (items: ApiResponse[]): TreeItem[] => {
   const root: { [key: string]: TreeItem } = {};
@@ -50,9 +57,7 @@ const buildTreeFromPaths = (items: ApiResponse[]): TreeItem[] => {
         }
       }
 
-      currentLevel = currentLevel[id].children ? 
-        root : 
-        {};
+      currentLevel = currentLevel[id].children ? root : {};
     });
   });
 
@@ -60,52 +65,76 @@ const buildTreeFromPaths = (items: ApiResponse[]): TreeItem[] => {
 };
 
 const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
-  const [tabStateCache, setTabStateCache] = useState<{ [moduleId: string]: string }>({});
-  const activeTab = selectedModule ? (tabStateCache[selectedModule.module_id] || TABS[0]) : TABS[0];
+  const [resourceStateCache, setResourceStateCache] = useState<{ 
+    [moduleId: string]: { 
+      type: string, 
+      selectedNodeId: string | null 
+    } 
+  }>({});
+  
+  const [selectedResourceType, setSelectedResourceType] = useState<string>(RESOURCE_TYPES[0]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [treeData, setTreeData] = useState<TreeItem[]>([]);
   const [contentCache, setContentCache] = useState<{ [key: string]: string }>({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Initialize or restore cached state when module changes
+  useEffect(() => {
+    if (selectedModule?.module_id) {
+      const cachedState = resourceStateCache[selectedModule.module_id];
+      if (cachedState) {
+        setSelectedResourceType(cachedState.type);
+        setSelectedNodeId(cachedState.selectedNodeId);
+      } else {
+        setSelectedResourceType(RESOURCE_TYPES[0]);
+        setSelectedNodeId(null);
+      }
+    }
+  }, [selectedModule?.module_id]);
+
+  // Update cache when resource type or selected node changes
+  useEffect(() => {
+    if (selectedModule?.module_id) {
+      setResourceStateCache(prev => ({
+        ...prev,
+        [selectedModule.module_id]: {
+          type: selectedResourceType,
+          selectedNodeId
+        }
+      }));
+    }
+  }, [selectedModule?.module_id, selectedResourceType, selectedNodeId]);
+
+  const fetchData = async () => {
+    if (!selectedModule) return;
+    
+    try {
+      const response = await fetch(
+        `http://localhost:8000/resource/${selectedModule.module_id}/${selectedResourceType}`
+      );
+      const data: ApiResponse[] = await response.json();
+      const tree = buildTreeFromPaths(data);
+      setTreeData(tree);
+
+      const newCache: { [key: string]: string } = {};
+      data.forEach(item => {
+        newCache[item.path] = item.content;
+      });
+      setContentCache(newCache);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
 
   useEffect(() => {
-    if (!selectedModule) {
-      setTreeData([]);
-      setContentCache({});
-      setSelectedNodeId(null);
-      return;
-    }
-
-    const fetchData = async () => {
-      try {
-        const response = await fetch(
-          `http://localhost:8000/resource/${selectedModule.module_id}/${activeTab}`
-        );
-        const data: ApiResponse[] = await response.json();
-        const tree = buildTreeFromPaths(data);
-        setTreeData(tree);
-
-        const newCache: { [key: string]: string } = {};
-        data.forEach(item => {
-          newCache[item.path] = item.content;
-        });
-        setContentCache(newCache);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    };
-
     fetchData();
-  }, [selectedModule, activeTab]);
+  }, [selectedModule, selectedResourceType]);
 
-  if (!selectedModule) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center p-8">
-          <h2 className="text-xl font-semibold text-gray-700 mb-2">No Module Selected</h2>
-          <p className="text-gray-500">Select a module from the sidebar to explore its contents</p>
-        </div>
-      </div>
-    );
-  }
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+    setIsRefreshing(false);
+  };
 
   const Node = React.forwardRef<HTMLDivElement, NodeRendererProps<TreeItem>>((props, ref) => {
     const { node, style } = props;
@@ -151,16 +180,6 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
 
   Node.displayName = 'Node';
 
-  const handleTabChange = (tabId: string) => {
-    if (selectedModule) {
-      setTabStateCache(prev => ({
-        ...prev,
-        [selectedModule.module_id]: tabId
-      }));
-    }
-    setSelectedNodeId(null);
-  };
-
   const handleContentChange = (newValue: string) => {
     if (selectedNodeId) {
       setContentCache(prev => ({
@@ -170,22 +189,43 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
     }
   };
 
+  if (!selectedModule) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center p-8">
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">No Module Selected</h2>
+          <p className="text-gray-500">Select a module from the sidebar to explore its contents</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col">
-      <div className="flex h-8 items-center px-2 border-b">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => handleTabChange(tab)}
-            className={`px-2 py-0.5 mx-1 rounded text-sm ${
-              activeTab === tab
-                ? 'bg-slate-100 hover:bg-slate-200'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="flex h-12 items-center px-4 border-b justify-between">
+        <Select
+          value={selectedResourceType}
+          onValueChange={(value) => setSelectedResourceType(value)}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {RESOURCE_TYPES.map((type) => (
+              <SelectItem key={type} value={type}>
+                {type}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <button
+          onClick={handleRefresh}
+          className="p-2 hover:bg-slate-100 rounded-full"
+          disabled={isRefreshing}
+        >
+          <RefreshCw className={`h-4 w-4 text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       <div className="flex-1">

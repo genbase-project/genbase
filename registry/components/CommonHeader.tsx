@@ -16,9 +16,10 @@ const CommonHeader = () => {
   const user = useUser();
   const router = useRouter();
 
-  const handleSearch = (e: { preventDefault: () => void; target: { search: { value: any; }; }; }) => {
+  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const searchQuery = e.target.search.value;
+    const form = e.currentTarget;
+    const searchQuery = (form.elements.namedItem('search') as HTMLInputElement)?.value;
     if (searchQuery) {
       router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
     }
@@ -29,7 +30,7 @@ const CommonHeader = () => {
       <div className="flex h-16 items-center px-4 container mx-auto">
         <div className="flex items-center flex-1 gap-6">
           <Link href="/" className="font-bold text-2xl">
-            AI Registry
+            Hivon Kits
           </Link>
           
           <div className="flex-1 flex items-center">

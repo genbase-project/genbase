@@ -25,22 +25,16 @@ function PublishPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
-
-  if (!user.id) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900" />
-      </div>
-    )
-  }
+  const [error, setError] = useState<string | null>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null)
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0]
       if (selectedFile.type === 'application/zip' || selectedFile.name.endsWith('.zip')) {
         setFile(selectedFile)
       } else {
-        alert('Please upload a zip file')
+        setError('Please upload a zip file')
       }
     }
   }
@@ -50,52 +44,43 @@ function PublishPage() {
 
     try {
       setUploading(true)
+      setError(null)
 
-      // Get the Firebase ID token
       const token = await user.getIdToken()
-      
       if (!token) {
         throw new Error('Authentication token not available')
       }
 
-      // Create a reference to the file in Firebase Storage
+      // Upload to Firebase Storage
       const storageRef = ref(storage, `registry/${user.id}/${file.name}`)
-
-      // Upload the file
       await uploadBytes(storageRef, file)
-
-      // Get the download URL
       const downloadURL = await getDownloadURL(storageRef)
 
-      // Create headers object
-      const headers: HeadersInit = {
-        'Authorization': token,
-        'Content-Type': 'application/json',
-      }
-
-      // Save metadata
+      // Send to API for processing
       const response = await fetch('/api/registry/publish', {
         method: 'POST',
-        headers,
+        headers: {
+          'Authorization': token,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           fileName: file.name,
           fileSize: file.size,
           downloadURL,
-          uploadedAt: new Date().toISOString(),
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to save package metadata')
+        throw new Error(data.error || 'Failed to process package')
       }
 
       setShowSuccessDialog(true)
       setFile(null)
     } catch (error) {
-      console.error('Error uploading file:', error)
-      alert(error instanceof Error ? error.message : 'Error uploading file')
+      console.error('Error:', error)
+      setError(error instanceof Error ? error.message : 'Error uploading file')
     } finally {
       setUploading(false)
       setUploadProgress(0)
@@ -126,6 +111,12 @@ function PublishPage() {
               disabled={uploading}
             />
           </div>
+
+          {error && (
+            <div className="text-sm text-red-500">
+              {error}
+            </div>
+          )}
 
           {file && (
             <div className="text-sm text-gray-500">

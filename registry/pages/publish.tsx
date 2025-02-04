@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import { useUser, withUser, AuthAction } from 'next-firebase-auth'
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
@@ -17,7 +17,11 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Progress } from '@/components/ui/progress'
 
-const storage = getStorage()
+
+const  storage= getStorage();
+
+
+
 
 function PublishPage() {
   const user = useUser()

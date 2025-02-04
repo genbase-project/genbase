@@ -61,7 +61,7 @@ const initAuth = () => {
           'nfa-example-git-v1x-gladly-team.vercel.app',
         ]
         const allowed =
-          allowedHosts.indexOf(new URL(destinationParamVal).host) > -1
+          allowedHosts.indexOf(new URL(destinationParamVal).host) > (-1)
         if (allowed) {
           destURL = destinationParamVal
         } else {

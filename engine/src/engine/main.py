@@ -6,9 +6,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from engine.apis.action import ActionRouter
-from engine.apis.agent import AgentRouter
+# from engine.apis.agent import AgentRouter
 
 # Import routers
+from engine.apis.chat import ChatRouter
+from engine.apis.coder import CoderRouter
 from engine.apis.kit import KitRouter
 
 # Import utilities
@@ -17,11 +19,13 @@ from engine.apis.module import ModuleRouter
 from engine.apis.project import ProjectRouter
 from engine.apis.repository import RepositoryRouter
 from engine.apis.resource import ResourceRouter  # New import
+from engine.apis.tasker import TaskerRouter
 from engine.apis.workflow import WorkflowRouter
+from engine.services.agents.base_agent import AgentServices
 from engine.services.execution.action import ActionService
 
 # Import new service and router
-from engine.services.execution.agent import AgentService
+# from engine.services.execution.agent import AgentService
 
 # Import services
 from engine.services.core.kit import KitService
@@ -76,14 +80,15 @@ module_service = ModuleService(
     stage_state_service=stage_state_service  # Add this
 )
 
+model_service = ModelService()
 
 resource_service = ResourceService(
     workspace_base=str(KIT_BASE_DIR),
     module_base=str(KIT_BASE_DIR),
     repo_base=str(REPO_BASE_DIR),  # Add repo base directory
-    module_service=module_service
+    module_service=module_service,
+    model_service=model_service
 )
-model_service = ModelService()
 
 
 action_service = ActionService(repo_service=repo_service)
@@ -103,14 +108,14 @@ workflow_service = WorkflowService(
 
 
 
-# Initialize Agent service
-agent_service = AgentService(
-    workflow_service=workflow_service,
-    model_service=model_service,
-    stage_state_service=stage_state_service,
-    repo_service=repo_service,
-    module_service=module_service,
-)
+# # Initialize Agent service
+# agent_service = AgentService(
+#     workflow_service=workflow_service,
+#     model_service=model_service,
+#     stage_state_service=stage_state_service,
+#     repo_service=repo_service,
+#     module_service=module_service,
+# )
 
 
 
@@ -158,11 +163,11 @@ workflow_router = WorkflowRouter(
     prefix="/workflow"
 )
 
-# Initialize AI workflow router
-agent_router = AgentRouter(
-    agent_service=agent_service,
-    prefix="/agent"
-)
+# # Initialize AI workflow router
+# agent_router = AgentRouter(
+#     agent_service=agent_service,
+#     prefix="/agent"
+# )
 
 # Include routers
 app.include_router(kit_router.router)
@@ -173,11 +178,50 @@ app.include_router(resource_router.router)  # Add resource router
 app.include_router(model_router.router)
 app.include_router(operation_router.router)
 app.include_router(workflow_router.router)
-app.include_router(agent_router.router)
+# app.include_router(agent_router.router)
 
 
 
 
+
+
+
+
+
+agent_services = AgentServices(
+    model_service=model_service,
+    workflow_service=workflow_service,
+    stage_state_service=stage_state_service,
+    repo_service=repo_service,
+    module_service=module_service
+)
+
+# Initialize TaskerRouter
+tasker_router = TaskerRouter(
+    agent_services=agent_services,
+    prefix="/tasker"
+)
+
+# Include the router
+app.include_router(tasker_router.router)
+
+
+
+# Initialize CoderRouter
+coder_router = CoderRouter(
+    agent_services=agent_services,
+    prefix="/coder"
+)
+
+app.include_router(coder_router.router)
+
+
+chat_router = ChatRouter(
+    agent_services=agent_services
+)
+
+# Include the router
+app.include_router(chat_router.router)
 
 # CORS middleware
 app.add_middleware(

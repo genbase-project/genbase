@@ -1,6 +1,13 @@
 import { useRef, useEffect } from 'react';
 import { Terminal, ChevronRight, CheckCircle, XCircle } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Send } from 'lucide-react';
 
 // Interfaces remain the same
 interface ToolCall {
@@ -32,83 +39,85 @@ interface ToolCallProps {
 interface ToolResultProps {
   result: ToolResult;
 }
-
-// Compact Tool Call component
-const ToolCall: React.FC<ToolCallProps> = ({ toolCall }) => {
-  const args = JSON.parse(toolCall.arguments);
+const ToolCall = ({ toolCall }: { toolCall: ToolCall }) => {
+  const args = typeof toolCall.arguments === 'string' ? JSON.parse(toolCall.arguments) : toolCall.arguments;
   
   return (
-    <div className="mt-1 rounded bg-blue-50/50 p-2 border border-blue-100">
-      <div className="flex items-center gap-1 text-blue-600 text-sm">
-        <Terminal className="w-3 h-3" />
-        <span>{toolCall.name}</span>
-      </div>
-      <details className="mt-1">
-        <summary className="flex items-center gap-1 text-xs text-blue-600 cursor-pointer">
-          <ChevronRight className="w-3 h-3" />
-          Args
-        </summary>
-        <pre className="mt-1 p-2 bg-white rounded text-xs font-mono overflow-x-auto">
-          {JSON.stringify(args, null, 2)}
-        </pre>
-      </details>
-    </div>
+    <Card className="mt-2">
+      <CardContent className="p-3">
+        <div className="flex items-center gap-2 text-blue-600">
+          <Terminal className="w-4 h-4" />
+          <span className="font-medium">{toolCall.name}</span>
+        </div>
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center gap-1 text-sm text-blue-600 mt-2">
+            <ChevronRight className="w-4 h-4" />
+            Arguments
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <pre className="mt-2 p-2 bg-slate-50 rounded text-sm font-mono overflow-x-auto max-w-full">
+              <code className="break-all whitespace-pre-wrap">
+                {JSON.stringify(args, null, 2)}</code>
+            </pre>
+          </CollapsibleContent>
+        </Collapsible>
+      </CardContent>
+    </Card>
   );
 };
 
-// Compact Tool Result component
-const ToolResult: React.FC<ToolResultProps> = ({ result }) => {
+// Updated ToolResult component using shadcn components
+const ToolResult = ({ result }: { result: ToolResult }) => {
   const isSuccess = result.result?.status === 'success';
   const hasStatus = typeof result.result?.status === 'string';
   
   return (
-    <div className={`mt-1 rounded ${
+    <Card className={`mt-2 ${
       hasStatus 
         ? isSuccess 
-          ? 'bg-green-50/50 border-green-100' 
-          : 'bg-red-50/50 border-red-100'
-        : 'bg-blue-50/50 border-blue-100'
-    } p-2 border`}>
-      <div className="flex items-center gap-1 text-sm">
-        {hasStatus ? (
-          isSuccess ? (
-            <CheckCircle className="w-3 h-3 text-green-600" />
+          ? 'bg-green-50/50' 
+          : 'bg-red-50/50'
+        : 'bg-blue-50/50'
+    }`}>
+      <CardContent className="p-3">
+        <div className="flex items-center gap-2">
+          {hasStatus ? (
+            isSuccess ? (
+              <CheckCircle className="w-4 h-4 text-green-600" />
+            ) : (
+              <XCircle className="w-4 h-4 text-red-600" />
+            )
           ) : (
-            <XCircle className="w-3 h-3 text-red-600" />
-          )
-        ) : (
-          <Terminal className="w-3 h-3 text-blue-600" />
-        )}
-        <span className={hasStatus 
-          ? isSuccess 
-            ? 'text-green-700' 
-            : 'text-red-700'
-          : 'text-blue-700'
-        }>
-          Result for: {result.step}
-        </span>
-      </div>
+            <Terminal className="w-4 h-4 text-blue-600" />
+          )}
+          <Badge variant={hasStatus ? (isSuccess ? "default" : "destructive") : "secondary"}>
+            {result.step}
+          </Badge>
+        </div>
 
-      <div className="mt-1 p-2 bg-white/50 rounded">
         {result.result?.message && (
-          <div className="text-xs mb-1">
+          <p className="text-sm mt-2 text-gray-600">
             {result.result.message}
-          </div>
+          </p>
         )}
         
-        <details>
-          <summary className="flex items-center gap-1 text-xs cursor-pointer mb-1">
-            <ChevronRight className="w-3 h-3" />
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center gap-1 text-sm mt-2">
+            <ChevronRight className="w-4 h-4" />
             Details
-          </summary>
-          <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap overflow-x-auto">
-            {JSON.stringify(result.result, null, 2)}
-          </pre>
-        </details>
-      </div>
-    </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <pre className="mt-2 p-2 bg-slate-50 rounded text-sm font-mono overflow-x-auto max-w-full">
+              <code className="break-all whitespace-pre-wrap">
+                {JSON.stringify(result.result, null, 2)}</code>
+            </pre>
+          </CollapsibleContent>
+        </Collapsible>
+      </CardContent>
+    </Card>
   );
 };
+
 
 // Message grouping helper remains the same
 const groupMessages = (messages: Message[]): Message[][] => {
@@ -141,7 +150,7 @@ const groupMessages = (messages: Message[]): Message[][] => {
 };
 
 // Compact Chat Container
-const ChatContainer: React.FC<ChatContainerProps> = ({ messages }) => {
+const ChatContainer = ({ messages }: { messages: Message[] }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const messageGroups = groupMessages(messages);
 
@@ -152,9 +161,10 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ messages }) => {
   }, [messages]);
 
   return (
-    <ScrollArea className="flex-1 px-2 py-2">
-      {messageGroups.map((group, groupIndex) => (
-        <div key={groupIndex} className="mb-3">
+    <ScrollArea className="flex-1 px-4 py-4 overflow-x-hidden">
+      <div className="max-w-full">
+        {messageGroups.map((group, groupIndex) => (
+        <div key={groupIndex} className="mb-6 last:mb-2">
           {group.map((message, messageIndex) => {
             if (message.role === 'user' && 
                 group.some(m => m.role === 'system' && m.tool_results)) {
@@ -162,40 +172,47 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ messages }) => {
             }
 
             return (
-              <div
+              <Card
                 key={messageIndex}
-                className={`mb-1 ${
-                  message.role === 'assistant' ? 'bg-gray-50' : ''
-                } rounded p-2`}
+                className={`mb-4 ${
+                  message.role === 'assistant' ? 'bg-gray-50' : 'bg-white'
+                }`}
               >
-                {message.role !== 'system' && (
-                  <div className="flex items-center gap-1 mb-1">
-                    <span className="text-xs text-gray-500">
+                <CardContent className="p-4">
+                  {message.role !== 'system' && (
+                    <Badge variant="outline" className="mb-2">
                       {message.role === 'assistant' ? 'Assistant' : 'You'}
-                    </span>
+                    </Badge>
+                  )}
+                  
+                  <div className="text-sm">
+                    {message.content !== 'Executing tool calls...' && message.content}
+                    
+                    {message.tool_calls?.map((toolCall, idx) => (
+                      <ToolCall key={idx} toolCall={toolCall} />
+                    ))}
+                    
+                    {message.tool_results?.map((result, idx) => (
+                      <ToolResult key={idx} result={result} />
+                    ))}
                   </div>
-                )}
-                
-                <div className="text-sm">
-                  {message.content !== 'Executing tool calls...' && message.content}
-                  
-                  {message.tool_calls?.map((toolCall, idx) => (
-                    <ToolCall key={idx} toolCall={toolCall} />
-                  ))}
-                  
-                  {message.tool_results?.map((result, idx) => (
-                    <ToolResult key={idx} result={result} />
-                  ))}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
       ))}
       <div ref={scrollRef} />
+      </div>
     </ScrollArea>
   );
 };
 
+
+
 export type { Message, ToolCall, ToolResult };
 export { ToolCall as ToolCallComponent, ToolResult as ToolResultComponent, ChatContainer };
+
+function isinstance(x: any, str: any) {
+  throw new Error('Function not implemented.');
+}

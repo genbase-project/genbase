@@ -1,10 +1,11 @@
 from datetime import datetime, UTC
 from enum import Enum
+from typing import Any, Dict
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from engine.db.models import AgentStatus
+from engine.db.models import AgentStatus, WorkflowStatus
 from engine.db.session import SessionLocal
 
 
@@ -26,6 +27,25 @@ PROMOTE_TOOL_SCHEMA = {
                 }
             },
             "required": ["target_stage"]
+        }
+    }
+}
+
+
+COMPLETE_WORKFLOW_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "complete_workflow",
+        "description": "Mark a workflow as completed",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "workflow_type": {
+                    "type": "string",
+                    "description": "Type of workflow to mark as completed"
+                }
+            },
+            "required": ["workflow_type"]
         }
     }
 }
@@ -127,3 +147,40 @@ class StageStateService:
                 return datetime.now(UTC).isoformat()
             
             return status.last_updated.isoformat()
+
+
+    def complete_workflow(self, module_id: str, workflow_type: str) -> Dict[str, Any]:
+        """Mark a workflow as completed"""
+
+        with SessionLocal() as db:
+            # Try to update existing record
+            stmt = (
+                update(WorkflowStatus)
+                .where(
+                    WorkflowStatus.module_id == module_id,
+                    WorkflowStatus.workflow_type == workflow_type
+                )
+                .values(
+                    is_completed=True,
+                    last_updated=datetime.now(UTC)
+                )
+            )
+            result = db.execute(stmt)
+            
+            # If no record exists, insert new one
+            if result.rowcount == 0:
+                workflow_status = WorkflowStatus(
+                    module_id=module_id,
+                    workflow_type=workflow_type,
+                    is_completed=True,
+                    last_updated=datetime.now(UTC)
+                )
+                db.add(workflow_status)
+            
+            db.commit()
+            
+            return {
+                "status": "success",
+                "message": f"Workflow {workflow_type} marked as completed"
+            }
+            

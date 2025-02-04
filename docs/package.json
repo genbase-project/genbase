@@ -1,0 +1,38 @@
+{
+  "name": "hivon-docs",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "postinstall": "fumadocs-mdx"
+  },
+  "dependencies": {
+    "@react-spring/web": "^9.7.5",
+    "@theguild/remark-mermaid": "^0.2.0",
+    "framer-motion": "^12.0.6",
+    "fumadocs-core": "15.0.0",
+    "fumadocs-mdx": "11.3.2",
+    "fumadocs-ui": "15.0.0",
+    "next": "15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-intersection-observer": "^9.15.1",
+    "react-particles": "^2.12.2",
+    "tsparticles": "^3.8.1",
+    "tsparticles-slim": "^2.12.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/mdx": "^2.0.13",
+    "@types/node": "22.10.9",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "eslint": "^8",
+    "eslint-config-next": "15.1.6",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.3"
+  }
+}

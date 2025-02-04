@@ -466,6 +466,7 @@ class ModuleService:
         try:
             with self._get_db() as db:
                 module = db.query(Module).filter_by(module_id=module_id).first()
+
                 
                 if not module:
                     raise ModuleError(f"Module {module_id} not found")

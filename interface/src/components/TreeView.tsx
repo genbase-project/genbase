@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Tree, NodeRendererProps } from 'react-arborist';
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronDown, Plus, Pencil, Box } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Pencil, Box, Search } from 'lucide-react';
+import { ScrollArea } from './ui/scroll-area';
+import { cn } from '@/lib/utils';
+import { Input } from './ui/input';
 
 export interface EnvVar {
   name: string;
@@ -61,6 +64,28 @@ export interface TreeViewProps {
   selectedModuleId?: string | null;
 }
 
+
+// Helper function to recursively filter tree nodes
+const filterNodes = (nodes: TreeNode[], searchText: string): TreeNode[] => {
+  return nodes.reduce<TreeNode[]>((acc, node) => {
+    const matchesSearch = node.name.toLowerCase().includes(searchText.toLowerCase());
+    
+    if (node.children) {
+      const filteredChildren = filterNodes(node.children, searchText);
+      if (matchesSearch || filteredChildren.length > 0) {
+        acc.push({
+          ...node,
+          children: filteredChildren
+        });
+      }
+    } else if (matchesSearch) {
+      acc.push(node);
+    }
+    
+    return acc;
+  }, []);
+};
+
 export const TreeView: React.FC<TreeViewProps> = ({
   data,
   modules,
@@ -73,6 +98,13 @@ export const TreeView: React.FC<TreeViewProps> = ({
   isLoading = false,
   selectedModuleId = null
 }) => {
+  const [searchText, setSearchText] = useState('');
+
+  const filteredData = useMemo(() => {
+    if (!searchText.trim()) return data;
+    return filterNodes(data, searchText);
+  }, [data, searchText]);
+
   const Node = React.forwardRef<HTMLDivElement, NodeRendererProps<TreeNode>>((props, ref) => {
     const { node, style, dragHandle } = props;
     const [showActions, setShowActions] = useState(false);
@@ -88,82 +120,97 @@ export const TreeView: React.FC<TreeViewProps> = ({
           if (typeof ref === 'function') ref(element);
           else if (ref) ref.current = element;
         }}
-        className={`flex items-center justify-between py-0.5 px-1 hover:bg-gray-100 group
-          ${isSelected ? 'bg-blue-50 hover:bg-blue-100' : ''}`}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
         data-id={node.id}
       >
         <div 
-          className="flex items-center gap-1 cursor-pointer flex-1"
-          onClick={() => {
-            if (node.isInternal) {
-              node.toggle();
-            } else if (node.data.module) {
-              onModuleClick(node.data.module);
-            }
-          }}
-        >
-          {node.data.isFolder ? (
-            <>
-              {node.isOpen ? 
-                <ChevronDown className="h-3 w-3 text-gray-400" /> : 
-                <ChevronRight className="h-3 w-3 text-gray-400" />
-              }
-            </>
-          ) : (
-            <Box className="h-3 w-3 text-gray-400 ml-3" />
+          className={cn(
+            "flex items-center justify-between py-1.5 px-2 h-8",
+            "rounded-sm mx-0 transition-colors",
+            "hover:bg-gray-200/50 group rounded-md",
+            isSelected && "bg-gray-200/60"
           )}
-          <span className="text-sm overflow-hidden whitespace-nowrap overflow-ellipsis">{node.data.name}</span>
-        </div>
-
-        {showActions && (onCreateModule || onEditPath || onRename) && (
-          <div className="flex gap-0.5">
-            {node.data.isFolder && onCreateModule && (
+        >
+          <div 
+            className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer"
+            onClick={() => {
+              if (node.data.isFolder) {
+                node.toggle();
+              } else if (node.data.module) {
+                onModuleClick(node.data.module);
+              }
+            }}
+          >
+            {node.data.isFolder ? (
               <Button 
                 variant="ghost" 
-                size="icon"
-                className="h-5 w-5"
+                size="icon" 
+                className="h-5 w-5 p-0 hover:bg-transparent"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onCreateModule(node.id);
+                  node.toggle();
                 }}
               >
-                <Plus className="h-3 w-3" />
+                {node.isOpen ? 
+                  <ChevronDown className="h-3.5 w-3.5 text-gray-500" /> : 
+                  <ChevronRight className="h-3.5 w-3.5 text-gray-500" />
+                }
               </Button>
+            ) : (
+              <Box className="h-3.5 w-3.5 ml-1 text-gray-400 shrink-0" />
             )}
-            {!node.data.isFolder && node.data.module && (
-              <>
-                {onRename && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRename(node.id, node.data.name);
-                    }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                )}
-                {onEditPath && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEditPath(node.data.module!);
-                    }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                )}
-              </>
-            )}
+            <span className="text-sm text-gray-700 truncate">{node.data.name}</span>
           </div>
-        )}
+
+          {showActions && (onCreateModule || onEditPath || onRename) && (
+            <div className="flex gap-1">
+              {node.data.isFolder && onCreateModule && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="h-6 w-6 rounded-full hover:bg-gray-200/70 hover:text-gray-800 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCreateModule(node.id);
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {!node.data.isFolder && node.data.module && (
+                <>
+                  {onRename && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 rounded-full hover:bg-gray-200/70 hover:text-gray-800 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRename(node.id, node.data.name);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {onEditPath && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 rounded-full hover:bg-gray-200/70 hover:text-gray-800 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditPath(node.data.module!);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     );
   });
@@ -172,8 +219,8 @@ export const TreeView: React.FC<TreeViewProps> = ({
 
   if (isLoading) {
     return (
-      <div className="h-screen min-w-48 bg-white border-r flex flex-col">
-        <div className="p-2 text-center text-gray-500 text-sm">
+      <div className="h-full bg-gray-50/60 border-none">
+        <div className="p-3 text-sm text-gray-500 text-center">
           Loading...
         </div>
       </div>
@@ -181,45 +228,52 @@ export const TreeView: React.FC<TreeViewProps> = ({
   }
 
   return (
-    <div className="h-screen min-w-48 bg-white border-r flex flex-col">
+    <div className="h-full bg-gray-50/60">
+      <div className="p-2 flex items-center  ">
+        <div className="flex items-center gap-2 px-2 py-1.5 bg-white/50 border border-gray-200/80 rounded-xl w-full">
+          <Search className="w-4 h-4 text-gray-500" />
+          <Input
+            type="text"
+            placeholder="Search modules..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="h-6 text-sm bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 border-none shadow-none w-full placeholder:text-gray-400"
+          />
+        </div>
+      </div>
       {onCreateModule && (
-        <div className="p-1.5 border-b flex justify-between items-center flex-shrink-0 text-gray-700">
-          <span className="font-semibold text-sm">PROJECT</span>
-          <div className="flex gap-0.5">
-            <Button 
-              variant="ghost" 
-              size="icon"
-              className="h-5 w-5"
-              onClick={() => onCreateModule(null)}
-            >
-              <Plus className="h-3 w-3" />
-            </Button>
-          </div>
+        <div className="pt-2 px-2 pb-1 flex items-center justify-between  border-gray-200/80">
+          <span><p className="text-xs font-medium text-gray-600 uppercase tracking-wide">Modules</p></span>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            className="h-6 w-6 rounded-full hover:bg-gray-200/70 hover:text-gray-800 transition-colors"
+            onClick={() => onCreateModule(null)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
         </div>
       )}
 
-      <div className="flex-1 overflow-auto hover:overflow-overlay" style={{
-        scrollbarWidth: 'thin',
-        scrollbarColor: 'rgb(209 213 219 / 0.4) transparent'
-      }}>
+      <ScrollArea className="flex-1">
         {data.length === 0 ? (
-          <div className="p-2 text-center text-gray-500 text-sm">
-            No items yet. Click the plus button to add a module.
+          <div className="p-3 text-sm text-gray-500 text-center">
+            No modules yet. Click the plus button to add one.
           </div>
         ) : (
           <Tree<TreeNode>
-            data={data}
+            data={filteredData}
             onMove={allowDrag ? onMove : undefined}
             width="100%"
             height={800}
             indent={16}
-            rowHeight={24}
-            overscanCount={1}
+            rowHeight={32}
+            overscanCount={5}
           >
             {Node}
           </Tree>
         )}
-      </div>
+      </ScrollArea>
     </div>
   );
 };

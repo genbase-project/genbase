@@ -10,13 +10,11 @@
     "static/development/_buildManifest.js",
     "static/development/_ssgManifest.js"
   ],
-  "rootMainFiles": [],
+  "rootMainFiles": [
+    "static/chunks/webpack.js",
+    "static/chunks/main-app.js"
+  ],
   "pages": {
-    "/": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/index.js"
-    ],
     "/_app": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
@@ -27,10 +25,15 @@
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
-    "/kit/[id]": [
+    "/auth": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/kit/[id].js"
+      "static/chunks/pages/auth.js"
+    ],
+    "/home": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/home.js"
     ]
   },
   "ampFirstPages": []

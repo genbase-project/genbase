@@ -22,8 +22,17 @@ class ActionInfo:
     name: str
     description: Optional[str] = None
     source_module_name: Optional[str] = None  # Add this field
-
-
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert ActionInfo to dictionary"""
+        return {
+            "module_id": self.module_id,
+            "workflow": self.workflow,
+            "action_path": self.action_path,
+            "name": self.name,
+            "description": self.description,
+            "source_module_name": self.source_module_name
+        }
 
 
 class WorkflowStep(BaseModel):
@@ -35,7 +44,7 @@ class WorkflowStep(BaseModel):
 class Workflow(BaseModel):
     """Workflow metadata"""
     instruction: Optional[str] = None
-    actions: List[WorkflowStep]
+    actions: List[WorkflowStep] = []  # Make actions optional with empty default
 
 class WorkflowError(Exception):
     """Base exception for workflow actions"""
@@ -67,8 +76,10 @@ class WorkflowService:
             if instruction_path.exists():
                 with open(instruction_path, 'r') as f:
                     return f.read()
+            logger.warning(f"Instruction file not found: {instruction_path}")
             return ""
         except Exception as e:
+            logger.error(f"Failed to read instruction file {instruction_path}: {str(e)}")
             raise WorkflowError(f"Failed to read instruction file: {str(e)}")
 
     def _resolve_action_path(self, module_path: Path, action_path: str) -> tuple[Path, str, str]:
@@ -102,16 +113,36 @@ class WorkflowService:
             # Read and validate kit
             kit = YAMLUtils.read_kit(module_path)
             if not kit.get('workflows', {}).get(workflow):
+                logger.error(f"Workflow '{workflow}' not found in kit.yaml")
                 raise WorkflowError(f"Workflow '{workflow}' not found")
 
             workflow_data = kit['workflows'][workflow]
-            workflow_model = Workflow.model_validate(workflow_data)
-
-            # Read instruction file if specified
+            
+            # Handle instruction file separately from model validation
+            instruction_file = workflow_data.get('instruction')
             instruction_content = ""
-            if workflow_model.instruction:
-                instruction_path = module_path / "instructions" / workflow_model.instruction
+            if instruction_file:
+                instruction_path = module_path / "instructions" / instruction_file
                 instruction_content = self._read_instruction_file(instruction_path)
+                
+            try:
+                # Create normalized workflow data for validation
+                validated_data = {
+                    "instruction": instruction_file,
+                    "actions": workflow_data.get('actions', [])
+                }
+                workflow_model = Workflow.model_validate(validated_data)
+                logger.info(f"""Workflow {workflow} validated:
+                Instruction file: {instruction_file}
+                Actions: {len(workflow_model.actions)}
+                Content length: {len(instruction_content)}
+                """)
+            except Exception as e:
+                logger.error(f"""Failed to validate workflow {workflow}:
+                Error: {str(e)}
+                Data: {workflow_data}
+                """)
+                raise WorkflowError(f"Invalid workflow configuration: {str(e)}")
 
             # Get function metadata for each step
             steps_metadata = []
@@ -136,6 +167,7 @@ class WorkflowService:
                         "metadata": metadata
                     })
                 except (ActionError, WorkflowError) as e:
+                    logger.error(f"Failed to get metadata for step {step.name}: {str(e)}")
                     # Add error information but continue processing other steps
                     steps_metadata.append({
                         "name": step.name,
@@ -144,14 +176,19 @@ class WorkflowService:
                         "error": str(e)
                     })
 
-            return {
+            result = {
                 "instructions": instruction_content,
                 "actions": steps_metadata,
                 "requirements": kit.get('dependencies', [])
             }
+            logger.info(f"Got workflow metadata for {workflow}:\n{result}")
+            return result
 
         except (ModuleError, WorkflowError) as e:
             raise WorkflowError(str(e))
+        except Exception as e:
+            logger.error(f"Unexpected error getting workflow metadata: {str(e)}")
+            raise WorkflowError(f"Failed to get workflow metadata: {str(e)}")
 
 
     def execute_workflow_step(
@@ -180,10 +217,27 @@ class WorkflowService:
 
             # Get the correct workflow data from source module
             workflow_data = kit['workflows'][source_workflow]
-            workflow_model = Workflow.model_validate(workflow_data)
-
+            
+            # Handle instruction file separately from model validation
+            instruction_file = workflow_data.get('instruction')
             source_info = f" from module {action_info.source_module_name}" if action_info.source_module_name else ""
-            logger.info(f"Executing action '{action_info.name}'{source_info} in workflow {source_workflow}")
+            logger.info(f"""Executing action '{action_info.name}'{source_info} in workflow {source_workflow}
+            Config: {workflow_data}
+            """)
+                
+            try:
+                # Create normalized workflow data for validation
+                validated_data = {
+                    "instruction": instruction_file,
+                    "actions": workflow_data.get('actions', [])
+                }
+                workflow_model = Workflow.model_validate(validated_data)
+            except Exception as e:
+                logger.error(f"""Failed to validate workflow {source_workflow}:
+                Error: {str(e)}
+                Data: {workflow_data}
+                """)
+                raise WorkflowError(f"Invalid workflow configuration: {str(e)}")
 
             # Find the action in the source workflow
             action = next(

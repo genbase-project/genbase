@@ -2,8 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/api/registry/file-content": "pages/api/registry/file-content.js",
-  "/api/login": "pages/api/login.js",
+  "/auth": "pages/auth.js",
   "/kit/[id]": "pages/kit/[id].js",
-  "/": "pages/index.js"
+  "/home": "pages/home.js",
+  "/api/logout": "pages/api/logout.js"
 }

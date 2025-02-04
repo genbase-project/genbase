@@ -1,7 +1,7 @@
 from datetime import datetime, UTC
 from typing import Dict, List, Optional
 
-from sqlalchemy import JSON, Column, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, PrimaryKeyConstraint, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -9,6 +9,19 @@ from engine.db.base import Base
 
 class Base(DeclarativeBase):
     pass
+
+class WorkManifest(Base):
+    """Stores AI-generated work manifests explaining module state"""
+    __tablename__ = "work_manifests"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    module_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id', ondelete='CASCADE'), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
+    
+    # Relationship
+    module: Mapped["Module"] = relationship(back_populates="manifests")
+
 
 # From chat_history table in agent.py
 class ChatHistory(Base):
@@ -62,6 +75,16 @@ class Module(Base):
         uselist=False
     )
 
+    workflow_statuses: Mapped[List["WorkflowStatus"]] = relationship(
+        back_populates="module",
+        cascade="all, delete-orphan"
+    )
+    
+    manifests: Mapped[List["WorkManifest"]] = relationship(
+        back_populates="module", 
+        cascade="all, delete-orphan"
+    )
+
 
 class ProjectModuleMapping(Base):
     __tablename__ = "project_module_mappings"
@@ -81,10 +104,14 @@ class ModuleRelation(Base):
     
     source_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id'), primary_key=True)
     target_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id'), primary_key=True)
-    relation_type: Mapped[str] = mapped_column(String, nullable=False)
+    relation_type: Mapped[str] = mapped_column(String, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Explicitly define primary key constraint
+    __table_args__ = (
+        PrimaryKeyConstraint('source_id', 'target_id', 'relation_type', name='module_relations_pkey'),
+    )
 
     
     # Relationships
@@ -125,6 +152,24 @@ class AgentStatus(Base):
     
     # Updated relationship with back_populates
     module: Mapped[Module] = relationship(back_populates="agent_status")
+
+
+
+class WorkflowStatus(Base):
+    """Tracks completion status of workflows for a module"""
+    __tablename__ = "workflow_status"
+    
+    module_id: Mapped[str] = mapped_column(
+        String, 
+        ForeignKey('modules.module_id', ondelete='CASCADE'),
+        primary_key=True
+    )
+    workflow_type: Mapped[str] = mapped_column(String, primary_key=True)
+    is_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    
+    # Relationship
+    module: Mapped["Module"] = relationship(back_populates="workflow_statuses")
 
 
 

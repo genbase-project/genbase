@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send } from 'lucide-react';
+import { Send, Bot } from 'lucide-react';
 import { ChatContainer } from '../components/Chat';
 import type { Message } from '../components/Chat';
 import type { Module } from '../components/TreeView';
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const sections = ['initialize', 'maintain',  'edit',  'remove',] as const;
 type Section = typeof sections[number];
@@ -30,7 +34,7 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/agent/${selectedModule.module_id}/sections/${currentSection}/history`
+        `http://localhost:8000/chat/${selectedModule.module_id}/workflow/${currentSection}/history`
       );
       const data: HistoryResponse = await response.json();
       setMessages(data.history || []);
@@ -49,7 +53,7 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
     setIsLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:8000/agent/${selectedModule.module_id}/execute`,
+        `http://localhost:8000/chat/${selectedModule.module_id}/execute`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -74,19 +78,22 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
   // Show a message when no module is selected
   if (!selectedModule) {
     return (
-      <div className="h-full flex items-center justify-center text-gray-500">
-        Please select a module to view the chat
+      <div className="h-full flex flex-col items-center justify-center space-y-4 text-gray-500">
+        <Bot className="w-12 h-12 text-gray-400 mb-2" strokeWidth={1.5} />
+        <div className="text-center">
+          <h3 className="text-lg font-medium text-gray-700 mb-1">No Module Selected</h3>
+          <p className="text-sm text-gray-500">Select a module from the sidebar to begin</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex">
-      {/* Main chat area */}
-      <div className="flex-1 flex flex-col border-t">
+    <div className="h-full flex overflow-hidden">
+      <div className="flex-1 flex flex-col border-t min-w-0">
         <ChatContainer messages={messages} />
         
-        <div className="p-4 border-t">
+        <div className="p-4 border-t shrink-0">
           <div className="max-w-3xl mx-auto flex gap-2">
             <Input
               value={inputValue}
@@ -102,7 +109,7 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
               variant="secondary"
             >
               {isLoading ? (
-                <div className="w-6 h-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+                <div className="w-4 h-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
               ) : (
                 <Send className="w-4 h-4" />
               )}
@@ -111,26 +118,32 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
         </div>
       </div>
 
-      {/* Section selector */}
-      <div className="w-48 border-l bg-gray-50 p-4">
-        <div className="flex items-center gap-0 mb-2 text-xs font-medium text-gray-600">
-          <span>WORKFLOWS</span>
-        </div>
-        <div className="space-y-2 font-regular">
-          {sections.map((section) => (
-            <Button
-              key={section}
-              variant={currentSection === section ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => setCurrentSection(section)}
-            >
-              {section}
-            </Button>
-          ))}
-        </div>
+      <div className="w-48 border-l">
+        <Tabs 
+          defaultValue="maintain" 
+          className="w-full"
+          onValueChange={(value) => setCurrentSection(value as Section)}
+        >
+          <div className="p-4">
+            <p className="text-xs font-medium text-gray-600 mb-2">WORKFLOWS</p>
+            <TabsList className="flex flex-col h-auto bg-transparent gap-1">
+              {['initialize', 'maintain', 'edit', 'remove'].map((section) => (
+                <TabsTrigger
+                  key={section}
+                  value={section}
+                  className="w-full justify-start data-[state=active]:bg-gray-100"
+                >
+                  {section}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+        </Tabs>
       </div>
     </div>
   );
+
+
 };
 
 export default BottomPanel;

@@ -1,8 +1,10 @@
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 
 from engine.services.storage.resource import Resource, ResourceError, ResourceService
+from engine.db.session import get_db
 
 
 class ResourceRouter:
@@ -11,7 +13,7 @@ class ResourceRouter:
     def __init__(
         self,
         resource_service: ResourceService,
-        prefix: str = "/resources"
+        prefix: str = "/resource"
     ):
         self.service = resource_service
         self.router = APIRouter(prefix=prefix, tags=["resources"])
@@ -41,8 +43,49 @@ class ResourceRouter:
         except ResourceError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    async def _generate_manifest(
+        self,
+        module_id: str,
+        db: Session = Depends(get_db)
+    ) -> Resource:
+        """Generate a new work manifest"""
+        try:
+            manifest = await self.service.generate_work_manifest(module_id, db)
+            return manifest
+        except ResourceError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    async def _get_manifests(
+        self,
+        module_id: str,
+        db: Session = Depends(get_db)
+    ) -> List[Resource]:
+        """Get all work manifests"""
+        try:
+            manifests = self.service.get_manifest_resources(module_id, db)
+            return manifests
+        except ResourceError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     def _setup_routes(self):
         """Setup all routes"""
+
+        # Add manifest routes
+        self.router.add_api_route(
+            "/{module_id}/manifest",
+            self._generate_manifest,
+            methods=["GET"],
+            response_model=Resource,
+            summary="Generate new work manifest"
+        )
+
+        self.router.add_api_route(
+            "/{module_id}/manifests",
+            self._get_manifests,
+            methods=["GET"],
+            response_model=List[Resource],
+            summary="Get all work manifests"
+        )
         self.router.add_api_route(
             "/{module_id}/workspace",
             self._get_workspace_resources,

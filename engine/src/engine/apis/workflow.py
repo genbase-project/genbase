@@ -1,10 +1,12 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from engine.services.execution.workflow import WorkflowError, WorkflowService
-
+from engine.config.workflow_config import WorkflowConfigService
+from engine.utils.yaml import YAMLUtils
+from engine.utils.logging import logger
 
 class ExecuteStepRequest(BaseModel):
     """Request body for executing a workflow step"""
@@ -19,21 +21,132 @@ class WorkflowRouter:
         prefix: str = "/workflow"
     ):
         self.service = workflow_service
+        self.config_service = WorkflowConfigService()
         self.router = APIRouter(prefix=prefix, tags=["workflow"])
         self._setup_routes()
+
+    async def _get_workflows(
+        self,
+        module_id: str = Query(..., description="Module ID")
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all available workflows and their configurations for a module.
+        
+        This endpoint provides a comprehensive view of all workflows available for a module, including:
+        - Base workflow configuration (type, agent, instructions, prerequisites)
+        - Module-specific customizations from kit.yaml
+        - Workflow metadata (instructions, steps, requirements)
+        - Default available actions with their schemas
+        
+        Returns:
+            List[Dict[str, Any]]: List of workflow configurations where each contains:
+                - workflow_type: The type of workflow (initialize, maintain, etc)
+                - agent_type: The type of agent that handles this workflow
+                - base_instructions: Default instructions for this workflow
+                - prerequisites: List of workflows that must be completed first
+                - module_id: ID of the module
+                - metadata: Workflow metadata including instructions and available steps
+                - default_actions: List of actions available by default
+                - kit_config: Module-specific configuration from kit.yaml
+        """
+        try:
+            # Get module path to read kit.yaml
+            module_path = self.service.module_service.get_module_path(module_id)
+            kit = YAMLUtils.read_kit(module_path)
+            
+            # Log kit workflows for debugging
+            logger.info(f"Kit workflows for module {module_id}:\n{kit.get('workflows', {})}")
+            
+            # Process each workflow
+            workflow_configs = []
+            
+            for workflow_type in self.config_service.default_configs:
+                try:
+                    # Get kit workflow config first and ensure actions list
+                    kit_workflow = kit.get('workflows', {}).get(workflow_type, {})
+                    # Default empty actions list if not provided
+                    if 'actions' not in kit_workflow:
+                        kit_workflow['actions'] = []
+                        
+                    logger.info(f"""Processing workflow {workflow_type}:
+                    Kit config: {kit_workflow}
+                    """)
+                    
+                    # Get base config
+                    config = self.config_service.get_workflow_config(
+                        workflow_type=workflow_type,
+                        kit_config=kit_workflow
+                    )
+                    
+                    # Get workflow metadata
+                    metadata = self.service.get_workflow_metadata(
+                        module_id=module_id,
+                        workflow=workflow_type
+                    )
+                    
+                    # Get default actions
+                    default_actions = []
+                    for action in config.default_actions:
+                        default_actions.append({
+                            "name": action.name,
+                            "description": action.description,
+                            "schema": action.schema
+                        })
+                    
+                    # Only append if everything loaded successfully
+                    workflow_configs.append({
+                        "workflow_type": config.workflow_type,
+                        "agent_type": config.agent_type,
+                        "base_instructions": config.base_instructions,
+                        "prerequisites": config.prerequisites,
+                        "module_id": module_id,
+                        "metadata": metadata,
+                        "default_actions": default_actions,
+                        "kit_config": kit_workflow
+                    })
+                    
+                except Exception as e:
+                    # Log error but continue processing other workflows
+                    logger.error(f"""Failed to load workflow {workflow_type}:
+                    Error: {str(e)}
+                    Module: {module_id}
+                    Kit config: {kit.get('workflows', {}).get(workflow_type)}
+                    """)
+                    # Skip this workflow rather than including with error
+            
+            return workflow_configs
+            
+        except Exception as e:
+            logger.error(f"Failed to get workflows for module {module_id}: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
 
     async def _get_workflow_metadata(
         self,
         module_id: str = Query(..., description="Module ID"),
         workflow: str = Query(..., description="Workflow (initialize/maintain/remove)")
     ) -> Dict[str, Any]:
-        """Get workflow metadata including instructions and steps"""
+        """
+        Get workflow metadata including instructions and steps.
+
+        This endpoint provides detailed information about a specific workflow, including:
+        - Workflow instructions from the module's instructions directory
+        - Available steps/actions with their metadata
+        - Module requirements needed for the workflow
+        
+        Returns:
+            Dict[str, Any]: Workflow metadata containing:
+                - instructions: String containing workflow instructions
+                - actions: List of available steps with metadata
+                - requirements: List of module requirements
+        """
         try:
-            return self.service.get_workflow_metadata(
+            metadata = self.service.get_workflow_metadata(
                 module_id=module_id,
                 workflow=workflow
             )
+            return metadata
         except WorkflowError as e:
+            logger.error(f"Failed to get metadata for workflow {workflow} in module {module_id}: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
     async def _execute_workflow_step(
@@ -43,7 +156,20 @@ class WorkflowRouter:
         step_name: str = Query(..., description="Name of the step to execute"),
         request: ExecuteStepRequest = None
     ) -> Dict[str, Any]:
-        """Execute a workflow step"""
+        """
+        Execute a workflow step with provided parameters.
+
+        This endpoint executes a specific step in a workflow. The step must be available
+        in the workflow's configuration. Parameters for the step can be provided in the
+        request body.
+
+        If no parameters are provided, an empty parameter set will be used.
+        
+        Returns:
+            Dict[str, Any]: Execution result containing:
+                - result: The result of the execution
+                May also include error details if execution fails
+        """
         try:
             if request is None:
                 request = ExecuteStepRequest()
@@ -56,6 +182,7 @@ class WorkflowRouter:
             )
             return {"result": result}
         except WorkflowError as e:
+            logger.error(f"Failed to execute step {step_name} in workflow {workflow} for module {module_id}: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
     def _setup_routes(self):
@@ -65,7 +192,8 @@ class WorkflowRouter:
             self._get_workflow_metadata,
             methods=["GET"],
             response_model=Dict[str, Any],
-            summary="Get workflow metadata including instructions and steps"
+            summary="Get detailed metadata for a specific workflow",
+            description="Get workflow-specific information including instructions, available steps, and requirements"
         )
 
         self.router.add_api_route(
@@ -73,5 +201,15 @@ class WorkflowRouter:
             self._execute_workflow_step,
             methods=["POST"],
             response_model=Dict[str, Any],
-            summary="Execute workflow step"
+            summary="Execute a specific step in a workflow",
+            description="Execute a workflow step with optional parameters provided in the request body"
+        )
+
+        self.router.add_api_route(
+            "/workflows",
+            self._get_workflows,
+            methods=["GET"],
+            response_model=List[Dict[str, Any]],
+            summary="Get all available workflows for a module",
+            description="Get comprehensive configuration for all workflows including base config, metadata, and module customizations"
         )

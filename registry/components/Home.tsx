@@ -24,6 +24,8 @@ const HomePage = () => {
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
 
+  console.log("packages", packages);
+
   useEffect(() => {
     const fetchPackages = async () => {
       try {

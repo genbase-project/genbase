@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import { Module } from '../components/TreeView';
-import { buildTreeFromModules } from '../lib/tree';
 import { toast } from '@/hooks/use-toast';
 import { DEFAULT_PROJECT_ID } from '../lib/tree';
 
@@ -78,7 +77,7 @@ export const useModuleRelationships = (moduleId: string) => {
 
       toast({
         title: "Success",
-        description: "Connection created successfully"
+        description: "Relationship created successfully"
       });
 
       // Refresh the relevant list
@@ -91,7 +90,33 @@ export const useModuleRelationships = (moduleId: string) => {
       console.error('Error creating connection:', error);
       toast({
         title: "Error",
-        description: "Failed to create connection",
+        description: "Failed to create relationship",
+        variant: "destructive"
+      });
+    }
+  }, [moduleId, fetchContext, fetchConnections]);
+
+  const removeConnection = useCallback(async (targetId: string, relationType: 'context' | 'connection') => {
+    try {
+      const response = await fetch(
+        `${API_BASE}/module/relation/${moduleId}/${targetId}/${relationType}`, 
+        { method: 'DELETE' }
+      );
+
+      if (!response.ok) throw new Error('Failed to remove connection');
+
+      toast({
+        title: "Success",
+        description: "Relationship removed successfully"
+      });
+
+      // Refresh both lists since the relationship might have changed
+      await Promise.all([fetchContext(), fetchConnections()]);
+    } catch (error) {
+      console.error('Error removing connection:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove relationship",
         variant: "destructive"
       });
     }
@@ -115,6 +140,7 @@ export const useModuleRelationships = (moduleId: string) => {
     isLoading,
     fetchAll,
     createConnection,
+    removeConnection,
     fetchAvailableModules
   };
 };

@@ -8,14 +8,56 @@ runConfig:
   # memoryMiB: 512
 
 # Environment variables and secrets.
+
+
+# # Copy this file as ".env.local".
+# # Update these with your Firebase app's values.
+# FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@hivon-ai.iam.gserviceaccount.com
+# NEXT_PUBLIC_FIREBASE_PUBLIC_API_KEY=AIzaSyCb-_vuseCqF0eo6GSS5vdcj8qADwYO24k
+# NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=hivon-ai.firebaseapp.com
+# NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://hivon-ai.firebaseio.com
+# NEXT_PUBLIC_FIREBASE_PROJECT_ID=hivon-ai
+# NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=hivon-ai.firebasestorage.app
+
+# # Your Firebase private key.
+# # When using Vercel, add the private key with double quotes
+# # via the CLI, not the Vercel dashboard:
+# #   vercel secrets add firebase-private-key '"my-key-here"'
+# # Then, use `JSON.parse` in the app. See:
+# # https://github.com/vercel/vercel/issues/749#issuecomment-707515089
+# FIREBASE_PRIVATE_KEY='"-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDBzp7mFstXbcWC\nFafcp7/R2VbTG8m/HaUz8IA55wm/5e0o74p7w3AS/PWaq0CQkc9MI22imbHqQWEA\nn9SN4hJtiUjY2DrnUh9IuhHMFHNfV/ir1+xBTWLTtvSvvSSKIl5qI4NLexzyM3jn\n8+7GnDq1Pfk2jMWrmNOt2LUDHOVh8yaRV6GELj/HEpdH5JeYX/FAA+AWLnZpo2Lr\nwYMW2ckDTsXEURqOtWn2NeIre33KsDI4ROHP6Vn290k8qLHEjRCJC/bA+pFoNSFh\nYmYRJd2STAzyOo2nxcUbnzor7N8RXi2S/dmLJon+sHAWlzH0G6G608MLAZ+UzgVz\ndz/MMJHVAgMBAAECggEAB4l2MH3ZG+X5n7IhPGQ3Aigw8jYgcGhCER+x546OmIHj\n6TWiQxHkp+MNLMiq0snOL/3TY6wVI9u1tAUt356tF3QWpdLdkjq6sLoGZdNdxpVw\nkZjsvSq57yssSjFRhyBdtO77SieC3ABtxpzRP7QPrGtj57UtyBtCEClfULxXnKl7\nXnUXXEzMYFlQUUM6Uxc7PgDCLHAsVWUTQef0sEu2w68zcsR3b6XjloMDEo1yveQq\nJm5F99bZcIswO5wxy6IxoCyGAqGhH9RoPiv55sg4/D7UpBaC+tMmGhLxV9cva7xD\nNi2LvhfcAIYHUL1RAzQhv+2f5w/U0GVykjjca46EAQKBgQDw2Yfl/fOL+aJIpPxs\nhPm93t7l475S/VwY9BNxq6BTF88T8QZzKA54X4ZgyljxOG2CA5qmxtGNj2Y7m06k\nVp3iixxHcOTR5yRACk80VzmNuPmO/0Bq9HWrLCygc9k9SWzdcfWS28NOVvJVzjXx\ndJi8N6ACJ57zIjsTL9r3prRsgQKBgQDN/4y4gVM1usmAiG9ohBNmnb75iobUDFAQ\nA0bRcZzLW7uDSgaZU8Tz9YMVaWLWblgcwpWQ3vVAPqfxjzqSkcK5PQAjpUxY+JNA\nCOgyUdmV6Yu5L6nwvuJ04eIV7IXPsTT8C8u/245qJ/lQchn2DMFpSjZhzHGebe1i\nIC1Tjh8LVQKBgHvmS+Ti+VD+wJ9CUKC634bvihcVS6mBsMkddos5USatztdhXIIN\nDzSZX5WXQp4E+0Cw/fPhv5dlN6BeStx7uoj6KzgNOYlJsPpI02oHnRHtIGSRpt/e\nllHSTbrVHeJLTXe10jEUYKqCS/QcOt/VrWTV8LhrDXfiGiXKrohL9/EBAoGAPyNf\nh0GkNmis0CeBNiCdLauV2DhcQOwRMgc/EnznGPFh1MjAowgo6rlKVyq4745clVwS\nqZecxfcuVHyY8EmazFnlDAfjEbYGs+7G9H1f2nH9sGHqjW6ETFzbheq7zL+8xK/8\n4C40RVdBNCX0zRR1x4bGik02Wd/JjXTdT6nU3A0CgYEA27oQU7KUwy8nDsQYNIAi\nCse5TljjP43JO7PLKnAu4STzwhWN0yXZcpbOBoqsH4C6CCofiCwFiOFmaEqDjvSx\n8xH2B29K+MKGCMjfoY7pm6/saisO1EOV3ex4MR0KtvD4oSq+ZxN5DZJ1mO8JK5UJ\niaUPWsxdLGW5h8CqqPWH/vc=\n-----END PRIVATE KEY-----\n"'
+
+# # Secrets used to sign cookies.
+# COOKIE_SECRET_CURRENT=HivonRegSec2025Curr
+# COOKIE_SECRET_PREVIOUS=HivonRegSec2025Prev
+
+# # Cookie options.
+# NEXT_PUBLIC_COOKIE_SECURE=false # set to true in HTTPS environment
+
+
+
+
+
 env:
-  # Configure environment variables.
-  # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment.
-  - variable: MESSAGE
-    value: Hello world!
-    availability:
-      - BUILD
-      - RUNTIME
+  - variable: FIREBASE_CLIENT_EMAIL
+    value: firebase-adminsdk-fbsvc@hivon-ai.iam.gserviceaccount.com
+  - variable: NEXT_PUBLIC_FIREBASE_PUBLIC_API_KEY
+    secret: firebasePublicApiKey
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: hivon-ai.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_DATABASE_URL
+    value: https://hivon-ai.firebaseio.com
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: hivon-ai
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: hivon-ai.firebasestorage.app
+  - variable: FIREBASE_PRIVATE_KEY
+    secret: firebasePrivateKey
+  - variable: COOKIE_SECRET_CURRENT
+    secret: registryCookieSecretCurrent
+  - variable: COOKIE_SECRET_PREVIOUS
+    secret: registryCookieSecretPrevious
+
 
   # Configure secrets
   # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters

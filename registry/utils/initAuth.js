@@ -6,6 +6,11 @@ import absoluteUrl from 'next-absolute-url'
 const TWELVE_DAYS_IN_MS = 12 * 60 * 60 * 24 * 1000
 
 const initAuth = () => {
+  if (process.env.RUNTIME !== 'true') {
+    console.warn('Skipping auth initialization during build')
+    return
+  }
+
   // Initialize Firebase.
   const firebaseClientInitConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_PUBLIC_API_KEY,

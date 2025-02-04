@@ -69,9 +69,8 @@ const HomePage = () => {
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {packages.map((pkg) => (
-                <Link href={`/kit/${pkg.kitConfig.id}`}>
-  <Card className="hover:shadow-lg transition-shadow"
-          key={pkg.fileName}>
+                <Link href={`/kit/${pkg.kitConfig.id}`} key={pkg.fileName}>
+  <Card className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>

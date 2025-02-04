@@ -1,9 +1,20 @@
 {
   "/_app": "pages/_app.js",
+  "/api/cookies-example": "pages/api/cookies-example.js",
+  "/api/example": "pages/api/example.js",
+  "/api/login": "pages/api/login.js",
   "/_error": "pages/_error.js",
+  "/api/registry/file-content": "pages/api/registry/file-content.js",
+  "/api/registry/publish": "pages/api/registry/publish.js",
+  "/api/logout": "pages/api/logout.js",
+  "/auth": "pages/auth.html",
+  "/deprecated/static-auth-required-loader": "pages/deprecated/static-auth-required-loader.html",
+  "/home": "pages/home.html",
+  "/kit/[id]": "pages/kit/[id].html",
+  "/publish": "pages/publish.html",
+  "/auth-ssr": "pages/auth-ssr.js",
+  "/deprecated/ssr-auth-required": "pages/deprecated/ssr-auth-required.js",
+  "/deprecated/ssr-no-token": "pages/deprecated/ssr-no-token.js",
   "/_document": "pages/_document.js",
-  "/auth": "pages/auth.js",
-  "/kit/[id]": "pages/kit/[id].js",
-  "/home": "pages/home.js",
-  "/api/logout": "pages/api/logout.js"
+  "/404": "pages/404.html"
 }

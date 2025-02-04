@@ -6,7 +6,7 @@ initAuth()
 const handler = async (req, res) => {
   try {
     // Including unused return value to demonstrate codemod
-    // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line no-unused-vars
     const { user } = await setAuthCookies(req, res)
   } catch (e) {
     // eslint-disable-next-line no-console

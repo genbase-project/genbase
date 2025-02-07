@@ -10,6 +10,36 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+
+
+from engine.apis.action import ActionRouter
+# from engine.apis.agent import AgentRouter
+
+# Import routers
+from engine.apis.chat import ChatRouter
+from engine.apis.kit import KitRouter
+
+# Import utilities
+from engine.apis.model import ModelRouter
+from engine.apis.module import ModuleRouter
+from engine.apis.project import ProjectRouter
+from engine.apis.repository import RepositoryRouter
+from engine.apis.resource import ResourceRouter  # New import
+from engine.apis.workflow import WorkflowRouter
+from engine.services.agents.base_agent import AgentServices
+from engine.services.execution.action import ActionService
+
+# Import services
+from engine.services.core.kit import KitService
+from engine.services.execution.model import ModelService
+from engine.services.core.module import ModuleService
+from engine.services.core.project import ProjectService
+from engine.services.storage.repository import RepoService
+from engine.services.storage.resource import ResourceService  # New import
+from engine.services.execution.stage_state import StageStateService  # Add this import
+from engine.services.execution.workflow import WorkflowService
+
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -40,38 +70,6 @@ class ErrorLoggingMiddleware(BaseHTTPMiddleware):
                     "stacktrace": traceback.format_exc().split("\n")
                 }
             )
-
-from engine.apis.action import ActionRouter
-# from engine.apis.agent import AgentRouter
-
-# Import routers
-from engine.apis.chat import ChatRouter
-from engine.apis.coder import CoderRouter
-from engine.apis.kit import KitRouter
-
-# Import utilities
-from engine.apis.model import ModelRouter
-from engine.apis.module import ModuleRouter
-from engine.apis.project import ProjectRouter
-from engine.apis.repository import RepositoryRouter
-from engine.apis.resource import ResourceRouter  # New import
-from engine.apis.tasker import TaskerRouter
-from engine.apis.workflow import WorkflowRouter
-from engine.services.agents.base_agent import AgentServices
-from engine.services.execution.action import ActionService
-
-# Import new service and router
-# from engine.services.execution.agent import AgentService
-
-# Import services
-from engine.services.core.kit import KitService
-from engine.services.execution.model import ModelService
-from engine.services.core.module import ModuleService
-from engine.services.core.project import ProjectService
-from engine.services.storage.repository import RepoService
-from engine.services.storage.resource import ResourceService  # New import
-from engine.services.execution.stage_state import StageStateService  # Add this import
-from engine.services.execution.workflow import WorkflowService
 
 load_dotenv()
 
@@ -150,17 +148,6 @@ workflow_service = WorkflowService(
 
 
 
-# # Initialize Agent service
-# agent_service = AgentService(
-#     workflow_service=workflow_service,
-#     model_service=model_service,
-#     stage_state_service=stage_state_service,
-#     repo_service=repo_service,
-#     module_service=module_service,
-# )
-
-
-
 # Initialize routers
 kit_router = KitRouter(
    kit_service=kit_service,
@@ -205,12 +192,6 @@ workflow_router = WorkflowRouter(
     prefix="/workflow"
 )
 
-# # Initialize AI workflow router
-# agent_router = AgentRouter(
-#     agent_service=agent_service,
-#     prefix="/agent"
-# )
-
 # Include routers
 app.include_router(kit_router.router)
 app.include_router(module_router.router)
@@ -220,7 +201,6 @@ app.include_router(resource_router.router)  # Add resource router
 app.include_router(model_router.router)
 app.include_router(operation_router.router)
 app.include_router(workflow_router.router)
-# app.include_router(agent_router.router)
 
 
 
@@ -238,24 +218,7 @@ agent_services = AgentServices(
     module_service=module_service
 )
 
-# Initialize TaskerRouter
-tasker_router = TaskerRouter(
-    agent_services=agent_services,
-    prefix="/tasker"
-)
 
-# Include the router
-app.include_router(tasker_router.router)
-
-
-
-# Initialize CoderRouter
-coder_router = CoderRouter(
-    agent_services=agent_services,
-    prefix="/coder"
-)
-
-app.include_router(coder_router.router)
 
 
 chat_router = ChatRouter(

@@ -6,7 +6,7 @@ import difflib
 from engine.config.workflow_config import WorkflowConfigurations
 from engine.services.agents.base_agent import Action, AgentContext, AgentError, AgentServices, BaseAgent
 from engine.utils.logging import logger
-from engine.services.execution.workflow import WorkflowError
+from engine.services.execution.workflow import WorkflowError, WorkflowMetadataResult, WorkflowStepMetadata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -183,7 +183,8 @@ Repository Context:
                         module_id=context.module_id,
                         workflow=context.workflow,
                         role="assistant",
-                        content=response_msg
+                        content=response_msg,
+                        session_id=context.session_id
                     )
                     return {"response": response_msg, "results": []}
                 else:
@@ -192,7 +193,8 @@ Repository Context:
                         module_id=context.module_id,
                         workflow=context.workflow,
                         role="assistant",
-                        content=msg
+                        content=msg,
+                        session_id=context.session_id
                     )
                     return {"response": msg, "results": []}
 
@@ -201,15 +203,15 @@ Repository Context:
             
             try:
                 # Get workflow metadata and instructions
-                workflow_data = await self.get_combined_workflow_metadata(context)
+                workflow_data = await self.get_workflow_metadata(context)
             except WorkflowError as e:
                 # If we can't get workflow metadata, use empty data but log the error
                 logger.warning(f"Could not get workflow metadata: {str(e)}")
-                workflow_data = {
-                    "instructions": "",
-                    "actions": [],
-                    "requirements": []
-                }
+                workflow_data = WorkflowMetadataResult(
+                    instructions="",
+                    actions=[],
+                    requirements=[]
+                )
             
             # Add workflow instructions and repo context to messages
             messages = self._add_instruction_prompts(messages, workflow_data, context)
@@ -217,7 +219,11 @@ Repository Context:
             # Add repository context
             for msg in messages:
                 if msg["role"] == "system":
-                    msg["content"] = f"{msg['content']}\n\nCurrent repository context:\n{repo_context}"
+                    msg["content"] = (
+                        f"{msg['content']}\n\n"
+                        f"Current repository context:\n{repo_context}\n\n"
+                        f"Workflow instructions:\n{workflow_data.instructions}"
+                    )
                     break
 
             # Get model response 

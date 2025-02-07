@@ -1,7 +1,13 @@
+import io
+import json
+import os
 import re
 import shutil
 import tempfile
 import zipfile
+from urllib.parse import urljoin
+
+import httpx
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from enum import Enum
@@ -13,6 +19,10 @@ import yaml
 
 class KitError(Exception):
     """Base exception for kit management errors"""
+    pass
+
+class RegistryError(KitError):
+    """Registry connection or download error"""
     pass
 
 class KitNotFoundError(KitError):
@@ -123,6 +133,65 @@ class KitService:
         with zipfile.ZipFile(zip_file, 'r') as zip_ref:
             zip_ref.extractall(extract_path)
 
+    def install_kit(self, owner: str, kit_id: str, version: str = None) -> KitMetadata:
+        """
+        Install kit from registry
+        
+        Args:
+            owner: Kit owner
+            kit_id: Kit identifier  
+            version: Optional specific version to install, otherwise latest
+            
+        Returns:
+            KitMetadata: Installed kit metadata
+            
+        Raises:
+            KitNotFoundError: If kit not found in registry
+            InvalidVersionError: If version format invalid  
+            RegistryError: If registry connection fails
+            KitError: Other errors during installation
+        """
+        if not (base_url := os.getenv('REGISTRY_URL')):
+            raise KitError("REGISTRY_URL environment variable not set")
+            
+        # Construct registry URL
+        base_url = urljoin(base_url, "api/registry/")
+        url = urljoin(base_url, f"kit?owner={owner}&id={kit_id}")
+
+        if version:
+            if not self.validate_semantic_version(version):
+                raise InvalidVersionError(f"Invalid version format: {version}")
+            url = urljoin(base_url, f"kit?owner={owner}&id={kit_id}&version={version}")
+        # Download kit from registry
+        try:
+            with httpx.Client() as client:
+                # First get kit metadata and download URL
+                response = client.get(url)
+                if response.status_code == 404:
+                    raise KitNotFoundError(f"Kit not found in registry: {owner}/{kit_id}")
+                response.raise_for_status()
+                
+                response_data = json.loads(response.content)
+                kit_info = response_data.get("kitConfig", {})
+                download_url = response_data.get("downloadURL")
+                if not download_url:
+                    raise KitError("Download URL not found in registry response")
+                
+                # Validate kit info
+                required_fields = ["owner", "id", "version"]
+                if not all(kit_info.get(field) for field in required_fields):
+                    raise KitError("Missing required fields in kit metadata")
+                
+                # Download actual kit zip file
+                download_response = client.get(download_url)
+                download_response.raise_for_status()
+                kit_data = io.BytesIO(download_response.content)
+        except httpx.HTTPError as e:
+            raise RegistryError(f"Failed to download kit from registry: {str(e)}")
+            
+        # Save downloaded kit
+        return self.save_kit(kit_data)
+
     def save_kit(self, kit_data: BinaryIO) -> KitMetadata:
         """
         Save a new kit version by extracting info from kit.yaml
@@ -161,8 +230,6 @@ class KitService:
             if not all([owner, kit_id, version]):
                 raise KitError("Missing required fields in kit.yaml")
 
-            if not self.validate_semantic_version(version):
-                raise InvalidVersionError(f"Invalid version format: {version}")
 
             # Get final kit path
             kit_path = self._get_kit_path(owner, kit_id, version)

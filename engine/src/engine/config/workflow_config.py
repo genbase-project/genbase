@@ -19,6 +19,7 @@ class WorkflowConfig:
     base_instructions: str  # Default instructions always included
     prerequisites: List[str]  # Workflows that must be completed first
     default_actions: List[WorkflowAction] = field(default_factory=list)  # Default actions available to this workflow
+    allow_multiple: bool = False  # Whether multiple chat sessions are allowed
 
 
 class WorkflowConfigurations:
@@ -41,7 +42,8 @@ class WorkflowConfigurations:
                 1. Verify environment setup
                 2. Install dependencies
                 3. Validate initial configuration""",
-                prerequisites=[]
+                prerequisites=[],
+                allow_multiple=False
             ),
             
             "maintain": WorkflowConfig(
@@ -49,15 +51,8 @@ class WorkflowConfigurations:
                 agent_type=WorkflowConfigurations.TASKER_AGENT,
                 base_instructions="""You are a maintenance agent responsible for keeping the module healthy.
                 Monitor and maintain the module's operation.""",
-                prerequisites=["initialize"]
-            ),
-            
-            "share": WorkflowConfig(
-                workflow_type="share",
-                agent_type=WorkflowConfigurations.TASKER_AGENT,
-                base_instructions="""You are responsible for managing shared resources and connections.
-                Carefully manage access and resource sharing between modules.""",
-                prerequisites=["initialize"]
+                prerequisites=["initialize"],
+                allow_multiple=True
             ),
             
             "remove": WorkflowConfig(
@@ -65,7 +60,8 @@ class WorkflowConfigurations:
                 agent_type=WorkflowConfigurations.TASKER_AGENT,
                 base_instructions="""You are responsible for safely removing the module.
                 Ensure all resources are cleaned up and dependencies are handled.""",
-                prerequisites=["initialize"]
+                prerequisites=["initialize"],
+                allow_multiple=False
             ),
             
             "edit": WorkflowConfig(
@@ -74,7 +70,8 @@ class WorkflowConfigurations:
                 base_instructions="""You are a code editing agent.
                 Make careful and minimal necessary changes.
                 Always explain changes and wait for confirmation.""",
-                prerequisites=["initialize"]
+                prerequisites=["initialize"],
+                allow_multiple=True
             )
         }
     @staticmethod
@@ -125,7 +122,8 @@ class WorkflowConfigService:
                 agent_type=base_config.agent_type,
                 base_instructions=base_config.base_instructions,
                 prerequisites=base_config.prerequisites.copy(),
-                default_actions=default_actions
+                default_actions=default_actions,
+                allow_multiple=base_config.allow_multiple  # Pass through allow_multiple setting
             )
         else:
             # Create copy of base config with kit customizations
@@ -134,7 +132,8 @@ class WorkflowConfigService:
                 agent_type=base_config.agent_type,
                 base_instructions=f"{base_config.base_instructions}\n\n{kit_config.get('instruction', '')}",
                 prerequisites=base_config.prerequisites.copy(),
-                default_actions=default_actions
+                default_actions=default_actions,
+                allow_multiple=kit_config.get('allow_multiple', base_config.allow_multiple)  # Allow override from kit config
             )
             
         return config

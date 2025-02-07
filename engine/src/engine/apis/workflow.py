@@ -1,20 +1,31 @@
-from typing import Any, Dict, List
+from datetime import datetime, UTC
+from typing import Any, Dict, List, Optional
+import uuid
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import select, insert
 
+from engine.db.models import ChatHistory
+from engine.db.session import SessionLocal
 from engine.services.execution.workflow import WorkflowError, WorkflowService
 from engine.config.workflow_config import WorkflowConfigService
 from engine.utils.yaml import YAMLUtils
 from engine.utils.logging import logger
+from engine.services.execution.stage_state import StageStateService
 
 class ExecuteStepRequest(BaseModel):
     """Request body for executing a workflow step"""
     parameters: Dict[str, Any] = {}
 
+class CreateSessionResponse(BaseModel):
+    """Response for session creation"""
+    session_id: str
+    timestamp: str
+
 class WorkflowRouter:
     """FastAPI router for workflow operations"""
-
+    
     def __init__(
         self,
         workflow_service: WorkflowService,
@@ -22,9 +33,42 @@ class WorkflowRouter:
     ):
         self.service = workflow_service
         self.config_service = WorkflowConfigService()
+        self.stage_state_service = StageStateService()
         self.router = APIRouter(prefix=prefix, tags=["workflow"])
         self._setup_routes()
-
+    
+    async def _create_session(
+        self,
+        module_id: str = Query(..., description="Module ID"),
+        workflow: str = Query(..., description="Workflow type")
+    ) -> CreateSessionResponse:
+        """Create a new chat session"""
+        try:
+            session_id = str(uuid.uuid4())
+            timestamp = datetime.now(UTC)
+            
+            # Add an initial system message to make the session appear in the list
+            with SessionLocal() as db:
+                stmt = insert(ChatHistory).values(
+                    module_id=module_id,
+                    section=workflow,
+                    role="system",
+                    content="Session created",
+                    timestamp=timestamp,
+                    message_type="text",
+                    session_id=session_id
+                )
+                db.execute(stmt)
+                db.commit()
+            
+            return CreateSessionResponse(
+                session_id=session_id,
+                timestamp=timestamp.isoformat()
+            )
+        except Exception as e:
+            logger.error(f"Failed to create session: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
+    
     async def _get_workflows(
         self,
         module_id: str = Query(..., description="Module ID")
@@ -93,6 +137,12 @@ class WorkflowRouter:
                             "schema": action.schema
                         })
                     
+                    # Get workflow completion status
+                    is_completed = self.stage_state_service.get_workflow_status(
+                        module_id=module_id,
+                        workflow_type=workflow_type
+                    )
+                    
                     # Only append if everything loaded successfully
                     workflow_configs.append({
                         "workflow_type": config.workflow_type,
@@ -102,7 +152,9 @@ class WorkflowRouter:
                         "module_id": module_id,
                         "metadata": metadata,
                         "default_actions": default_actions,
-                        "kit_config": kit_workflow
+                        "kit_config": kit_workflow,
+                        "is_completed": is_completed,
+                        "allow_multiple": config.allow_multiple
                     })
                     
                 except Exception as e:
@@ -123,7 +175,8 @@ class WorkflowRouter:
     async def _get_workflow_metadata(
         self,
         module_id: str = Query(..., description="Module ID"),
-        workflow: str = Query(..., description="Workflow (initialize/maintain/remove)")
+        workflow: str = Query(..., description="Workflow (initialize/maintain/remove/edit)"),
+        session_id: Optional[str] = Query(None, description="Optional session ID")
     ) -> Dict[str, Any]:
         """
         Get workflow metadata including instructions and steps.
@@ -152,9 +205,10 @@ class WorkflowRouter:
     async def _execute_workflow_step(
         self,
         module_id: str = Query(..., description="Module ID"),
-        workflow: str = Query(..., description="Workflow (initialize/maintain/remove)"),
+        workflow: str = Query(..., description="Workflow (initialize/maintain/remove/edit)"),
         step_name: str = Query(..., description="Name of the step to execute"),
-        request: ExecuteStepRequest = None
+        request: ExecuteStepRequest = None,
+        session_id: Optional[str] = Query(None, description="Optional session ID")
     ) -> Dict[str, Any]:
         """
         Execute a workflow step with provided parameters.
@@ -185,8 +239,68 @@ class WorkflowRouter:
             logger.error(f"Failed to execute step {step_name} in workflow {workflow} for module {module_id}: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
+    async def _get_workflow_sessions(
+        self,
+        module_id: str = Query(..., description="Module ID"),
+        workflow: str = Query(..., description="Workflow type")
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all available sessions for a workflow.
+        
+        Returns a list of sessions including their IDs and latest messages.
+        """
+        try:
+            with SessionLocal() as db:
+                # Get all unique session IDs for this module/workflow
+                stmt = (
+                    select(ChatHistory.session_id)
+                    .distinct()
+                    .where(
+                        ChatHistory.module_id == module_id,
+                        ChatHistory.section == workflow
+                    )
+                )
+                sessions = db.execute(stmt).scalars().all()
+                
+                # Get latest message for each session
+                result = []
+                for session_id in sessions:
+                    latest_msg = (
+                        db.query(ChatHistory)
+                        .filter(
+                            ChatHistory.module_id == module_id,
+                            ChatHistory.section == workflow,
+                            ChatHistory.session_id == session_id
+                        )
+                        .order_by(ChatHistory.timestamp.desc())
+                        .first()
+                    )
+                    
+                    if latest_msg:
+                        result.append({
+                            "session_id": session_id,
+                            "last_message": latest_msg.content,
+                            "last_updated": latest_msg.timestamp.isoformat(),
+                            "is_default": session_id == str(uuid.UUID(int=0))
+                        })
+                
+                return sorted(result, key=lambda x: x["last_updated"], reverse=True)
+                
+        except Exception as e:
+            logger.error(f"Failed to get workflow sessions: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
+
     def _setup_routes(self):
         """Setup all routes"""
+        self.router.add_api_route(
+            "/session/create",
+            self._create_session,
+            methods=["POST"],
+            response_model=CreateSessionResponse,
+            summary="Create a new chat session",
+            description="Create a new chat session for a workflow"
+        )
+
         self.router.add_api_route(
             "/metadata",
             self._get_workflow_metadata,
@@ -194,6 +308,15 @@ class WorkflowRouter:
             response_model=Dict[str, Any],
             summary="Get detailed metadata for a specific workflow",
             description="Get workflow-specific information including instructions, available steps, and requirements"
+        )
+
+        self.router.add_api_route(
+            "/sessions",
+            self._get_workflow_sessions,
+            methods=["GET"],
+            response_model=List[Dict[str, Any]],
+            summary="Get all available sessions for a workflow",
+            description="Get list of chat sessions including their IDs and latest messages"
         )
 
         self.router.add_api_route(

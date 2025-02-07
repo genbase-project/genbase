@@ -180,7 +180,17 @@ class StageStateService:
             db.commit()
             
             return {
-                "status": "success",
+                "status": "success", 
                 "message": f"Workflow {workflow_type} marked as completed"
             }
             
+    def get_workflow_status(self, module_id: str, workflow_type: str) -> bool:
+        """Get completion status for a workflow"""
+        with self._get_db() as db:
+            stmt = select(WorkflowStatus).where(
+                WorkflowStatus.module_id == module_id,
+                WorkflowStatus.workflow_type == workflow_type
+            )
+            status = db.execute(stmt).scalar_one_or_none()
+            
+            return bool(status and status.is_completed)

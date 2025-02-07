@@ -4,7 +4,7 @@ from engine.config.workflow_config import WorkflowConfigurations
 from engine.services.agents.base_agent import Action, AgentContext, AgentError, BaseAgent
 from engine.utils.logging import logger
 from engine.services.execution.stage_state import COMPLETE_WORKFLOW_SCHEMA
-from engine.services.execution.workflow import ActionInfo
+from engine.services.execution.workflow import ActionInfo, WorkflowStepMetadata
 from dataclasses import asdict
 
 class TaskerAgent(BaseAgent):
@@ -19,12 +19,6 @@ class TaskerAgent(BaseAgent):
         """Return agent-specific default actions"""
         logger.debug("Getting default actions for TaskerAgent")
         return [
-            Action(
-                name="complete_workflow",
-                description="Mark a workflow as completed",
-                schema=COMPLETE_WORKFLOW_SCHEMA,
-                function=self.services.stage_state_service.complete_workflow
-            )
         ]
 
     def _get_base_instructions(self) -> str:
@@ -60,6 +54,8 @@ If asked what you can do, explain your capabilities based on the available tools
 
     def _serialize_metadata(self, obj: Any) -> Any:
         """Serialize objects that aren't JSON serializable"""
+        if hasattr(obj, 'model_dump'):  # Handle Pydantic models
+            return obj.model_dump()
         if hasattr(obj, 'to_dict'):
             return obj.to_dict()
         if hasattr(obj, '__dict__'):
@@ -85,23 +81,29 @@ If asked what you can do, explain your capabilities based on the available tools
             logger.info(f"Processing workflow for module {context.module_id}, workflow {context.workflow}")
             
             # Get workflow metadata
-            workflow_data = await self.get_combined_workflow_metadata(context)
+            workflow_metadata = await self.get_workflow_metadata(context)
             
             # Add instruction prompts
-            messages = self._add_instruction_prompts(messages, workflow_data, context)
+            messages = self._add_instruction_prompts(messages, workflow_metadata, context)
             
             # Get all workflow actions including defaults
-            all_workflow_actions = workflow_data.get("actions", [])
+            all_workflow_actions = list(workflow_metadata.actions)
             
             # Get workflow-specific default actions
             workflow_default_actions = self.get_workflow_default_actions(context.workflow)
             for action in workflow_default_actions:
-                all_workflow_actions.append({
-                    "name": action.name,
-                    "description": action.description,
-                    "action": action.name,
-                    "metadata": action.schema["function"]
-                })
+                # Create a metadata object that matches the required schema
+                metadata = {
+                    **action.schema["function"],  # Existing function metadata
+                    "is_async": False  # Default to non-async for workflow default actions
+                }
+                
+                all_workflow_actions.append(WorkflowStepMetadata(
+                    name=action.name,
+                    description=action.description,
+                    action=action.name,
+                    metadata=metadata
+                ))
             
             # Get action tools and mapping
             workflow_tools, action_map = await self.get_workflow_actions(
@@ -134,7 +136,8 @@ If asked what you can do, explain your capabilities based on the available tools
                     context.module_id,
                     context.workflow,
                     "assistant",
-                    assistant_message.content
+                    assistant_message.content,
+                    session_id=context.session_id
                 )
             
             # Handle tool calls
@@ -181,13 +184,20 @@ If asked what you can do, explain your capabilities based on the available tools
                                 parameters=tool_args
                             )
                         
+                        # Ensure result is JSON serializable
+                        if hasattr(result, 'model_dump'):
+                            result_dict = result.model_dump()
+                        else:
+                            result_dict = {"value": str(result)}
+                        
                         results.append({
                             "action": tool_name,
-                            "result": result
+                            "result": result_dict
                         })
                         
+                        # Use the serialized result for the summary
                         tool_results_summary.append(
-                            f"Action '{tool_name}' executed with result: {json.dumps(result)}"
+                            f"Action '{tool_name}' executed with result: {json.dumps(result_dict)}"
                         )
                         
                     except Exception as e:
@@ -206,13 +216,22 @@ If asked what you can do, explain your capabilities based on the available tools
                         "\n".join(tool_results_summary)
                     )
                     
+                    # Convert results to JSON serializable format
+                    serialized_results = []
+                    for result in results:
+                        serialized_results.append({
+                            "action": result["action"],
+                            "result": self._serialize_metadata(result["result"])
+                        })
+                    
                     self.history_manager.add_to_history(
                         context.module_id,
                         context.workflow,
                         "user",
                         tool_results_message,
                         message_type="tool_result",
-                        tool_data=results
+                        tool_data=serialized_results,
+                        session_id=context.session_id
                     )
                     
                     # Get fresh chat history for final response
@@ -233,7 +252,8 @@ If asked what you can do, explain your capabilities based on the available tools
                             context.module_id,
                             context.workflow,
                             "assistant",
-                            final_message.content
+                            final_message.content,
+                            session_id=context.session_id
                         )
                         return {
                             "response": final_message.content,

@@ -143,6 +143,24 @@ class KitRouter:
         except KitError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
+    async def _install_kit(self, owner: str, kit_id: str, version: str = None):
+        """Install kit from registry"""
+        try:
+            metadata = self.service.install_kit(owner, kit_id, version)
+            return JSONResponse(
+                content={
+                    "status": "success",
+                    "message": "Kit installed successfully",
+                    "kit_info": KitResponse.from_metadata(metadata).dict()
+                }
+            )
+        except InvalidVersionError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except KitNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except KitError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
     def _setup_routes(self):
         """Setup all routes"""
         self.router.add_api_route(
@@ -150,6 +168,20 @@ class KitRouter:
             self._upload_kit,
             methods=["POST"],
             summary="Upload kit"
+        )
+
+        self.router.add_api_route(
+            "/install/{owner}/{kit_id}/{version}",
+            self._install_kit,
+            methods=["GET"],
+            summary="Install kit from registry with specific version"
+        )
+
+        self.router.add_api_route(
+            "/install/{owner}/{kit_id}",
+            self._install_kit,
+            methods=["GET"],
+            summary="Install kit from registry with latest version"
         )
 
         self.router.add_api_route(

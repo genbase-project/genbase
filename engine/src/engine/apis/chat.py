@@ -1,7 +1,7 @@
 # engine/apis/agent.py
 
-from typing import Dict, Any, List
-from fastapi import APIRouter, HTTPException
+from typing import Dict, Any, List, Optional
+from fastapi import APIRouter, HTTPException, Query, Path
 from pydantic import BaseModel
 
 from engine.config.workflow_config import WorkflowConfigurations
@@ -15,6 +15,7 @@ class WorkflowExecuteRequest(BaseModel):
     """Request model for workflow execution"""
     section: str
     input: str
+    session_id: str = "00000000-0000-0000-0000-000000000000"  # Default UUID(0)
 
 class WorkflowResponse(BaseModel):
     """Response model for workflow execution"""
@@ -49,6 +50,7 @@ class ChatRouter:
         self.tasker_agent = TaskerAgent(agent_services)
         self.coder_agent = CoderAgent(agent_services)
         
+        # Important: prefix is /chat in our route declarations
         self.router = APIRouter(prefix=prefix, tags=["agent"])
         self._setup_routes()
 
@@ -69,8 +71,8 @@ class ChatRouter:
 
     async def _execute_workflow(
         self,
-        module_id: str,
-        request: WorkflowExecuteRequest
+        request: WorkflowExecuteRequest,
+        module_id: str = Path(..., description="Module ID")
     ) -> WorkflowResponse:
         """Handle workflow execution request"""
         try:
@@ -81,7 +83,8 @@ class ChatRouter:
             context = AgentContext(
                 module_id=module_id,
                 workflow=request.section,
-                user_input=request.input
+                user_input=request.input,
+                session_id=request.session_id
             )
             
             # Execute workflow
@@ -99,22 +102,24 @@ class ChatRouter:
 
     async def _get_workflow_history(
         self,
-        module_id: str,
-        section: str
+        module_id: str = Path(..., description="Module ID"),
+        workflow: str = Path(..., description="Workflow (initialize/maintain/remove/edit)"),
+        session_id: Optional[str] = Query("00000000-0000-0000-0000-000000000000", description="Optional session ID")
     ) -> HistoryResponse:
         """Get workflow history"""
         try:
             # Get appropriate agent
-            agent = self._get_agent_for_workflow(section)
+            agent = self._get_agent_for_workflow(workflow)
             
             history = agent.history_manager.get_chat_history(
                 module_id=module_id,
-                workflow=section
+                workflow=workflow,
+                session_id=session_id
             )
             
             return HistoryResponse(
                 history=history,
-                section=section,
+                section=workflow,
                 module_id=module_id
             )
             
@@ -125,7 +130,7 @@ class ChatRouter:
 
     async def _get_status(
         self,
-        module_id: str
+        module_id: str = Path(..., description="Module ID")
     ) -> StatusResponse:
         """Get module status"""
         try:
@@ -146,6 +151,14 @@ class ChatRouter:
 
     def _setup_routes(self):
         """Setup API routes"""
+        # Update parameter description to clarify session_id usage
+        descriptions = {
+            "module_id": "Module ID",
+            "section": "Workflow section (initialize/maintain/remove/edit)",
+            "session_id": "Optional session ID. Defaults to base session if not provided."
+        }
+        
+        # Use full paths with /chat prefix since it's not in router prefix
         self.router.add_api_route(
             "/{module_id}/execute",
             self._execute_workflow,
@@ -154,7 +167,7 @@ class ChatRouter:
         )
 
         self.router.add_api_route(
-            "/{module_id}/workflow/{section}/history",
+            "/{module_id}/workflow/{workflow}/history",
             self._get_workflow_history,
             methods=["GET"],
             response_model=HistoryResponse

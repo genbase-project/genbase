@@ -1,9 +1,45 @@
 import os
+import logging
+import traceback
 from pathlib import Path
+from typing import Any, Dict
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('app.log')
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+class ErrorLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
+        try:
+            return await call_next(request)
+        except Exception as e:
+            logger.error(
+                f"Exception occurred: {str(e)}\n"
+                f"Path: {request.url.path}\n"
+                f"Method: {request.method}\n"
+                f"Stacktrace:\n{traceback.format_exc()}"
+            )
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "detail": str(e),
+                    "stacktrace": traceback.format_exc().split("\n")
+                }
+            )
 
 from engine.apis.action import ActionRouter
 # from engine.apis.agent import AgentRouter
@@ -42,8 +78,14 @@ load_dotenv()
 os.environ["ANTHROPIC_API_KEY"] = "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"
 
 
-# Create FastAPI app
-app = FastAPI(title="Repository and Module Management API")
+# Create FastAPI app with exception handlers
+app = FastAPI(
+    title="Repository and Module Management API",
+    debug=True  # Enable debug mode for detailed error responses
+)
+
+# Add error logging middleware
+app.add_middleware(ErrorLoggingMiddleware)
 
 # Configuration
 BASE_DATA_DIR = Path(".data")
@@ -243,4 +285,14 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    
+    # Configure uvicorn logging
+    uvicorn_config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        log_level="debug",
+        access_log=True
+    )
+    server = uvicorn.Server(uvicorn_config)
+    server.run()

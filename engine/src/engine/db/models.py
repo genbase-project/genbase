@@ -1,5 +1,6 @@
 from datetime import datetime, UTC
 from typing import Dict, List, Optional
+import uuid
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, PrimaryKeyConstraint, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -35,9 +36,10 @@ class ChatHistory(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     message_type: Mapped[str] = mapped_column(String, nullable=False, default="text")
     tool_data: Mapped[Optional[Dict]] = mapped_column(JSON, nullable=True)
+    session_id: Mapped[str] = mapped_column(String, nullable=False, default=lambda: str(uuid.UUID(int=0)))
     
     __table_args__ = (
-        UniqueConstraint('module_id', 'section', 'timestamp'),
+        UniqueConstraint('module_id', 'section', 'timestamp', 'session_id'),
     )
 
 # From modules, project_module_mappings, and module_relations tables in module.py

@@ -21,7 +21,7 @@ class OpenAIFunctionSchema(BaseModel):
             function={
                 "name": metadata.name,
                 "description": metadata.description,
-                "parameters": metadata.parameters,
+                "parameters": metadata.parameters or {},
                 "strict": True
             }
         )

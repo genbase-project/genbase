@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,9 +12,25 @@ from engine.db.session import SessionLocal
 from engine.services.execution.model import ModelService
 from engine.services.execution.stage_state import StageStateService, AgentStage, AgentState
 from engine.services.core.module import ModuleService, RelationType
-from engine.services.execution.workflow import ActionInfo, WorkflowService
+from engine.services.execution.workflow import (
+    ActionInfo,
+    WorkflowService,
+    WorkflowMetadataResult,
+    WorkflowStepMetadata
+)
 from engine.services.storage.repository import RepoService
 from engine.utils.logging import logger
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+import json
+
+
+from engine.services.execution.workflow import ActionInfo, WorkflowService
+from engine.services.core.module import ModuleService, RelationType
+from engine.services.execution.model import ModelService
+from engine.services.execution.stage_state import StageStateService
+from engine.services.storage.repository import RepoService
 
 class AgentError(Exception):
     """Base exception for agent operations"""
@@ -34,6 +51,7 @@ class AgentContext:
     module_id: str
     workflow: str
     user_input: str
+    session_id: Optional[str] = None
 
 class ChatHistoryManager:
     """Manages chat history operations"""
@@ -41,15 +59,28 @@ class ChatHistoryManager:
     def __init__(self):
         self._db = SessionLocal()
     
-    def get_chat_history(self, module_id: str, workflow: str) -> List[Dict[str, Any]]:
-        """Get chat history for a module and workflow"""
+    def get_chat_history(
+        self,
+        module_id: str,
+        workflow: str,
+        session_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get chat history for a module and workflow session
+        
+        Args:
+            module_id: Module ID
+            workflow: Workflow type
+            session_id: Optional session ID. If not provided, returns default session (all zeros UUID)
+        """
         try:
             with self._db as db:
                 stmt = (
                     select(ChatHistory)
                     .where(
                         ChatHistory.module_id == module_id,
-                        ChatHistory.section == workflow
+                        ChatHistory.section == workflow,
+                        ChatHistory.session_id == (session_id or str(uuid.UUID(int=0)))
                     )
                     .order_by(ChatHistory.timestamp.asc())
                 )
@@ -78,9 +109,21 @@ class ChatHistoryManager:
         role: str,
         content: str,
         message_type: str = "text",
-        tool_data: Optional[Dict[str, Any]] = None
+        tool_data: Optional[Dict[str, Any]] = None,
+        session_id: Optional[str] = None
     ):
-        """Add message to chat history"""
+        """
+        Add message to chat history
+        
+        Args:
+            module_id: Module ID
+            workflow: Workflow type
+            role: Message role (user/assistant)
+            content: Message content
+            message_type: Message type (text/tool_call/tool_result)
+            tool_data: Optional tool data
+            session_id: Optional session ID. If not provided, uses default session (all zeros UUID)
+        """
         try:
             with self._db as db:
                 chat_message = ChatHistory(
@@ -90,7 +133,8 @@ class ChatHistoryManager:
                     content=content or "Empty message",
                     timestamp=datetime.now(UTC),
                     message_type=message_type,
-                    tool_data=tool_data
+                    tool_data=tool_data,
+                    session_id=session_id or str(uuid.UUID(int=0))
                 )
                 db.add(chat_message)
                 db.commit()
@@ -106,45 +150,6 @@ class Action:
     schema: Dict[str, Any]  # OpenAPI function schema
     function: Callable[..., Any]  # Actual function implementation
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
-import json
-
-from engine.utils.logging import logger
-from engine.services.execution.workflow import ActionInfo, WorkflowService
-from engine.services.core.module import ModuleService, RelationType
-from engine.services.execution.model import ModelService
-from engine.services.execution.stage_state import StageStateService
-from engine.services.storage.repository import RepoService
-
-@dataclass
-class AgentServices:
-    """Container for all services required by agents"""
-    model_service: ModelService
-    workflow_service: WorkflowService
-    stage_state_service: StageStateService
-    repo_service: RepoService
-    module_service: ModuleService
-
-@dataclass
-class AgentContext:
-    """Context for an agent operation"""
-    module_id: str
-    workflow: str
-    user_input: str
-
-@dataclass
-class Action:
-    """Represents an action with both schema and implementation"""
-    name: str
-    description: str
-    schema: Dict[str, Any]  # OpenAPI function schema
-    function: Any  # Actual function implementation
-
-class AgentError(Exception):
-    """Base exception for agent operations"""
-    pass
 
 class BaseAgent(ABC):
     """Base class for all agents with shared infrastructure"""
@@ -219,7 +224,8 @@ class BaseAgent(ABC):
                 # Get chat history
                 messages = self.history_manager.get_chat_history(
                     context.module_id,
-                    context.workflow
+                    context.workflow,
+                    context.session_id
                 )
                 
                 # Add user input to history
@@ -227,7 +233,8 @@ class BaseAgent(ABC):
                     context.module_id,
                     context.workflow,
                     "user",
-                    context.user_input
+                    context.user_input,
+                    session_id=context.session_id
                 )
 
                 messages.append({
@@ -251,89 +258,38 @@ class BaseAgent(ABC):
             raise AgentError(f"Failed to process request: {str(e)}")
 
 
-    async def get_combined_workflow_metadata(self, context: AgentContext) -> Dict[str, Any]:
-        """Get combined workflow metadata from main and shared workflows"""
+    async def get_workflow_metadata(self, context: AgentContext) -> WorkflowMetadataResult:
+        """Get workflow metadata"""
         try:
-            # Get main workflow metadata - Remove await as this is not async
-            main_workflow = self.services.workflow_service.get_workflow_metadata(
+            workflow = self.services.workflow_service.get_workflow_metadata(
                 module_id=context.module_id,
                 workflow=context.workflow
             )
-            
-            # Get connected modules
-            connected_modules = self.services.module_service.get_linked_modules(
-                module_id=context.module_id,
-                relation_type=RelationType.CONNECTION
-            )
-            
-            combined_instructions = [main_workflow.get("instructions", "")]
-            combined_actions = main_workflow.get("actions", [])
-            combined_requirements = set(main_workflow.get("requirements", []))
-            
-            # Process connected modules
-            for connected_module in connected_modules:
-                try:
-                    # Remove await here as well
-                    share_workflow = self.services.workflow_service.get_workflow_metadata(
-                        module_id=connected_module.module_id,
-                        workflow="share"
-                    )
-                    
-                    if share_workflow.get("instructions"):
-                        module_context = f"\nShared instructions from {connected_module.module_name}:\n"
-                        combined_instructions.extend([module_context, share_workflow["instructions"]])
-                    
-                    # Add shared actions with source information
-                    for action in share_workflow.get("actions", []):
-                        shared_action = {
-                            **action,
-                            "source_module_id": connected_module.module_id,
-                            "source_module_name": connected_module.module_name,
-                            "source_workflow": "share"
-                        }
-                        combined_actions.append(shared_action)
-                    
-                    combined_requirements.update(share_workflow.get("requirements", []))
-                    
-                except Exception as e:
-                    logger.warning(f"Failed to process share workflow from {connected_module.module_id}: {str(e)}")
-                    continue
-            
-            return {
-                "instructions": "\n".join(filter(None, combined_instructions)),
-                "actions": combined_actions,
-                "requirements": list(combined_requirements)
-            }
-            
+            return workflow
         except Exception as e:
-            logger.error(f"Error getting combined workflow metadata: {str(e)}")
+            logger.error(f"Error getting workflow metadata: {str(e)}")
             raise AgentError(f"Failed to get workflow metadata: {str(e)}")
 
     # Also update get_workflow_actions to remove await if the methods it calls aren't async
     async def get_workflow_actions(
         self,
         context: AgentContext,
-        workflow_actions: List[Dict[str, Any]]
+        workflow_actions: List[WorkflowStepMetadata]
     ) -> Tuple[List[Dict[str, Any]], Dict[str, ActionInfo]]:
         """Convert workflow actions to tools format with action mapping"""
         tools = []
         action_map = {}
         
         for action in workflow_actions:
-            metadata = action.get("metadata")
-            if not metadata:
+            if not action.metadata:
                 continue
-                
-            source_module_id = action.get("source_module_id", context.module_id)
-            source_workflow = action.get("source_workflow", context.workflow)
-            
+
             action_info = ActionInfo(
-                module_id=source_module_id,
-                workflow=source_workflow,
-                action_path=action["action"],
-                name=action["name"],
-                description=action.get("description", "") or metadata.description,
-                source_module_name=action.get("source_module_name")
+                module_id=context.module_id,
+                workflow=context.workflow,
+                action_path=action.action,
+                name=action.name,
+                description=action.description or action.metadata.description
             )
             
             tool = {
@@ -341,7 +297,7 @@ class BaseAgent(ABC):
                 "function": {
                     "name": action_info.name,
                     "description": action_info.description,
-                    "parameters": metadata.parameters
+                    "parameters": {} if action.metadata.parameters is None else action.metadata.parameters,
                 }
             }
             
@@ -353,7 +309,7 @@ class BaseAgent(ABC):
     def _add_instruction_prompts(
         self,
         messages: List[Dict[str, str]],
-        workflow_data: Dict[str, Any],
+        workflow_data: WorkflowMetadataResult,
         context: AgentContext
     ) -> List[Dict[str, str]]:
         """Add instruction prompts to messages"""
@@ -361,8 +317,8 @@ class BaseAgent(ABC):
 
         instructions.append(f"Current workflow is {context.workflow}")
         
-        if workflow_data.get("instructions"):
-            instructions.append(workflow_data["instructions"])
+        if workflow_data.instructions:
+            instructions.append(workflow_data.instructions)
             
         combined_instructions = "\n\n".join(instructions)
         

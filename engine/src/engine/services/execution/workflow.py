@@ -1,27 +1,39 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict, NotRequired
 
 import yaml
 from engine.services.storage.repository import RepoService
 from engine.utils.yaml import YAMLUtils
 from pydantic import BaseModel
 
-from engine.services.execution.action import ActionError, ActionService
+from engine.services.execution.action import ActionError, ActionService, FunctionMetadata
 from engine.services.core.module import ModuleError, ModuleService, RelationType
 from engine.services.storage.resource import ResourceService
 from engine.utils.logging import logger
 
+class WorkflowStepMetadata(BaseModel):
+    """Pydantic model for workflow step metadata"""
+    name: str
+    action: str
+    description: Optional[str] = None
+    metadata: Optional[FunctionMetadata] = None
+    error: Optional[str] = None
+
+class WorkflowMetadataResult(BaseModel):
+    """Pydantic model for complete workflow metadata response"""
+    instructions: str
+    actions: List[WorkflowStepMetadata]
+    requirements: List[str]
 
 @dataclass
 class ActionInfo:
-    """Stores information about an action including its source"""
+    """Stores information about an action"""
     module_id: str
     workflow: str
     action_path: str
     name: str
     description: Optional[str] = None
-    source_module_name: Optional[str] = None  # Add this field
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert ActionInfo to dictionary"""
@@ -30,8 +42,7 @@ class ActionInfo:
             "workflow": self.workflow,
             "action_path": self.action_path,
             "name": self.name,
-            "description": self.description,
-            "source_module_name": self.source_module_name
+            "description": self.description
         }
 
 
@@ -45,6 +56,12 @@ class Workflow(BaseModel):
     """Workflow metadata"""
     instruction: Optional[str] = None
     actions: List[WorkflowStep] = []  # Make actions optional with empty default
+
+class WorkflowExecutionResult(BaseModel):
+    """Pydantic model for workflow execution result"""
+    status: str
+    message: str
+    result: Any
 
 class WorkflowError(Exception):
     """Base exception for workflow actions"""
@@ -105,7 +122,8 @@ class WorkflowService:
             
         return actions_dir, file_path, function_name
 
-    def get_workflow_metadata(self, module_id: str, workflow: str) -> Dict[str, Any]:
+
+    def get_workflow_metadata(self, module_id: str, workflow: str) -> WorkflowMetadataResult:
         """Get workflow metadata including instructions and steps"""
         try:
             # Get module info
@@ -176,11 +194,11 @@ class WorkflowService:
                         "error": str(e)
                     })
 
-            result = {
-                "instructions": instruction_content,
-                "actions": steps_metadata,
-                "requirements": kit.get('dependencies', [])
-            }
+            result = WorkflowMetadataResult(
+                instructions=instruction_content,
+                actions=[WorkflowStepMetadata(**step) for step in steps_metadata],
+                requirements=kit.get('dependencies', [])
+            )
             logger.info(f"Got workflow metadata for {workflow}:\n{result}")
             return result
 
@@ -197,31 +215,26 @@ class WorkflowService:
         workflow: str,
         action_info: ActionInfo,
         parameters: Dict[str, Any]
-    ) -> Any:
+    ) -> WorkflowExecutionResult:
         """Execute a workflow action with full context."""
         try:
             # Get module info for the module that owns the action
-            source_module_path = self.module_service.get_module_path(action_info.module_id)
-            source_module_metadata = self.module_service.get_module_metadata(action_info.module_id)
+            module_path = self.module_service.get_module_path(action_info.module_id)
+            module_metadata = self.module_service.get_module_metadata(action_info.module_id)
 
-            logger.info(f"Executing action from module {action_info.module_id} in workflow {action_info.workflow}")
+            logger.info(f"Executing action {action_info.name} in workflow {action_info.workflow}")
             
-            # Read kit from the source module
-            kit = YAMLUtils.read_kit(source_module_path)
-            source_workflow = action_info.workflow  # This will be 'share' for shared actions
+            # Read kit
+            kit = YAMLUtils.read_kit(module_path)
+            if not kit.get('workflows', {}).get(action_info.workflow):
+                raise WorkflowError(f"Workflow '{action_info.workflow}' not found")
 
-            if not kit.get('workflows', {}).get(source_workflow):
-                raise WorkflowError(
-                    f"Workflow '{source_workflow}' not found in module {action_info.source_module_name or action_info.module_id}"
-                )
-
-            # Get the correct workflow data from source module
-            workflow_data = kit['workflows'][source_workflow]
+            # Get workflow data
+            workflow_data = kit['workflows'][action_info.workflow]
             
-            # Handle instruction file separately from model validation
+            # Handle instruction file separately from model validation 
             instruction_file = workflow_data.get('instruction')
-            source_info = f" from module {action_info.source_module_name}" if action_info.source_module_name else ""
-            logger.info(f"""Executing action '{action_info.name}'{source_info} in workflow {source_workflow}
+            logger.info(f"""Executing action '{action_info.name}' in workflow {action_info.workflow}
             Config: {workflow_data}
             """)
                 
@@ -233,13 +246,13 @@ class WorkflowService:
                 }
                 workflow_model = Workflow.model_validate(validated_data)
             except Exception as e:
-                logger.error(f"""Failed to validate workflow {source_workflow}:
+                logger.error(f"""Failed to validate workflow:
                 Error: {str(e)}
                 Data: {workflow_data}
                 """)
                 raise WorkflowError(f"Invalid workflow configuration: {str(e)}")
 
-            # Find the action in the source workflow
+            # Find the action in workflow model
             action = next(
                 (s for s in workflow_model.actions if s.name == action_info.name), 
                 None
@@ -247,33 +260,33 @@ class WorkflowService:
             
             if not action:
                 raise WorkflowError(
-                    f"Action '{action_info.name}' not found in workflow '{source_workflow}' of module {action_info.source_module_name or action_info.module_id}"
+                    f"Action '{action_info.name}' not found in workflow '{action_info.workflow}'"
                 )
 
-            # Resolve action path in source module
+            # Resolve action path
             actions_dir, file_path, function_name = self._resolve_action_path(
-                source_module_path, action.path
+                module_path, action.path
             )
 
-            # Get requirements from source module
+            # Get requirements
             requirements = kit.get('dependencies', [])
 
-            # Execute in the context of the source module
+            # Execute function
             result = self.action_service.execute_function(
                 folder_path=str(actions_dir),
                 file_path=file_path,
                 function_name=function_name,
                 parameters=parameters,
                 requirements=requirements,
-                env_vars=source_module_metadata.env_vars,
-                repo_name=source_module_metadata.repo_name
+                env_vars=module_metadata.env_vars,
+                repo_name=module_metadata.repo_name
             )
 
-            return {
-                "status": "success",
-                "message": f"Successfully executed {action_info.name}{source_info}",
-                "result": result
-            }
+            return WorkflowExecutionResult(
+                status="success",
+                message=f"Successfully executed {action_info.name}",
+                result=result
+            )
 
         except (ModuleError, ActionError, WorkflowError) as e:
             raise WorkflowError(str(e))

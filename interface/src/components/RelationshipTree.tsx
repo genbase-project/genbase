@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Network, Link2, Plus, ChevronRight, ChevronDown, Box, MoreVertical, Search } from 'lucide-react';
+import { Network, Link2, Plus, ChevronDown, Box, MoreVertical, Search } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,8 +8,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { useModuleRelationships } from '@/hooks/useModuleRelationships';
+import React, { useState, useRef, useMemo } from 'react';
 
 import { Module } from '../components/TreeView';
 import { Tree, NodeRendererProps } from 'react-arborist';
@@ -103,7 +102,7 @@ const RelationshipNode = React.forwardRef<HTMLDivElement, NodeRendererProps<Exte
       )}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onClick={(e) => {
+      onClick={(_) => {
         if (node.isInternal) {
           node.toggle();
         }

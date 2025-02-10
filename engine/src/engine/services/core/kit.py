@@ -12,9 +12,16 @@ from dataclasses import dataclass
 from datetime import datetime, UTC
 from enum import Enum
 from pathlib import Path
-from typing import BinaryIO, List, Optional
+from typing import Any, BinaryIO, Dict, List, Optional
 
 import yaml
+
+@dataclass
+class SharedAction:
+    """Shared action definition"""
+    path: str  # Format: "module:function_name"
+    name: str
+    description: Optional[str] = None
 
 
 class KitError(Exception):
@@ -38,6 +45,13 @@ class InvalidVersionError(KitError):
     pass
 
 @dataclass
+class SharedAction:
+    """Shared action definition"""
+    path: str  # Format: "module:function_name"
+    name: str
+    description: Optional[str] = None
+
+@dataclass
 class KitMetadata:
     """Module version metadata"""
     name: str
@@ -52,6 +66,30 @@ class KitMetadata:
     def __post_init__(self):
         if self.environment is None:
             self.environment = []
+    
+    @staticmethod
+    def validate_shared_actions(shared_actions: Optional[List[Dict[str, Any]]] = None) -> List[SharedAction]:
+        """Validate shared_actions section from kit.yaml"""
+        if not shared_actions:
+            return []
+            
+        validated = []
+        for action in shared_actions:
+            if not isinstance(action, dict):
+                raise KitError("Shared action must be a dictionary")
+                
+            if 'path' not in action or 'name' not in action:
+                raise KitError("Shared action must have path and name")
+                
+            if ':' not in action['path']:
+                raise KitError("Shared action path must be in format 'module:function'")
+                
+            validated.append(SharedAction(
+                path=action['path'],
+                name=action['name'],
+                description=action.get('description')
+            ))
+        return validated
 
 class VersionSort(Enum):
     """Version sorting options"""
@@ -72,6 +110,13 @@ class KitService:
         self.base_path.mkdir(exist_ok=True)
 
     @staticmethod
+    def get_kit_shared_actions(self, owner: str, kit_id: str, version: str) -> List[SharedAction]:
+        """Get shared actions defined in a kit"""
+        kit_path = self._get_kit_path(owner, kit_id, version)
+        with open(kit_path / "kit.yaml") as f:
+            kit_data = yaml.safe_load(f)
+            return KitMetadata.validate_shared_actions(kit_data.get('shared_actions'))
+
     def validate_semantic_version(version: str) -> bool:
         """
         Validate semantic versioning format (X.Y.Z)

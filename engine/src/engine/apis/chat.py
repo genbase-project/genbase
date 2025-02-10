@@ -14,8 +14,8 @@ from engine.config.workflow_config import WorkflowConfigService
 class WorkflowExecuteRequest(BaseModel):
     """Request model for workflow execution"""
     section: str
-    input: str
-    session_id: str = "00000000-0000-0000-0000-000000000000"  # Default UUID(0)
+    input: str 
+    session_id: Optional[str] = "00000000-0000-0000-0000-000000000000"  # Default UUID(0)
 
 class WorkflowResponse(BaseModel):
     """Response model for workflow execution"""
@@ -35,6 +35,8 @@ class StatusResponse(BaseModel):
     state: str
     last_updated: str
 
+from engine.services.core.agent_loader import AgentLoader, AgentLoaderError
+
 class ChatRouter:
     """FastAPI router for agent endpoints"""
 
@@ -45,29 +47,45 @@ class ChatRouter:
     ):
         self.services = agent_services
         self.workflow_config_service = WorkflowConfigService()
-        
-        # Initialize agents
-        self.tasker_agent = TaskerAgent(agent_services)
-        self.coder_agent = CoderAgent(agent_services)
+        self.agent_loader = AgentLoader(agent_services)
         
         # Important: prefix is /chat in our route declarations
         self.router = APIRouter(prefix=prefix, tags=["agent"])
         self._setup_routes()
 
-    def _get_agent_for_workflow(self, workflow_type: str) -> BaseAgent:
-        """Get appropriate agent based on workflow type"""
+    def _get_agent_for_workflow(self, workflow_type: str, module_id: str) -> BaseAgent:
+        """Get appropriate agent based on workflow configuration in kit.yaml"""
         try:
-            config = self.workflow_config_service.get_workflow_config(workflow_type)
+            # Get module info
+            module_path = self.services.module_service.get_module_path(module_id)
             
-            if config.agent_type == WorkflowConfigurations.TASKER_AGENT:
-                return self.tasker_agent
-            elif config.agent_type == WorkflowConfigurations.CODER_AGENT:
-                return self.coder_agent
-            else:
-                raise AgentError(f"Unknown agent type for workflow: {workflow_type}")
+            # Get kit config first
+            with open(module_path / "kit.yaml") as f:
+                import yaml
+                kit_config = yaml.safe_load(f)
+            
+            # Get workflow config
+            config = self.workflow_config_service.get_workflow_config(workflow_type, kit_config)
+            
+            if not config.agent_type:
+                raise AgentError(f"No agent type specified for workflow: {workflow_type}")
+
+            # Load appropriate agent from kit
+            agent = self.agent_loader.load_workflow_agent(
+                kit_path=module_path,
+                workflow_name=workflow_type,
+                workflow_config=config
+            )
+            
+            if not agent:
+                raise AgentError(f"Failed to load agent '{config.agent_type}' for workflow: {workflow_type}")
                 
+            return agent
+                
+        except AgentLoaderError as e:
+            raise AgentError(f"Failed to load agent: {str(e)}")
         except Exception as e:
-            raise AgentError(f"Failed to determine agent type: {str(e)}")
+            raise AgentError(f"Failed to determine agent: {str(e)}")
 
     async def _execute_workflow(
         self,
@@ -77,21 +95,23 @@ class ChatRouter:
         """Handle workflow execution request"""
         try:
             # Get appropriate agent
-            agent = self._get_agent_for_workflow(request.section)
+            agent = self._get_agent_for_workflow(request.section, module_id)
             
-            # Create context
+            # Create context - force string session ID
+            session_id = request.session_id or "00000000-0000-0000-0000-000000000000"
+            
             context = AgentContext(
                 module_id=module_id,
                 workflow=request.section,
                 user_input=request.input,
-                session_id=request.session_id
+                session_id=session_id
             )
             
             # Execute workflow
             result = await agent.process_request(context)
             
             return WorkflowResponse(
-                response=result["response"],
+                response=result.get("response", ""),  # Default empty string 
                 results=result.get("results", [])
             )
             
@@ -109,7 +129,7 @@ class ChatRouter:
         """Get workflow history"""
         try:
             # Get appropriate agent
-            agent = self._get_agent_for_workflow(workflow)
+            agent = self._get_agent_for_workflow(workflow, module_id)
             
             history = agent.history_manager.get_chat_history(
                 module_id=module_id,

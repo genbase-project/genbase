@@ -209,6 +209,105 @@ class WorkflowService:
             raise WorkflowError(f"Failed to get workflow metadata: {str(e)}")
 
 
+    def get_shared_actions_metadata(self, module_id: str) -> WorkflowMetadataResult:
+        """Get metadata for all shared actions in a module"""
+        try:
+            # Get module info
+            module_path = self.module_service.get_module_path(module_id)
+            
+            # Read kit config
+            kit = YAMLUtils.read_kit(module_path)
+            
+            # Get shared actions
+            shared_actions = kit.get('shared_actions', [])
+            
+            steps_metadata = []
+            for action in shared_actions:
+                try:
+                    # Resolve action path
+                    actions_dir, file_path, function_name = self._resolve_action_path(
+                        module_path, action['path']
+                    )
+
+                    # Get function metadata
+                    metadata = self.action_service.get_function_metadata(
+                        folder_path=str(actions_dir),
+                        file_path=file_path,
+                        function_name=function_name
+                    )
+
+                    steps_metadata.append({
+                        "name": action['name'],
+                        "description": action.get('description'),
+                        "action": action['path'],
+                        "metadata": metadata
+                    })
+                except (ActionError, WorkflowError) as e:
+                    logger.error(f"Failed to get metadata for shared action {action['name']}: {str(e)}")
+                    steps_metadata.append({
+                        "name": action['name'],
+                        "description": action.get('description'),
+                        "action": action['path'],
+                        "error": str(e)
+                    })
+
+            return WorkflowMetadataResult(
+                instructions="",  # Shared actions don't have instructions
+                actions=[WorkflowStepMetadata(**step) for step in steps_metadata],
+                requirements=kit.get('dependencies', [])
+            )
+
+        except (ModuleError, WorkflowError) as e:
+            raise WorkflowError(str(e))
+        except Exception as e:
+            logger.error(f"Unexpected error getting shared actions metadata: {str(e)}")
+            raise WorkflowError(f"Failed to get shared actions metadata: {str(e)}")
+
+    def execute_shared_action(
+        self,
+        module_id: str,
+        action_info: ActionInfo,
+        parameters: Dict[str, Any]
+    ) -> WorkflowExecutionResult:
+        """Execute a shared action"""
+        try:
+            # Get module info
+            module_path = self.module_service.get_module_path(module_id)
+            module_metadata = self.module_service.get_module_metadata(module_id)
+
+            # Read kit
+            kit = YAMLUtils.read_kit(module_path)
+            
+            # Verify action exists
+            shared_actions = kit.get('shared_actions', [])
+            if not any(a['name'] == action_info.name for a in shared_actions):
+                raise WorkflowError(f"Shared action '{action_info.name}' not found")
+
+            # Resolve action path
+            actions_dir, file_path, function_name = self._resolve_action_path(
+                module_path, action_info.action_path
+            )
+
+            # Execute function
+            result = self.action_service.execute_function(
+                folder_path=str(actions_dir),
+                file_path=file_path,
+                function_name=function_name,
+                parameters=parameters,
+                requirements=kit.get('dependencies', []),
+                env_vars=module_metadata.env_vars,
+                repo_name=module_metadata.repo_name
+            )
+
+            return WorkflowExecutionResult(
+                status="success",
+                message=f"Successfully executed shared action {action_info.name}",
+                result=result
+            )
+
+        except (ModuleError, ActionError, WorkflowError) as e:
+            raise WorkflowError(str(e))
+
     def execute_workflow_step(
         self,
         module_id: str,

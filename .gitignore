@@ -11,10 +11,12 @@ node_modules
 __pycache__/
 *.py[cod]
 *$py.class
-
-
+registry/.next/
+.pytest_cache
 # Node
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+engine/.pdm-python
+engine/*.log
 
 # dependencies
 /node_modules

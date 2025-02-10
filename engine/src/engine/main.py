@@ -39,6 +39,8 @@ from engine.services.storage.resource import ResourceService  # New import
 from engine.services.execution.stage_state import StageStateService  # Add this import
 from engine.services.execution.workflow import WorkflowService
 
+load_dotenv()
+
 
 # Configure logging
 logging.basicConfig(
@@ -71,10 +73,6 @@ class ErrorLoggingMiddleware(BaseHTTPMiddleware):
                 }
             )
 
-load_dotenv()
-
-os.environ["ANTHROPIC_API_KEY"] = "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"
-
 
 # Create FastAPI app with exception handlers
 app = FastAPI(
@@ -86,22 +84,19 @@ app = FastAPI(
 app.add_middleware(ErrorLoggingMiddleware)
 
 # Configuration
-BASE_DATA_DIR = Path(".data")
+BASE_DATA_DIR = Path(os.getenv("DATA_DIR"))
 REPO_BASE_DIR = BASE_DATA_DIR / "repositories"
-SEARCH_INDEX_DIR = BASE_DATA_DIR / "search_indices"
 KIT_BASE_DIR = BASE_DATA_DIR / "kit"
 
 
 # Create necessary directories
 BASE_DATA_DIR.mkdir(exist_ok=True)
 REPO_BASE_DIR.mkdir(exist_ok=True)
-SEARCH_INDEX_DIR.mkdir(exist_ok=True)
 KIT_BASE_DIR.mkdir(exist_ok=True)
 
 # Initialize services
 repo_service = RepoService(
-    base_path=REPO_BASE_DIR,
-    search_index_path=SEARCH_INDEX_DIR
+    base_path=REPO_BASE_DIR
 )
 
 kit_service = KitService(base_path=KIT_BASE_DIR)

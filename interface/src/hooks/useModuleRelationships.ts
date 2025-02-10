@@ -2,8 +2,9 @@ import { useState, useCallback } from 'react';
 import { Module } from '../components/TreeView';
 import { toast } from '@/hooks/use-toast';
 import { DEFAULT_PROJECT_ID } from '../lib/tree';
+import { ENGINE_BASE_URL } from '@/config';
 
-const API_BASE = 'http://localhost:8000';
+
 
 export const useModuleRelationships = (moduleId: string) => {
   const [context, setContext] = useState<Module[]>([]);
@@ -12,7 +13,7 @@ export const useModuleRelationships = (moduleId: string) => {
 
   const fetchContext = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/module/${moduleId}/context`);
+      const response = await fetch(`${ENGINE_BASE_URL}/module/${moduleId}/context`);
       if (!response.ok) throw new Error('Failed to fetch context');
       const data = await response.json();
       setContext(data);
@@ -28,7 +29,7 @@ export const useModuleRelationships = (moduleId: string) => {
 
   const fetchConnections = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/module/${moduleId}/connections`);
+      const response = await fetch(`${ENGINE_BASE_URL}/module/${moduleId}/connections`);
       if (!response.ok) throw new Error('Failed to fetch connections');
       const data = await response.json();
       setConnections(data);
@@ -44,7 +45,7 @@ export const useModuleRelationships = (moduleId: string) => {
 
   const fetchAvailableModules = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/module/project/${DEFAULT_PROJECT_ID}/list`);
+      const response = await fetch(`${ENGINE_BASE_URL}/module/project/${DEFAULT_PROJECT_ID}/list`);
       if (!response.ok) throw new Error('Failed to fetch available modules');
       const data = await response.json();
       return data;
@@ -61,7 +62,7 @@ export const useModuleRelationships = (moduleId: string) => {
 
   const createConnection = useCallback(async (targetId: string, relationType: 'context' | 'connection') => {
     try {
-      const response = await fetch(`${API_BASE}/module/relation`, {
+      const response = await fetch(`${ENGINE_BASE_URL}/module/relation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -99,7 +100,7 @@ export const useModuleRelationships = (moduleId: string) => {
   const removeConnection = useCallback(async (targetId: string, relationType: 'context' | 'connection') => {
     try {
       const response = await fetch(
-        `${API_BASE}/module/relation/${moduleId}/${targetId}/${relationType}`, 
+        `${ENGINE_BASE_URL}/module/relation/${moduleId}/${targetId}/${relationType}`, 
         { method: 'DELETE' }
       );
 

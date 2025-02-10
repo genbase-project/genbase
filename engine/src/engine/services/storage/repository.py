@@ -47,32 +47,26 @@ class RepoService:
 
     def __init__(
         self,
-        base_path: str | Path,
-        search_index_path: str | Path,
+        base_path: str | Path
     ):
         """
         Initialize repository service
         
         Args:
             base_path: Base directory for storing repositories
-            search_index_path: Path for storing search indices
             create_index_func: Function to create search index
         """
         self.base_path = Path(base_path)
-        self.search_index_path = Path(search_index_path)
 
 
         # Create necessary directories
         self.base_path.mkdir(parents=True, exist_ok=True)
-        self.search_index_path.mkdir(parents=True, exist_ok=True)
 
     def _get_repo_path(self, repo_name: str) -> Path:
         """Get repository path"""
         return self.base_path / repo_name
 
-    def _get_index_path(self, repo_name: str) -> Path:
-        """Get search index path"""
-        return self.search_index_path / repo_name
+
 
     def _init_git_repo(self, repo_path: Path) -> Repo:
         """Initialize git repository with default configuration"""
@@ -328,8 +322,6 @@ class RepoService:
             with open(full_file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
 
-            # Update search index
-            self.create_index(repo_path, repo_name, self.search_index_path)
 
             # Remove backup if successful
             if backup_path and backup_path.exists():

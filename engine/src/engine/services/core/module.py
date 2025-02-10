@@ -32,6 +32,10 @@ class ModuleError(Exception):
     """Base exception for module errors"""
     pass
 
+class ConnectionAccessError(ModuleError):
+    """No connection access to target module"""
+    pass
+
 
 @dataclass
 class ModuleMetadata:
@@ -409,6 +413,31 @@ class ModuleService:
 
 
 
+
+    def verify_connection_access(self, source_id: str, target_id: str) -> bool:
+        """
+        Verify source module has CONNECTION relation with target
+        
+        Args:
+            source_id: Source module ID
+            target_id: Target module ID
+            
+        Returns:
+            bool: True if connection exists
+            
+        Raises:
+            ModuleError: On database errors
+        """
+        try:
+            with self._get_db() as db:
+                relation = db.query(ModuleRelation).filter_by(
+                    source_id=source_id,
+                    target_id=target_id,
+                    relation_type=RelationType.CONNECTION.value
+                ).first()
+                return relation is not None
+        except Exception as e:
+            raise ModuleError(f"Failed to verify connection access: {str(e)}")
 
     def get_module_metadata(self, module_id: str) -> ModuleMetadata:
         """

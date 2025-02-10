@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -8,14 +8,12 @@ import {
 import 'react-complex-tree/lib/style-modern.css';
 import LeftSidebar from './layout/LeftSidebar';
 import MainContent from './layout/MainContent';
-import RightSidebar from './layout/RightSidebar';
 import BottomPanel from './layout/BottomPanel';
 import { useModuleStore } from './store';
 import { GripHorizontal } from 'lucide-react';
 import { ThemeProvider } from './components/themeProvider';
 
 const ProjectInterface = () => {
-  const [rightTab, setRightTab] = useState('');
   const [sidebarExpand, setSidebarExpand] = useState(true);
   const selectedModule = useModuleStore(state => state.selectedModule);
 
@@ -30,7 +28,7 @@ const ProjectInterface = () => {
 
 
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
     <div className="h-screen flex flex-col bg-background">
 
       
@@ -51,7 +49,7 @@ const ProjectInterface = () => {
                 <GripHorizontal className="h-3 w-3 text-gray-400" />
               </div>
             </ResizableHandle>
-            <ResizablePanel defaultSize={25} minSize={10} maxSize={95}>
+            <ResizablePanel defaultSize={35} minSize={10} maxSize={95}>
               <BottomPanel selectedModule={selectedModule} />
             </ResizablePanel>
           </ResizablePanelGroup>

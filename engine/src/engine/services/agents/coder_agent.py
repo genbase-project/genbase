@@ -188,7 +188,17 @@ Repository Context:
                     )
                     return {"response": response_msg, "results": []}
                 else:
-                    msg = "Changes were not applied. Let me know if you'd like to proceed with the changes or if you need any modifications."
+                    from engine.utils.xml_prompts import create_user_prompt
+                    msg = f"""The changes were not applied.
+
+{create_user_prompt(
+    "Would you like to proceed with these changes?",
+    [
+        ("Yes, apply changes", "Apply the proposed code changes"),
+        ("Show changes again", "Review the proposed changes"),
+        ("No, cancel", "Keep the code as is")
+    ]
+)}"""
                     self.history_manager.add_to_history(
                         module_id=context.module_id,
                         workflow=context.workflow,

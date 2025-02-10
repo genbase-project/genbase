@@ -20,17 +20,6 @@ from engine.services.execution.workflow import (
 )
 from engine.services.storage.repository import RepoService
 from engine.utils.logging import logger
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
-import json
-
-
-from engine.services.execution.workflow import ActionInfo, WorkflowService
-from engine.services.core.module import ModuleService, RelationType
-from engine.services.execution.model import ModelService
-from engine.services.execution.stage_state import StageStateService
-from engine.services.storage.repository import RepoService
 
 class AgentError(Exception):
     """Base exception for agent operations"""
@@ -141,7 +130,6 @@ class ChatHistoryManager:
         except Exception as e:
             raise AgentError(f"Failed to add to history: {str(e)}")
 
-
 @dataclass
 class Action:
     """Represents an action with both schema and implementation"""
@@ -150,7 +138,6 @@ class Action:
     schema: Dict[str, Any]  # OpenAPI function schema
     function: Callable[..., Any]  # Actual function implementation
 
-
 class BaseAgent(ABC):
     """Base class for all agents with shared infrastructure"""
 
@@ -158,6 +145,33 @@ class BaseAgent(ABC):
         self.services = services
         self.history_manager = ChatHistoryManager()
         self.workflow_config_service = WorkflowConfigService()
+
+    def create_xml_prompt(self, question: str, options: List[dict]) -> str:
+        """Create an XML prompt with the specified question and options.
+        
+        Args:
+            question: The question to ask the user
+            options: List of dicts with 'text' and optional 'description' keys
+        
+        Example:
+            options = [
+                {"text": "Yes", "description": "Continue with changes"},
+                {"text": "No", "description": "Cancel the operation"}
+            ]
+        """
+        option_tags = []
+        for opt in options:
+            desc = f' description="{opt["description"]}"' if "description" in opt else ''
+            option_tags.append(f'<option{desc}>{opt["text"]}</option>')
+            
+        return f"""<user_prompt>
+<question>
+{question}
+</question>
+<options>
+{"".join(option_tags)}
+</options>
+</user_prompt>"""
 
     @property
     @abstractmethod
@@ -170,8 +184,6 @@ class BaseAgent(ABC):
     def default_actions(self) -> List[Action]:
         """Return list of default actions available to this agent type"""
         pass
-
-
 
     def get_completed_workflows(self, module_id: str) -> Set[str]:
         """Get set of completed workflows for a module"""
@@ -193,8 +205,16 @@ class BaseAgent(ABC):
     def verify_prerequisites(self, module_id: str, workflow: str) -> bool:
         """Verify if all prerequisite workflows are completed"""
         try:
-            # Get workflow config
-            config = self.workflow_config_service.get_workflow_config(workflow)
+            # Get module path
+            module_path = self.services.module_service.get_module_path(module_id)
+            
+            # Get kit config
+            with open(module_path / "kit.yaml") as f:
+                import yaml
+                kit_config = yaml.safe_load(f)
+            
+            # Get workflow config with kit config
+            config = self.workflow_config_service.get_workflow_config(workflow, kit_config)
             
             # Get completed workflows
             completed = self.get_completed_workflows(module_id)
@@ -205,7 +225,6 @@ class BaseAgent(ABC):
         except Exception as e:
             logger.error(f"Error verifying prerequisites: {str(e)}")
             return False
-
 
     async def process_request(self, context: AgentContext) -> Dict[str, Any]:
         """Standard request processing flow"""
@@ -257,7 +276,56 @@ class BaseAgent(ABC):
             self.services.stage_state_service.set_standby(context.module_id)
             raise AgentError(f"Failed to process request: {str(e)}")
 
-
+    async def get_shared_actions(self, module_id: str) -> Tuple[List[Dict[str, Any]], Dict[str, ActionInfo]]:
+        """
+        Get shared actions from all connected modules
+        
+        Args:
+            module_id: Module ID to get shared actions for
+            
+        Returns:
+            Tuple of:
+            - List of shared actions in tool format
+            - Dict mapping tool names to ActionInfo
+        """
+        tools = []
+        action_map = {}
+        try:
+            # Get all modules with CONNECTION relation
+            connected_modules = self.services.module_service.get_linked_modules(
+                module_id=module_id,
+                relation_type=RelationType.CONNECTION
+            )
+            
+            for module in connected_modules:
+                # Get shared actions metadata
+                metadata = self.services.workflow_service.get_shared_actions_metadata(module.module_id)
+                
+                for action in metadata.actions:
+                    if not action.error:
+                        tool_name = f"{module.module_id}:{action.name}"
+                        tools.append({
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "description": action.description or "",
+                                "parameters": {} if action.metadata.parameters is None else action.metadata.parameters,
+                            }
+                        })
+                        
+                        action_map[tool_name] = ActionInfo(
+                            module_id=module.module_id,
+                            workflow="",  # Not part of a workflow
+                            action_path=action.action,
+                            name=action.name,
+                            description=action.description
+                        )
+                    
+            return tools, action_map
+        except Exception as e:
+            logger.error(f"Failed to get shared actions: {str(e)}")
+            return [], {}
+            
     async def get_workflow_metadata(self, context: AgentContext) -> WorkflowMetadataResult:
         """Get workflow metadata"""
         try:
@@ -270,7 +338,6 @@ class BaseAgent(ABC):
             logger.error(f"Error getting workflow metadata: {str(e)}")
             raise AgentError(f"Failed to get workflow metadata: {str(e)}")
 
-    # Also update get_workflow_actions to remove await if the methods it calls aren't async
     async def get_workflow_actions(
         self,
         context: AgentContext,
@@ -350,9 +417,16 @@ class BaseAgent(ABC):
         """Process workflow according to specific agent type"""
         pass
 
-    def get_workflow_default_actions(self, workflow: str) -> List[Action]:
+    def get_workflow_default_actions(self, workflow: str, module_id: str) -> List[Action]:
         """Get default actions for specific workflow type"""
-        workflow_config = self.workflow_config_service.get_workflow_config(workflow)
+        module_path = self.services.module_service.get_module_path(module_id)
+        
+        # Get kit config
+        with open(module_path / "kit.yaml") as f:
+            import yaml
+            kit_config = yaml.safe_load(f)
+            
+        workflow_config = self.workflow_config_service.get_workflow_config(workflow, kit_config)
         actions = []
         for wf_action in workflow_config.default_actions:
             actions.append(Action(

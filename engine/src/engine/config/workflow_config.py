@@ -25,19 +25,14 @@ class WorkflowConfig:
 class WorkflowConfigurations:
     """Central configuration for all core workflows"""
     
-    TASKER_AGENT = "tasker"
-    CODER_AGENT = "coder"
-    
- 
     @staticmethod
     def get_default_configs() -> Dict[str, WorkflowConfig]:
         """Get default configurations for all workflows"""
         return {
             "initialize": WorkflowConfig(
                 workflow_type="initialize",
-                agent_type=WorkflowConfigurations.TASKER_AGENT,
-                base_instructions="""You are an initialization agent responsible for setting up the module.
-                Verify all requirements are met before completion.
+                agent_type="", # Will be overridden by kit.yaml
+                base_instructions="""Initialize the module and verify all requirements are met.
                 Follow these steps:
                 1. Verify environment setup
                 2. Install dependencies
@@ -48,28 +43,27 @@ class WorkflowConfigurations:
             
             "maintain": WorkflowConfig(
                 workflow_type="maintain",
-                agent_type=WorkflowConfigurations.TASKER_AGENT,
-                base_instructions="""You are a maintenance agent responsible for keeping the module healthy.
-                Monitor and maintain the module's operation.""",
+                agent_type="", # Will be overridden by kit.yaml
+                base_instructions="""Monitor and maintain the module's operation.
+                Keep the module healthy and running smoothly.""",
                 prerequisites=["initialize"],
                 allow_multiple=True
             ),
             
             "remove": WorkflowConfig(
                 workflow_type="remove",
-                agent_type=WorkflowConfigurations.TASKER_AGENT,
-                base_instructions="""You are responsible for safely removing the module.
-                Ensure all resources are cleaned up and dependencies are handled.""",
+                agent_type="", # Will be overridden by kit.yaml
+                base_instructions="""Safely remove the module and clean up resources.
+                Ensure all dependencies and resources are properly handled.""",
                 prerequisites=["initialize"],
                 allow_multiple=False
             ),
             
             "edit": WorkflowConfig(
                 workflow_type="edit",
-                agent_type=WorkflowConfigurations.CODER_AGENT,
-                base_instructions="""You are a code editing agent.
-                Make careful and minimal necessary changes.
-                Always explain changes and wait for confirmation.""",
+                agent_type="", # Will be overridden by kit.yaml
+                base_instructions="""Make code edits with minimal impact.
+                Always explain changes and ensure stability.""",
                 prerequisites=["initialize"],
                 allow_multiple=True
             )
@@ -105,36 +99,51 @@ class WorkflowConfigService:
         self.default_actions: Dict[str, List[WorkflowAction]] = WorkflowConfigurations.get_default_actions(stage_state_service)
     
     def get_workflow_config(
-        self,
+        self, 
         workflow_type: str,
         kit_config: Optional[Dict] = None
     ) -> WorkflowConfig:
-        """Get workflow configuration, optionally merged with kit.yaml config"""
+        """Get workflow configuration from defaults and kit.yaml"""
         if workflow_type not in self.default_configs:
             raise ValueError(f"Unknown workflow type: {workflow_type}")
             
         base_config = self.default_configs[workflow_type]
         default_actions = self.default_actions.get(workflow_type, [])
+
+        # Start with base config
+        config = WorkflowConfig(
+            workflow_type=workflow_type,
+            agent_type=base_config.agent_type,
+            base_instructions=base_config.base_instructions,
+            prerequisites=base_config.prerequisites.copy(),
+            default_actions=default_actions,
+            allow_multiple=base_config.allow_multiple
+        )
         
-        if not kit_config:
-            config = WorkflowConfig(
-                workflow_type=workflow_type,  # Use passed in type, not base type
-                agent_type=base_config.agent_type,
-                base_instructions=base_config.base_instructions,
-                prerequisites=base_config.prerequisites.copy(),
-                default_actions=default_actions,
-                allow_multiple=base_config.allow_multiple  # Pass through allow_multiple setting
-            )
-        else:
-            # Create copy of base config with kit customizations
-            config = WorkflowConfig(
-                workflow_type=workflow_type,  # Use passed in type, not base type
-                agent_type=base_config.agent_type,
-                base_instructions=f"{base_config.base_instructions}\n\n{kit_config.get('instruction', '')}",
-                prerequisites=base_config.prerequisites.copy(),
-                default_actions=default_actions,
-                allow_multiple=kit_config.get('allow_multiple', base_config.allow_multiple)  # Allow override from kit config
-            )
+        if kit_config:
+            # Update from kit.yaml
+            if "workflows" in kit_config:
+                workflow_config = kit_config["workflows"].get(workflow_type, {})
+                
+                # Get workflow-specific agent
+                agent = workflow_config.get("agent")
+                if not agent:
+                    # Try default agent from workflows root
+                    agent = kit_config["workflows"].get("agent")
+                    
+                if agent:
+                    # Validate agent exists in kit config
+                    if agent not in {a["name"] for a in kit_config.get("agents", [])}:
+                        raise ValueError(f"Agent '{agent}' not found in kit.yaml agents")
+                    config.agent_type = agent
+                
+                # Merge instructions
+                if "instruction" in workflow_config:
+                    config.base_instructions = f"{config.base_instructions}\n\n{workflow_config['instruction']}"
+                    
+                # Allow workflow-specific multiple sessions
+                if "allow_multiple" in workflow_config:
+                    config.allow_multiple = workflow_config["allow_multiple"]
             
         return config
 

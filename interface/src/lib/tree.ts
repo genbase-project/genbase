@@ -110,6 +110,8 @@ export function getNewPath(
     return 'root';
   }
 
+  console.log('getNewPath', dragId, targetParentId, targetIndex);
+
   const parentNode = findNodeById(tree, targetParentId);
   if (!parentNode || !parentNode.isFolder) {
     return 'root';

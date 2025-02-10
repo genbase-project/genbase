@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/resizable"
 import { Tree, NodeRendererProps } from 'react-arborist';
 import CodeEditor from '../components/CodeEditor';
-import { ChevronRight, ChevronDown, Box, RefreshCw, Code, Eye, TextCursor, Package, Expand, Minimize, Network } from 'lucide-react';
+import { ChevronRight, ChevronDown, Box, RefreshCw, Code, Eye, Package, Expand, Minimize, Network } from 'lucide-react';
 import RightSidebar from './RightSidebar';
 import { Module } from '../components/TreeView';
 import ReactMarkdown from 'react-markdown';
@@ -25,7 +25,26 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Info } from 'lucide-react';
+import { Info, AlertTriangle } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { ENGINE_BASE_URL } from '@/config';
 
 interface TreeItem {
   id: string;
@@ -83,8 +102,7 @@ const ContentViewer = ({
   content, 
   isMarkdown, 
   onChange,
-  viewMode = 'code',
-  isExpanded = false
+  viewMode = 'code'
 }: { 
   content: string; 
   isMarkdown: boolean; 
@@ -101,21 +119,20 @@ const ContentViewer = ({
     );
   }
 
-  return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-auto">
-        {viewMode === 'preview' ? (
-          <div className="prose max-w-none p-4">
-            <ReactMarkdown>{content}</ReactMarkdown>
-          </div>
-        ) : (
-          <CodeEditor 
-            value={content}
-            onChange={onChange}
-          />
-        )}
+  return viewMode === 'preview' ? (
+
+    <div className=" flex flex-col overflow-auto">
+         <ScrollArea className="flex-1 overflow-x-hidden">
+      <div className="prose max-w-none p-4 ">
+        <ReactMarkdown>{content}</ReactMarkdown>
       </div>
+      </ScrollArea>
     </div>
+  ) : (
+    <CodeEditor 
+      value={content}
+      onChange={onChange}
+    />
   );
 };
 
@@ -135,7 +152,10 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('code');
 const [isExpanded, setIsExpanded] = useState(false);
-const [showRelations, setShowRelations] = useState(false);
+  const [showRelations, setShowRelations] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const deleteInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (selectedModule?.module_id) {
@@ -168,7 +188,7 @@ const [showRelations, setShowRelations] = useState(false);
     setIsLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:8000/resource/${selectedModule.module_id}/${selectedResourceType}`
+        `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/${selectedResourceType}`
       );
       const data: ApiResponse[] = await response.json();
       setResourceData(data);
@@ -190,7 +210,7 @@ const [showRelations, setShowRelations] = useState(false);
     
     try {
       await fetch(
-        `http://localhost:8000/resource/${selectedModule.module_id}/manifest`,
+        `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/manifest`,
         { method: 'GET' }
       );
       await fetchResources();  // Refresh to get the newly generated manifest
@@ -304,7 +324,7 @@ const [showRelations, setShowRelations] = useState(false);
                   <Info className="h-4 w-4 text-gray-600" />
                 </button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-w-4xl max-h-[80vh]">
                 <DialogHeader>
                   <DialogTitle>
                     <div className="flex items-center gap-3">
@@ -315,7 +335,16 @@ const [showRelations, setShowRelations] = useState(false);
                     </div>
                   </DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-6 py-4">
+                <Tabs defaultValue="module" className="mt-4">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="module">Module Info</TabsTrigger>
+                    <TabsTrigger value="kit">Kit Info</TabsTrigger>
+                    <TabsTrigger value="env">Environment</TabsTrigger>
+                    <TabsTrigger value="destroy" className="text-destructive">Destroy</TabsTrigger>
+                  </TabsList>
+                  <ScrollArea className="h-[500px] mt-4">
+                  <div className="px-2">
+                  <TabsContent value="module">
                   <div className="bg-gray-50 rounded-lg p-4 grid gap-4">
                     <div className="grid grid-cols-4 items-center gap-4">
                       <span className="font-medium text-gray-500">Version</span>
@@ -330,45 +359,131 @@ const [showRelations, setShowRelations] = useState(false);
                       <span className="col-span-3">{new Date(selectedModule.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-semibold mb-3 text-gray-900">Configuration</h3>
-                    <div className="bg-gray-50 rounded-lg p-4 grid gap-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <span className="font-medium text-gray-500">Project ID</span>
-                        <span className="col-span-3">{selectedModule.project_id}</span>
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <span className="font-medium text-gray-500">Kit ID</span>
-                        <span className="col-span-3">{selectedModule.kit_id}</span>
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <span className="font-medium text-gray-500">Repository</span>
-                        <span className="col-span-3">{selectedModule.repo_name}</span>
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <span className="font-medium text-gray-500">Path</span>
-                        <span className="col-span-3 font-mono text-sm">{selectedModule.path}</span>
+                  </TabsContent>
+                  <TabsContent value="kit">
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 rounded-lg p-4 grid gap-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <span className="font-medium text-gray-500">Kit ID</span>
+                          <span className="col-span-3">{selectedModule.kit_id}</span>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <span className="font-medium text-gray-500">Repository</span>
+                          <span className="col-span-3">{selectedModule.repo_name}</span>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <span className="font-medium text-gray-500">Path</span>
+                          <span className="col-span-3 font-mono text-sm">{selectedModule.path}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  {Object.entries(selectedModule.env_vars).length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold mb-3 text-gray-900">Environment Variables</h3>
+                  </TabsContent>
+
+                  <TabsContent value="env" className="space-y-4">
+                    {Object.entries(selectedModule.env_vars).length > 0 ? (
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="font-mono text-sm grid gap-2">
                           {Object.entries(selectedModule.env_vars).map(([key, value]) => (
-                            <div key={key} className="grid grid-cols-[120px_1fr] gap-2 items-baseline">
+                            <div key={key} className="grid grid-cols-[200px_1fr] gap-2 items-baseline">
                               <span className="text-gray-500">{key}:</span>
                               <span>{value}</span>
                             </div>
                           ))}
                         </div>
                       </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-500">
+                        No environment variables configured
+                      </div>
+                    )}
+                  
+                  </TabsContent>
+                  <TabsContent value="destroy" className="space-y-4">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold text-red-600 mb-2">Danger Zone</h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Force deleting a module is a destructive action that cannot be undone.
+                      </p>
+                      <Button
+                        variant="destructive"
+                        onClick={() => setShowDeleteDialog(true)}
+                        className="w-full"
+                      >
+                        Force Delete Module
+                      </Button>
                     </div>
-                  )}
-                </div>
+                  </TabsContent>
+                  </div>
+                  </ScrollArea>
+                </Tabs>
               </DialogContent>
             </Dialog>
+
+            <AlertDialog 
+              open={showDeleteDialog} 
+              onOpenChange={setShowDeleteDialog}
+              
+            >
+              <AlertDialogContent  className='bg-white'>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    Force Delete Module
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="space-y-3">
+                    <p className="font-semibold text-destructive">Warning: This action cannot be undone!</p>
+                    <ul className="list-disc pl-4 space-y-1 text-sm">
+                      <li>Module will be completely deleted from the system</li>
+                      <li>All running agents will be terminated immediately</li>
+                      <li>All workspace files will be permanently deleted</li>
+                      <li>This action may affect system stability if module is critical</li>
+                    </ul>
+                    <p className="text-sm mt-4">
+                      To confirm deletion, type "delete {selectedModule?.module_name}" below:
+                    </p>
+                    <Input
+                      ref={deleteInputRef}
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      className="mt-2"
+                      placeholder={`delete ${selectedModule?.module_name}`}
+                    />
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => {
+                    setDeleteConfirmText('');
+                    setShowDeleteDialog(false);
+                  }}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={deleteConfirmText !== `delete ${selectedModule?.module_name}`}
+                    onClick={async () => {
+                      if (!selectedModule) return;
+                      
+                      try {
+                        await fetch(
+                          `${ENGINE_BASE_URL}/module/${selectedModule.module_id}`,
+                          { method: 'DELETE' }
+                        );
+                        
+                        
+
+                        window.location.reload();
+
+                      } catch (error) {
+                        console.error('Error deleting module:', error);
+                      }
+                 
+                    }}
+                    className="bg-destructive hover:bg-destructive/90 bg-red-600"
+                  >
+                    Delete Module
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           <Select
             value={selectedResourceType}

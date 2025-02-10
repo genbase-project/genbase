@@ -1,18 +1,15 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 import json
-from engine.config.workflow_config import WorkflowConfigurations
 from engine.services.agents.base_agent import Action, AgentContext, AgentError, BaseAgent
+from engine.services.execution.workflow import ActionInfo
 from engine.utils.logging import logger
-from engine.services.execution.stage_state import COMPLETE_WORKFLOW_SCHEMA
-from engine.services.execution.workflow import ActionInfo, WorkflowStepMetadata
-from dataclasses import asdict
 
 class TaskerAgent(BaseAgent):
     """Agent for handling task-based workflows"""
 
     @property
     def agent_type(self) -> str:
-        return WorkflowConfigurations.TASKER_AGENT
+        return "tasker"
 
     @property
     def default_actions(self) -> List[Action]:
@@ -21,7 +18,7 @@ class TaskerAgent(BaseAgent):
         return []
 
     def _get_base_instructions(self) -> str:
-        return """You are a task execution agent responsible for managing module operations.
+        return """You are a task execution agent responsible for managing workflow operations.
 
 When handling user requests:
 
@@ -45,10 +42,12 @@ When handling user requests:
 - Provide clear result summaries
 - When asking for user input, use XML prompts format
 
-4. Workflow Completion:
-- Mark workflows as completed when all requirements are met
-- Verify successful completion of all tasks
-- Explain completion decisions
+4. Task Management:
+- Process and execute workflow tasks
+- Handle tool dependencies and execution order
+- Track task completion status
+- Provide progress updates
+- Handle errors and retries
 
 XML User Prompts:
 When asking the user a question or requiring confirmation, use the XML format like this:
@@ -64,20 +63,46 @@ Your question goes here
 
 If asked what you can do, explain your capabilities based on the available tools and actions."""
 
-    def _serialize_metadata(self, obj: Any) -> Any:
-        """Serialize objects that aren't JSON serializable"""
-        if hasattr(obj, 'model_dump'):  # Handle Pydantic models
-            return obj.model_dump_json()
-        if hasattr(obj, 'to_dict'):
-            return obj.to_dict()
-        if hasattr(obj, '__dict__'):
-            return obj.__dict__
-        return str(obj)
+    async def _get_shared_actions(
+        self,
+        context: AgentContext,
+        module_id: str
+    ) -> List[Dict[str, Any]]:
+        """Get tools for module's shared actions"""
+        try:
+            # Get metadata for module's shared actions
+            shared_actions = await self.services.workflow_service.get_shared_actions_metadata(module_id)
+            
+            tools = []
+            action_map = {}
+            for action in shared_actions.actions:
+                if not action.error:
+                    # Create function schema from metadata
+                    schema = {
+                        "name": action.name,
+                        "description": action.description or "",
+                        "function": action.metadata
+                    }
+                    tools.append(schema)
+                    
+                    # Store action info for looking up execution details
+                    action_map[action.name] = ActionInfo(
+                        module_id=module_id,
+                        workflow="",  # Not part of a workflow
+                        action_path=action.action,
+                        name=action.name,
+                        description=action.description
+                    )
+            
+            return tools, action_map
+        except Exception as e:
+            logger.error(f"Error getting shared actions: {str(e)}")
+            return [], {}
 
     async def _process_workflow(
         self,
         context: AgentContext,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, str]], 
         tools: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Process workflow execution with tools"""
@@ -102,12 +127,12 @@ If asked what you can do, explain your capabilities based on the available tools
                     "is_async": False  # Default to non-async for workflow default actions
                 }
                 
-                all_workflow_actions.append(WorkflowStepMetadata(
-                    name=action.name,
-                    description=action.description,
-                    action=action.name,
-                    metadata=metadata
-                ))
+                all_workflow_actions.append({
+                    "name": action.name,
+                    "description": action.description,
+                    "action": action.name,
+                    "metadata": metadata
+                })
             
             # Get action tools and mapping
             workflow_tools, action_map = await self.get_workflow_actions(
@@ -121,11 +146,11 @@ If asked what you can do, explain your capabilities based on the available tools
             # Combine workflow tools with agent default tools
             all_tools = workflow_tools + [action.schema for action in agent_actions]
 
-            from engine.utils.xml_prompts import create_user_prompt, CONFIRM_PROCEED
+            from engine.utils.xml_prompts import create_user_prompt
 
             # Check if this is a confirmation request
             if "proceed" in context.user_input.lower() or "continue" in context.user_input.lower():
-                formatted_input = CONFIRM_PROCEED
+                formatted_input = "Would you like to continue?"  # Simple confirmation prompt
             else:
                 formatted_input = context.user_input
 
@@ -238,21 +263,14 @@ If asked what you can do, explain your capabilities based on the available tools
                         ]
                     )
                     
-                    # Convert results to JSON serializable format
-                    serialized_results = []
-                    for result in results:
-                        serialized_results.append({
-                            "action": result["action"],
-                            "result": self._serialize_metadata(result["result"])
-                        })
-                    
+                    # Add to history
                     self.history_manager.add_to_history(
                         context.module_id,
                         context.workflow,
                         "user",
                         tool_results_message,
                         message_type="tool_result",
-                        tool_data=serialized_results,
+                        tool_data=results,
                         session_id=context.session_id
                     )
                     

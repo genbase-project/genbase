@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
-import { ChevronLeft, ChevronRight, Sidebar, SidebarClose, Settings } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { Sidebar, SidebarClose, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader } from "@/components/ui/card";
 import {
 Dialog,
 DialogContent,
@@ -30,13 +29,13 @@ DialogFooter,
 DialogDescription,
 } from "@/components/ui/dialog"
 import { SidebarHeader } from '@/components/ui/sidebar';
+import { ENGINE_BASE_URL } from '@/config';
 interface LeftSidebarProps {
   initialModules?: Kit[];
   onExpand:  (expand: boolean) => void;
   expanded: boolean
 }
 
-const API_BASE = 'http://localhost:8000';
 
 const LeftSidebar: React.FC<LeftSidebarProps> = ({ initialModules = [], onExpand: onExpand, expanded  }) => {
 const { toast } = useToast();
@@ -85,7 +84,7 @@ useEffect(() => {
 
 const fetchKits = async () => {
   try {
-    const response = await fetch(`${API_BASE}/kit`);
+    const response = await fetch(`${ENGINE_BASE_URL}/kit`);
     if (!response.ok) throw new Error('Failed to fetch kits');
     const result = await response.json();
     setKits(result.kits);
@@ -104,8 +103,8 @@ useEffect(() => {
   const fetchModels = async () => {
     try {
       const [availableRes, currentRes] = await Promise.all([
-        fetch(`${API_BASE}/model/list`),
-        fetch(`${API_BASE}/model/current`)
+        fetch(`${ENGINE_BASE_URL}/model/list`),
+        fetch(`${ENGINE_BASE_URL}/model/current`)
       ]);
       
       if (availableRes.ok) {
@@ -145,7 +144,7 @@ const handleSaveModelSettings = async () => {
   if (!selectedModel) return;
   
   try {
-    const res = await fetch(`${API_BASE}/model/set`, {
+    const res = await fetch(`${ENGINE_BASE_URL}/model/set`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -214,7 +213,7 @@ const handleSaveModelSettings = async () => {
 
 const fetchModules = async () => {
   try {
-    const response = await fetch(`${API_BASE}/module/project/${DEFAULT_PROJECT_ID}/list`);
+    const response = await fetch(`${ENGINE_BASE_URL}/module/project/${DEFAULT_PROJECT_ID}/list`);
     if (!response.ok) throw new Error('Failed to fetch modules');
     const allModules: Module[] = await response.json();
     setTreeData(buildTreeFromModules(allModules));
@@ -258,7 +257,7 @@ const handleRenameConfirm = async () => {
 
   try {
     const moduleId = (moduleToRename.id).replace('module-', '');
-    const response = await fetch(`${API_BASE}/module/${moduleId}/name`, {
+    const response = await fetch(`${ENGINE_BASE_URL}/module/${moduleId}/name`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -299,7 +298,7 @@ const createModule = async (
   moduleName: string
 ) => {
   try {
-    const response = await fetch(`${API_BASE}/module`, {
+    const response = await fetch(`${ENGINE_BASE_URL}/module`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -367,7 +366,7 @@ const handleCreateConfirm = async () => {
 
 const updateModulePath = async (moduleId: string, newPath: string) => {
   try {
-    const response = await fetch(`${API_BASE}/module/${moduleId}/path`, {
+    const response = await fetch(`${ENGINE_BASE_URL}/module/${moduleId}/path`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

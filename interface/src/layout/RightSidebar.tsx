@@ -1,6 +1,4 @@
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Network, Link2, Plus, ChevronRight, ChevronDown, Box, MoreVertical, Package } from 'lucide-react';
+import { Network } from 'lucide-react';
 import { Module } from '../components/TreeView';
 import { useEffect, useState } from "react";
 import { useModuleRelationships } from "@/hooks/useModuleRelationships";

@@ -88,7 +88,7 @@ const filterNodes = (nodes: TreeNode[], searchText: string): TreeNode[] => {
 
 export const TreeView: React.FC<TreeViewProps> = ({
   data,
-  modules,
+  // modules,
   allowDrag = true,
   onCreateModule,
   onModuleClick,

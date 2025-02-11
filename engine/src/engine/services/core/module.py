@@ -18,7 +18,8 @@ from engine.services.storage.repository import (
     RepoNotFoundError,
     RepoService,
 )
-from engine.services.execution.stage_state import StageStateService
+from engine.services.execution.state import StateService
+from engine.services.core.kit import KitService, KitConfig
 from engine.utils.file import extract_zip
 from engine.utils.logging import logger
 
@@ -80,12 +81,14 @@ class ModuleService:
         workspace_base: str,
         module_base: str,
         repo_service: RepoService,
-        stage_state_service: StageStateService
+        stage_state_service: StateService,
+        kit_service: KitService
     ):
         self.workspace_base = Path(workspace_base)
         self.repo_service = repo_service
         self.stage_state_service = stage_state_service
         self.module_base = module_base
+        self.kit_service = kit_service
 
 
     def _get_db(self) -> Session:
@@ -512,6 +515,70 @@ class ModuleService:
             raise ModuleError(f"Failed to update module name: {str(e)}")
         
 
+
+    def update_module_env_var(
+        self,
+        module_id: str,
+        env_var_name: str,
+        env_var_value: str
+    ):
+        """
+        Update/set environment variable for a module
+        
+        Args:
+            module_id: Module ID
+            env_var_name: Environment variable name
+            env_var_value: Environment variable value
+            
+        Raises:
+            ModuleError: If module not found or update fails
+        """
+        try:
+            with self._get_db() as db:
+                module = db.query(Module).filter_by(module_id=module_id).first()
+                
+                if not module:
+                    raise ModuleError(f"Module {module_id} not found")
+                    
+                # Get current env vars and update
+                env_vars = module.env_vars.copy()
+                env_vars[env_var_name] = env_var_value
+                
+                # Assign the whole dict back to trigger SQLAlchemy change detection
+                module.env_vars = env_vars
+                module.updated_at = datetime.now(UTC)
+                db.commit()
+                db.refresh(module)  # Refresh to ensure we have latest state
+                
+                logger.info(f"Updated env var {env_var_name} for module {module_id}")
+                
+                return ModuleMetadata.from_orm(module, module.project_mappings[0])
+                
+        except Exception as e:
+            raise ModuleError(f"Failed to update module env var: {str(e)}")
+
+    def get_module_kit_config(self, module_id: str) -> KitConfig:
+        """
+        Get kit configuration for a module
+        
+        Args:
+            module_id: Module ID
+            
+        Returns:
+            KitConfig: Complete kit configuration
+            
+        Raises:
+            ModuleError: If module not found or kit config cannot be retrieved
+        """
+        try:
+            metadata = self.get_module_metadata(module_id)
+            return self.kit_service.get_kit_config(
+                owner=metadata.owner,
+                kit_id=metadata.kit_id,
+                version=metadata.version
+            )
+        except Exception as e:
+            raise ModuleError(f"Failed to get kit config: {str(e)}")
 
     def get_relation_description(
         self,

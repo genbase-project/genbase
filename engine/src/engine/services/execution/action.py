@@ -5,141 +5,167 @@ import os
 import subprocess
 import sys
 import venv
-from dataclasses import dataclass
+import inspect
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Callable, Optional, Type, Union, get_args, get_origin, Literal
+from types import UnionType
 
 import cloudpickle
+from pydantic import BaseModel, create_model
 
 from engine.services.storage.repository import RepoService
 from engine.utils.logging import logger
 
 
-@dataclass
-class FunctionMetadata:
+class FunctionMetadata(BaseModel):
     """Function metadata in OpenAI function calling format"""
     name: str
     description: str
     parameters: Dict[str, Any]
     is_async: bool
 
+def _get_type_info(type_hint: Any) -> Dict[str, Any]:
+    """Convert Python type hint to JSON schema type info"""
+    logger.debug(f"Processing type hint: {type_hint}")
+    
+    # Handle None type
+    if type_hint is type(None):
+        return {"type": "null"}
+
+    # Handle basic types
+    type_map = {
+        str: {"type": "string"},
+        int: {"type": "integer"},
+        float: {"type": "number"},
+        bool: {"type": "boolean"},
+        list: {"type": "array"},
+        dict: {"type": "object"},
+        Any: {"type": "object"}
+    }
+    
+    if type_hint in type_map:
+        return type_map[type_hint]
+
+    # Get origin/args for complex types
+    origin = get_origin(type_hint)
+    args = get_args(type_hint)
+    
+    logger.debug(f"Type origin: {origin}, args: {args}")
+
+    # Handle Optional (Union with None)
+    if origin in (Union, UnionType) and type(None) in args:
+        non_none_args = [arg for arg in args if arg is not type(None)]
+        if len(non_none_args) == 1:
+            type_info = _get_type_info(non_none_args[0])
+            if isinstance(type_info["type"], list):
+                if "null" not in type_info["type"]:
+                    type_info["type"].append("null")
+            else:
+                type_info["type"] = [type_info["type"], "null"]
+            return type_info
+
+    # Handle Union types
+    if origin in (Union, UnionType):
+        types = []
+        for arg in args:
+            type_info = _get_type_info(arg)
+            if isinstance(type_info["type"], list):
+                types.extend(type_info["type"])
+            else:
+                types.append(type_info["type"])
+        return {"type": list(set(types))}
+
+    # Handle List
+    if origin == list:
+        return {
+            "type": "array",
+            "items": _get_type_info(args[0]) if args else {"type": "object"}
+        }
+
+    # Handle Dict
+    if origin == dict:
+        return {
+            "type": "object",
+            "additionalProperties": True
+        }
+
+    # Handle Literal
+    if origin == Literal:
+        return {
+            "type": "string",
+            "enum": list(args)
+        }
+
+    # Handle Pydantic models
+    if inspect.isclass(type_hint) and issubclass(type_hint, BaseModel):
+        return type_hint.model_json_schema()
+
+    logger.warning(f"Unhandled type hint: {type_hint}, defaulting to object")
+    return {"type": "object"}
+
+def function_to_schema(func: Callable) -> Dict[str, Any]:
+    """Convert a Python function to an OpenAPI-compatible JSON schema"""
+    logger.info(f"Generating schema for function: {func.__name__}")
+    
+    try:
+        # Get function signature
+        sig = inspect.signature(func)
+        logger.debug(f"Function signature: {sig}")
+
+        # Get docstring
+        description = inspect.getdoc(func) or ""
+        logger.debug(f"Function description: {description}")
+
+        # Process parameters
+        properties = {}
+        required = []
+
+        for name, param in sig.parameters.items():
+            logger.debug(f"Processing parameter: {name}")
+            
+            # Get parameter type
+            param_type = param.annotation if param.annotation != inspect.Parameter.empty else Any
+            type_info = _get_type_info(param_type)
+            
+            # Add description from docstring if available
+            if description:
+                param_desc = [
+                    line.strip()
+                    for line in description.split("\n")
+                    if f":param {name}:" in line
+                ]
+                if param_desc:
+                    type_info["description"] = param_desc[0].split(":", 2)[-1].strip()
+
+            properties[name] = type_info
+            
+            # Check if parameter is required
+            if param.default == inspect.Parameter.empty:
+                required.append(name)
+
+        parameters = {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": False
+        }
+        
+        logger.debug(f"Generated parameters schema: {parameters}")
+        
+        return {
+            "name": func.__name__,
+            "description": description,
+            "parameters": parameters,
+            "is_async": inspect.iscoroutinefunction(func)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating schema for function {func.__name__}: {str(e)}")
+        raise
+
 class ActionError(Exception):
     """Base exception for action errors"""
     pass
-
-class FunctionParser(ast.NodeVisitor):
-    """AST parser to extract function information in OpenAI schema format"""
-    def __init__(self, function_name: str):
-        self.function_name = function_name
-        self.description = ""
-        self.parameters: Dict[str, Any] = {
-            "type": "object",
-            "properties": {},
-            "required": [],
-            "additionalProperties": False
-        }
-        self.found = False
-        self.is_async = False
-
-    def _get_type_schema(self, annotation) -> Dict[str, Any]:
-        """Convert Python type annotation to JSON schema"""
-        if annotation is None:
-            return {"type": "object"}
-
-        if isinstance(annotation, ast.Name):
-            type_map = {
-                "str": {"type": "string"},
-                "int": {"type": "integer"},
-                "float": {"type": "number"},
-                "bool": {"type": "boolean"},
-                "list": {"type": "array"},
-                "Dict": {"type": "object"},  # Handle Dict as a name directly
-                "dict": {"type": "object"},
-                "Any": {"type": "object"}
-            }
-            return type_map.get(annotation.id, {"type": "object"})
-
-        elif isinstance(annotation, ast.Subscript):
-            if isinstance(annotation.value, ast.Name):
-                if annotation.value.id == "Dict":
-                    # For Dict type, we specify it's an object that can have additional properties
-                    return {
-                        "type": "object",
-                        "additionalProperties": True
-                    }
-                elif annotation.value.id == "List":
-                    return {
-                        "type": "array",
-                        "items": self._get_type_schema(annotation.slice)
-                    }
-                elif annotation.value.id == "Tuple":
-                    # For tuples, represent as array with fixed items
-                    if isinstance(annotation.slice, ast.Tuple):
-                        return {
-                            "type": "array",
-                            "items": [self._get_type_schema(item) for item in annotation.slice.elts],
-                            "minItems": len(annotation.slice.elts),
-                            "maxItems": len(annotation.slice.elts)
-                        }
-                    else:
-                        return {"type": "array"}
-                elif annotation.value.id == "Optional":
-                    type_schema = self._get_type_schema(annotation.slice)
-                    if isinstance(type_schema["type"], list):
-                        if "null" not in type_schema["type"]:
-                            type_schema["type"].append("null")
-                    else:
-                        type_schema["type"] = [type_schema["type"], "null"]
-                    return type_schema
-                elif annotation.value.id == "Union":
-                    if isinstance(annotation.slice, ast.Tuple):
-                        types = []
-                        for elt in annotation.slice.elts:
-                            type_schema = self._get_type_schema(elt)
-                            if "type" in type_schema:
-                                if isinstance(type_schema["type"], list):
-                                    types.extend(type_schema["type"])
-                                else:
-                                    types.append(type_schema["type"])
-                        return {"type": list(set(types))} if types else {"type": "object"}
-        
-        # Default fallback
-        return {"type": "object"}
-
-    def visit_FunctionDef(self, node):
-        if node.name == self.function_name:
-            self.found = True
-
-            # Get docstring
-            if ast.get_docstring(node):
-                self.description = ast.get_docstring(node)
-
-            # Get parameters
-            for arg in node.args.args:
-                param_schema = self._get_type_schema(arg.annotation)
-                
-                # Add description if available in docstring
-                if self.description:
-                    param_docs = [
-                        line.strip()
-                        for line in self.description.split("\n")
-                        if f":param {arg.arg}:" in line
-                    ]
-                    if param_docs:
-                        param_desc = param_docs[0].split(":", 2)[-1].strip()
-                        param_schema["description"] = param_desc
-
-                self.parameters["properties"][arg.arg] = param_schema
-
-                # Add to required list if no default value
-                default_offset = len(node.args.args) - len(node.args.defaults)
-                if node.args.args.index(arg) < default_offset:
-                    self.parameters["required"].append(arg.arg)
-
-    def visit_AsyncFunctionDef(self, node):
-        """Visit async function definition"""
-        self.is_async = True
-        self.visit_FunctionDef(node)
 
 
 
@@ -228,28 +254,41 @@ class ActionService:
         function_name: str
     ) -> FunctionMetadata:
         """Get function metadata in OpenAI function calling format"""
+        logger.info(f"Getting metadata for function {function_name} in {file_path}")
+        
         try:
             full_path = Path(folder_path) / file_path
+            logger.debug(f"Full path: {full_path}")
 
-            with open(full_path, 'r') as f:
-                source = f.read()
-
-            # Parse the source code
-            tree = ast.parse(source)
-            parser = FunctionParser(function_name)
-            parser.visit(tree)
-
-            if not parser.found:
+            # Import the module to get the actual function
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("dynamic_module", str(full_path))
+            if not spec or not spec.loader:
+                raise ActionError(f"Could not load module spec for {file_path}")
+                
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            
+            if not hasattr(module, function_name):
                 raise ActionError(f"Function {function_name} not found in {file_path}")
+                
+            func = getattr(module, function_name)
+            if not callable(func):
+                raise ActionError(f"{function_name} in {file_path} is not callable")
+
+            # Generate schema from function
+            schema = function_to_schema(func)
+            logger.debug(f"Generated schema: {schema}")
 
             return FunctionMetadata(
-                name=function_name,
-                description=parser.description,
-                parameters=parser.parameters,
-                is_async=parser.is_async
+                name=schema["name"],
+                description=schema["description"],
+                parameters=schema["parameters"],
+                is_async=schema["is_async"]
             )
 
         except Exception as e:
+            logger.error(f"Error analyzing function: {str(e)}")
             raise ActionError(f"Error analyzing function: {str(e)}")
 
 
@@ -414,3 +453,67 @@ except Exception as e:
 
             except Exception as e:
                 raise ActionError(f"Error executing function: {str(e)}")
+
+# # Example test code demonstrating function metadata parsing capabilities
+# if __name__ == "__main__":
+#     from enum import Enum
+#     from typing import List, Optional, Union, Literal
+#     from pydantic import BaseModel, Field
+    
+#     # Example enum and Pydantic models
+#     class UserRole(str, Enum):
+#         ADMIN = "admin"
+#         USER = "user"
+#         GUEST = "guest"
+    
+#     class UserProfile(BaseModel):
+#         """User profile information"""
+#         name: str = Field(..., description="User's full name")
+#         age: Optional[int] = Field(None, description="User's age")
+#         roles: List[UserRole] = Field(default_factory=list, description="User's roles")
+    
+#     class TeamSettings(BaseModel):
+#         """Team configuration settings"""
+#         team_name: str = Field(..., description="Name of the team")
+#         max_members: int = Field(default=10, description="Maximum number of team members")
+#         features: List[str] = Field(default_factory=list, description="Enabled features")
+    
+#     # Example function with various type hints
+#     async def create_team(
+#         profile: UserProfile,
+#         team_config: TeamSettings,
+#         team_type: Literal["public", "private", "internal"],
+#         metadata: Optional[Dict[str, Any]] = None,
+#         sync_data: Union[bool, List[str]] = False
+#     ) -> Dict[str, Any]:
+#         """Create a new team with the given configuration.
+        
+#         Args:
+#             profile: User profile creating the team
+#             team_config: Team configuration settings
+#             team_type: Type of team to create
+#             metadata: Optional metadata for the team
+#             sync_data: Whether to sync data or list of data types to sync
+            
+#         Returns:
+#             Dictionary with team creation result
+#         """
+#         pass  # Function implementation not needed for schema generation example
+    
+#     # Example usage
+#     try:
+#         logger.info("Generating schema for example function...")
+#         schema = function_to_schema(create_team)
+#         logger.info("Generated schema:")
+#         logger.info(json.dumps(schema, indent=2))
+        
+#         # The schema will include:
+#         # - Complex types from Pydantic models (UserProfile, TeamSettings)
+#         # - Literal types with specific allowed values
+#         # - Optional parameters with defaults
+#         # - Union types
+#         # - Async function detection
+#         # - Parameter descriptions from docstrings
+        
+#     except Exception as e:
+#         logger.error(f"Error in example: {str(e)}")

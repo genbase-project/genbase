@@ -1,36 +1,37 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, UTC
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+import importlib.util
+import inspect
 import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from engine.config.workflow_config import WorkflowConfigService
-from engine.db.models import ChatHistory, WorkflowStatus
+
 from engine.db.session import SessionLocal
+from engine.services.agents.chat_history import AgentError, ChatHistoryManager
 from engine.services.execution.model import ModelService
-from engine.services.execution.stage_state import StageStateService, AgentStage, AgentState
+from engine.services.execution.state import StateService, AgentState
 from engine.services.core.module import ModuleService, RelationType
 from engine.services.execution.workflow import (
     ActionInfo,
     WorkflowService,
     WorkflowMetadataResult,
-    WorkflowStepMetadata
+    WorkflowActionMetadata
 )
 from engine.services.storage.repository import RepoService
 from engine.utils.logging import logger
+from pathlib import Path
 
-class AgentError(Exception):
-    """Base exception for agent operations"""
-    pass
 
 @dataclass
 class AgentServices:
     """Container for all services required by agents"""
     model_service: ModelService
     workflow_service: WorkflowService
-    stage_state_service: StageStateService
+    stage_state_service: StateService
     repo_service: RepoService
     module_service: ModuleService
 
@@ -42,93 +43,6 @@ class AgentContext:
     user_input: str
     session_id: Optional[str] = None
 
-class ChatHistoryManager:
-    """Manages chat history operations"""
-    
-    def __init__(self):
-        self._db = SessionLocal()
-    
-    def get_chat_history(
-        self,
-        module_id: str,
-        workflow: str,
-        session_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Get chat history for a module and workflow session
-        
-        Args:
-            module_id: Module ID
-            workflow: Workflow type
-            session_id: Optional session ID. If not provided, returns default session (all zeros UUID)
-        """
-        try:
-            with self._db as db:
-                stmt = (
-                    select(ChatHistory)
-                    .where(
-                        ChatHistory.module_id == module_id,
-                        ChatHistory.section == workflow,
-                        ChatHistory.session_id == (session_id or str(uuid.UUID(int=0)))
-                    )
-                    .order_by(ChatHistory.timestamp.asc())
-                )
-                messages = db.execute(stmt).scalars().all()
-
-                history = []
-                for msg in messages:
-                    message = {
-                        "role": msg.role,
-                        "content": msg.content
-                    }
-                    if msg.message_type in ["tool_call", "tool_result"]:
-                        if msg.message_type == "tool_call":
-                            message["tool_calls"] = msg.tool_data
-                        else:
-                            message["tool_results"] = msg.tool_data
-                    history.append(message)
-                return history
-        except Exception as e:
-            raise AgentError(f"Failed to get chat history: {str(e)}")
-
-    def add_to_history(
-        self,
-        module_id: str,
-        workflow: str,
-        role: str,
-        content: str,
-        message_type: str = "text",
-        tool_data: Optional[Dict[str, Any]] = None,
-        session_id: Optional[str] = None
-    ):
-        """
-        Add message to chat history
-        
-        Args:
-            module_id: Module ID
-            workflow: Workflow type
-            role: Message role (user/assistant)
-            content: Message content
-            message_type: Message type (text/tool_call/tool_result)
-            tool_data: Optional tool data
-            session_id: Optional session ID. If not provided, uses default session (all zeros UUID)
-        """
-        try:
-            with self._db as db:
-                chat_message = ChatHistory(
-                    module_id=module_id,
-                    section=workflow,
-                    role=role,
-                    content=content or "Empty message",
-                    timestamp=datetime.now(UTC),
-                    message_type=message_type,
-                    tool_data=tool_data,
-                    session_id=session_id or str(uuid.UUID(int=0))
-                )
-                db.add(chat_message)
-                db.commit()
-        except Exception as e:
-            raise AgentError(f"Failed to add to history: {str(e)}")
 
 @dataclass
 class Action:
@@ -176,7 +90,7 @@ class BaseAgent(ABC):
     @property
     @abstractmethod
     def agent_type(self) -> str:
-        """Return agent type (tasker or coder)"""
+        """Return agent type"""
         pass
 
     @property
@@ -185,56 +99,12 @@ class BaseAgent(ABC):
         """Return list of default actions available to this agent type"""
         pass
 
-    def get_completed_workflows(self, module_id: str) -> Set[str]:
-        """Get set of completed workflows for a module"""
-        try:
-            with SessionLocal() as db:
-                stmt = (
-                    select(WorkflowStatus)
-                    .where(
-                        WorkflowStatus.module_id == module_id,
-                        WorkflowStatus.is_completed == True
-                    )
-                )
-                results = db.execute(stmt).scalars().all()
-                return {ws.workflow_type for ws in results}
-        except Exception as e:
-            logger.error(f"Error getting completed workflows: {str(e)}")
-            return set()
-
-    def verify_prerequisites(self, module_id: str, workflow: str) -> bool:
-        """Verify if all prerequisite workflows are completed"""
-        try:
-            # Get module path
-            module_path = self.services.module_service.get_module_path(module_id)
-            
-            # Get kit config
-            with open(module_path / "kit.yaml") as f:
-                import yaml
-                kit_config = yaml.safe_load(f)
-            
-            # Get workflow config with kit config
-            config = self.workflow_config_service.get_workflow_config(workflow, kit_config)
-            
-            # Get completed workflows
-            completed = self.get_completed_workflows(module_id)
-            
-            # Check if all prerequisites are completed
-            return self.workflow_config_service.can_execute_workflow(workflow, completed)
-            
-        except Exception as e:
-            logger.error(f"Error verifying prerequisites: {str(e)}")
-            return False
 
     async def process_request(self, context: AgentContext) -> Dict[str, Any]:
         """Standard request processing flow"""
         try:            
 
-            if not self.verify_prerequisites(context.module_id, context.workflow):
-                raise AgentError(
-                    f"Cannot execute workflow '{context.workflow}' - prerequisites not met. "
-                    "Please complete required workflows first."
-                )
+
 
             # Set executing state
             self.services.stage_state_service.set_executing(context.module_id)
@@ -341,7 +211,7 @@ class BaseAgent(ABC):
     async def get_workflow_actions(
         self,
         context: AgentContext,
-        workflow_actions: List[WorkflowStepMetadata]
+        workflow_actions: List[WorkflowActionMetadata]
     ) -> Tuple[List[Dict[str, Any]], Dict[str, ActionInfo]]:
         """Convert workflow actions to tools format with action mapping"""
         tools = []
@@ -416,6 +286,85 @@ class BaseAgent(ABC):
     ) -> Dict[str, Any]:
         """Process workflow according to specific agent type"""
         pass
+
+    async def execute_function_by_name(
+        self,
+        module_id: str,
+        file_path: str,
+        function_name: str,
+        params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Dynamically execute a function from a given file by name
+        
+        Args:
+            module_id: ID of the module containing the function
+            file_path: Path to the Python file containing the function (relative to module root)
+            function_name: Name of the function to execute
+            params: Optional parameters to pass to the function
+            
+        Returns:
+            Dictionary containing the result of the function execution
+        """
+        try:
+            # Get absolute path to module
+            module_path = self.services.module_service.get_module_path(module_id)
+            full_path = module_path / file_path
+            
+            if not full_path.exists():
+                raise AgentError(f"Function file not found: {file_path}")
+            
+            # Load module dynamically
+            spec = importlib.util.spec_from_file_location(
+                f"dynamic_module_{function_name}",
+                str(full_path)
+            )
+            if not spec or not spec.loader:
+                raise AgentError(f"Could not load module spec for {file_path}")
+                
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            
+            # Get function from module
+            if not hasattr(module, function_name):
+                raise AgentError(f"Function {function_name} not found in {file_path}")
+                
+            function = getattr(module, function_name)
+            if not callable(function):
+                raise AgentError(f"{function_name} in {file_path} is not callable")
+
+            # Inspect function signature
+            sig = inspect.signature(function)
+            if params is None:
+                params = {}
+                
+            # Filter only parameters that exist in function signature
+            valid_params = {}
+            for param_name, param in sig.parameters.items():
+                if param_name in params:
+                    valid_params[param_name] = params[param_name]
+                elif param.default is inspect.Parameter.empty:
+                    raise AgentError(f"Required parameter {param_name} missing for function {function_name}")
+
+            # Execute function
+            result = function(**valid_params)
+            
+            # Handle coroutines
+            if inspect.iscoroutine(result):
+                import asyncio
+                result = await result
+
+            return {
+                "success": True,
+                "result": result
+            }
+            
+        except Exception as e:
+            logger.error(f"Error executing function {function_name}: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
 
     def get_workflow_default_actions(self, workflow: str, module_id: str) -> List[Action]:
         """Get default actions for specific workflow type"""

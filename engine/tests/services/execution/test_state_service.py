@@ -3,7 +3,7 @@ import pytest
 from datetime import datetime, UTC
 from unittest.mock import Mock, patch
 from engine.services.execution.stage_state import (
-    StageStateService, AgentStage, AgentState, InvalidTransition
+    StateService, AgentStage, AgentState, InvalidTransition
 )
 
 @pytest.fixture
@@ -15,7 +15,7 @@ def mock_db_session():
 
 @pytest.fixture
 def stage_service():
-    return StageStateService()
+    return StateService()
 
 def test_validate_stage_transition(stage_service):
     """Test basic stage transition validation"""

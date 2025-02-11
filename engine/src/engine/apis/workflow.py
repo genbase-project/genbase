@@ -12,7 +12,7 @@ from engine.services.execution.workflow import WorkflowError, WorkflowService
 from engine.config.workflow_config import WorkflowConfigService
 from engine.utils.yaml import YAMLUtils
 from engine.utils.logging import logger
-from engine.services.execution.stage_state import StageStateService
+from engine.services.execution.stage_state import StateService
 
 class ExecuteStepRequest(BaseModel):
     """Request body for executing a workflow step"""
@@ -33,7 +33,7 @@ class WorkflowRouter:
     ):
         self.service = workflow_service
         self.config_service = WorkflowConfigService()
-        self.stage_state_service = StageStateService()
+        self.stage_state_service = StateService()
         self.router = APIRouter(prefix=prefix, tags=["workflow"])
         self._setup_routes()
     
@@ -148,7 +148,6 @@ class WorkflowRouter:
                         "workflow_type": config.workflow_type,
                         "agent_type": config.agent_type,
                         "base_instructions": config.base_instructions,
-                        "prerequisites": config.prerequisites,
                         "module_id": module_id,
                         "metadata": metadata,
                         "default_actions": default_actions,

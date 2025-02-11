@@ -84,7 +84,7 @@ class ActionRouter:
         except ActionError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    def _setup_routes(self):
+    async def _setup_routes(self):
         """Setup all routes"""
         self.router.add_api_route(
             "/metadata",

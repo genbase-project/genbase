@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Set, Any
 
-from engine.services.execution.stage_state import COMPLETE_WORKFLOW_SCHEMA, StageStateService
+from engine.services.execution.stage_state import StateService
 
 @dataclass
 class WorkflowAction:
@@ -17,7 +17,6 @@ class WorkflowConfig:
     workflow_type: str
     agent_type: str  # "tasker" or "coder"
     base_instructions: str  # Default instructions always included
-    prerequisites: List[str]  # Workflows that must be completed first
     default_actions: List[WorkflowAction] = field(default_factory=list)  # Default actions available to this workflow
     allow_multiple: bool = False  # Whether multiple chat sessions are allowed
 
@@ -37,7 +36,6 @@ class WorkflowConfigurations:
                 1. Verify environment setup
                 2. Install dependencies
                 3. Validate initial configuration""",
-                prerequisites=[],
                 allow_multiple=False
             ),
             
@@ -46,7 +44,6 @@ class WorkflowConfigurations:
                 agent_type="", # Will be overridden by kit.yaml
                 base_instructions="""Monitor and maintain the module's operation.
                 Keep the module healthy and running smoothly.""",
-                prerequisites=["initialize"],
                 allow_multiple=True
             ),
             
@@ -55,7 +52,6 @@ class WorkflowConfigurations:
                 agent_type="", # Will be overridden by kit.yaml
                 base_instructions="""Safely remove the module and clean up resources.
                 Ensure all dependencies and resources are properly handled.""",
-                prerequisites=["initialize"],
                 allow_multiple=False
             ),
             
@@ -64,29 +60,14 @@ class WorkflowConfigurations:
                 agent_type="", # Will be overridden by kit.yaml
                 base_instructions="""Make code edits with minimal impact.
                 Always explain changes and ensure stability.""",
-                prerequisites=["initialize"],
                 allow_multiple=True
             )
         }
     @staticmethod
-    def get_default_actions(stage_state_service: StageStateService) -> Dict[str, List[WorkflowAction]]:
+    def get_default_actions(stage_state_service: StateService) -> Dict[str, List[WorkflowAction]]:
         return {
-            "initialize": [
-                WorkflowAction(
-                    name="complete_workflow",
-                    description="Mark the current workflow as completed",
-                    schema=COMPLETE_WORKFLOW_SCHEMA,
-                    function=stage_state_service.complete_workflow
-                )
-            ],
-            "remove": [
-                WorkflowAction(
-                    name="complete_workflow",
-                    description="Mark the current workflow as completed",
-                    schema=COMPLETE_WORKFLOW_SCHEMA,
-                    function=stage_state_service.complete_workflow
-                )
-            ]
+            "initialize": [],
+            "remove": []
     }
 
     
@@ -95,7 +76,7 @@ class WorkflowConfigService:
     
     def __init__(self):
         self.default_configs = WorkflowConfigurations.get_default_configs()
-        stage_state_service = StageStateService()
+        stage_state_service = StateService()
         self.default_actions: Dict[str, List[WorkflowAction]] = WorkflowConfigurations.get_default_actions(stage_state_service)
     
     def get_workflow_config(
@@ -115,7 +96,6 @@ class WorkflowConfigService:
             workflow_type=workflow_type,
             agent_type=base_config.agent_type,
             base_instructions=base_config.base_instructions,
-            prerequisites=base_config.prerequisites.copy(),
             default_actions=default_actions,
             allow_multiple=base_config.allow_multiple
         )
@@ -147,15 +127,3 @@ class WorkflowConfigService:
             
         return config
 
-
-    def can_execute_workflow(
-        self,
-        workflow_type: str,
-        completed_workflows: Set[str]
-    ) -> bool:
-        """Check if a workflow can be executed based on prerequisites"""
-        if workflow_type not in self.default_configs:
-            return False
-            
-        config = self.default_configs[workflow_type]
-        return all(prereq in completed_workflows for prereq in config.prerequisites)

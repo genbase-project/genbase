@@ -96,24 +96,23 @@ class ResourceService:
     def get_documentation_resources(self, module_id: str) -> List[Resource]:
         """Get documentation resources"""
         try:
-            module_path = self.module_service.get_module_path(module_id)
-            kit = YAMLUtils.read_kit(module_path)
-            if not kit.get('instructions', {}).get('documentation'):
-                return []
-
-            instruction_path = module_path / "instructions"
-            if not instruction_path.exists():
+            # Get kit config with full paths populated
+            kit_config = self.module_service.get_module_kit_config(module_id)
+            
+            # Early return if no documentation
+            if not kit_config.instructions or not kit_config.instructions.documentation:
                 return []
 
             resources = []
-            for doc in kit['instructions']['documentation']:
-                file_path = instruction_path / doc['path']
+            # Process each documentation resource
+            for doc in kit_config.instructions.documentation:
+                file_path = Path(doc.full_path)
                 if file_path.exists():
                     resources.append(Resource(
-                        path=doc['path'],
+                        path=doc.path,
                         name=file_path.name,
                         content=self._read_file_content(file_path),
-                        description=doc.get('description')
+                        description=doc.description
                     ))
 
             return resources
@@ -124,24 +123,23 @@ class ResourceService:
     def get_specification_resources(self, module_id: str) -> List[Resource]:
         """Get specification resources"""
         try:
-            module_path = self.module_service.get_module_path(module_id)
-            kit = YAMLUtils.read_kit(module_path)
-            if not kit.get('instructions', {}).get('specification'):
-                return []
-
-            instruction_path = module_path / "instructions"
-            if not instruction_path.exists():
+            # Get kit config with full paths populated
+            kit_config = self.module_service.get_module_kit_config(module_id)
+            
+            # Early return if no specifications
+            if not kit_config.instructions or not kit_config.instructions.specification:
                 return []
 
             resources = []
-            for spec in kit['instructions']['specification']:
-                file_path = instruction_path / spec['path']
+            # Process each specification resource
+            for spec in kit_config.instructions.specification:
+                file_path = Path(spec.full_path)
                 if file_path.exists():
                     resources.append(Resource(
-                        path=spec['path'],
+                        path=spec.path,
                         name=file_path.name,
                         content=self._read_file_content(file_path),
-                        description=spec.get('description')
+                        description=spec.description
                     ))
 
             return resources

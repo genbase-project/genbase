@@ -51,6 +51,16 @@ class UpdateRelationDescriptionRequest(BaseModel):
 
 
 
+class UpdateModuleEnvVarRequest(BaseModel):
+    env_var_name: str
+    env_var_value: str
+    
+    @validator('env_var_name')
+    def validate_env_var_name(cls, v):
+        if not v.strip():
+            raise ValueError('Environment variable name cannot be empty')
+        return v.strip()
+
 class UpdateModuleNameRequest(BaseModel):
     name: str
     
@@ -281,6 +291,22 @@ class ModuleRouter:
 
 
 
+    async def _update_module_env_var(
+        self,
+        module_id: str,
+        request: UpdateModuleEnvVarRequest
+    ):
+        """Update module environment variable"""
+        try:
+            metadata = self.service.update_module_env_var(
+                module_id=module_id,
+                env_var_name=request.env_var_name,
+                env_var_value=request.env_var_value
+            )
+            return ModuleResponse.from_metadata(metadata)
+        except ModuleError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     async def _update_module_name(
         self,
         module_id: str,
@@ -401,6 +427,14 @@ class ModuleRouter:
             methods=["PUT"],
             response_model=ModuleResponse,
             summary="Update module name"
+        )
+
+        self.router.add_api_route(
+            "/{module_id}/env",
+            self._update_module_env_var,
+            methods=["PUT"],
+            response_model=ModuleResponse,
+            summary="Update module environment variable"
         )
 
 

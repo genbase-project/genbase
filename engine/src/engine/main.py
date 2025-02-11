@@ -3,14 +3,15 @@ import logging
 import traceback
 from pathlib import Path
 from typing import Any, Dict
+import secrets
+from base64 import b64decode
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-
-
 
 from engine.apis.action import ActionRouter
 # from engine.apis.agent import AgentRouter
@@ -36,11 +37,10 @@ from engine.services.core.module import ModuleService
 from engine.services.core.project import ProjectService
 from engine.services.storage.repository import RepoService
 from engine.services.storage.resource import ResourceService  # New import
-from engine.services.execution.stage_state import StageStateService  # Add this import
+from engine.services.execution.state import StateService  # Add this import
 from engine.services.execution.workflow import WorkflowService
 
 load_dotenv()
-
 
 # Configure logging
 logging.basicConfig(
@@ -53,6 +53,22 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# Basic auth configuration
+security = HTTPBasic()
+
+def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = os.getenv("API_USERNAME")
+    correct_password = os.getenv("API_PASSWORD")
+    
+    if not secrets.compare_digest(credentials.username, correct_username) or \
+       not secrets.compare_digest(credentials.password, correct_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 class ErrorLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Any) -> Any:
@@ -73,11 +89,11 @@ class ErrorLoggingMiddleware(BaseHTTPMiddleware):
                 }
             )
 
-
 # Create FastAPI app with exception handlers
 app = FastAPI(
     title="Repository and Module Management API",
-    debug=True  # Enable debug mode for detailed error responses
+    debug=True,  # Enable debug mode for detailed error responses
+    dependencies=[Depends(get_current_user)]  # Apply basic auth to all routes
 )
 
 # Add error logging middleware
@@ -87,7 +103,6 @@ app.add_middleware(ErrorLoggingMiddleware)
 BASE_DATA_DIR = Path(os.getenv("DATA_DIR"))
 REPO_BASE_DIR = BASE_DATA_DIR / "repositories"
 KIT_BASE_DIR = BASE_DATA_DIR / "kit"
-
 
 # Create necessary directories
 BASE_DATA_DIR.mkdir(exist_ok=True)
@@ -103,16 +118,15 @@ kit_service = KitService(base_path=KIT_BASE_DIR)
 
 project_service = ProjectService()
 
-
-
 # Add after other service initializations
-stage_state_service = StageStateService()
+stage_state_service = StateService()
 
 module_service = ModuleService(
     workspace_base=str(KIT_BASE_DIR),
     module_base=str(KIT_BASE_DIR),
     repo_service=repo_service,
-    stage_state_service=stage_state_service  # Add this
+    stage_state_service=stage_state_service,
+    kit_service=kit_service
 )
 
 model_service = ModelService()
@@ -125,7 +139,6 @@ resource_service = ResourceService(
     model_service=model_service
 )
 
-
 action_service = ActionService(repo_service=repo_service)
 
 # Add this with other service initializations
@@ -136,12 +149,8 @@ workflow_service = WorkflowService(
     action_service=action_service,
     resource_service=resource_service,
     repo_service=repo_service,
+    kit_service=kit_service
 )
-
-
-
-
-
 
 # Initialize routers
 kit_router = KitRouter(
@@ -170,10 +179,8 @@ resource_router = ResourceRouter(
     prefix="/resource"
 )
 
-
 # Initialize router
 model_router = ModelRouter(model_service)
-
 
 # Add to router initialization
 operation_router = ActionRouter(
@@ -197,14 +204,6 @@ app.include_router(model_router.router)
 app.include_router(operation_router.router)
 app.include_router(workflow_router.router)
 
-
-
-
-
-
-
-
-
 agent_services = AgentServices(
     model_service=model_service,
     workflow_service=workflow_service,
@@ -212,9 +211,6 @@ agent_services = AgentServices(
     repo_service=repo_service,
     module_service=module_service
 )
-
-
-
 
 chat_router = ChatRouter(
     agent_services=agent_services
@@ -231,9 +227,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-
 
 # Startup event to initialize database
 @app.on_event("startup")

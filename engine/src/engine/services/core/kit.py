@@ -8,20 +8,172 @@ import zipfile
 from urllib.parse import urljoin
 
 import httpx
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from enum import Enum
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, List, Optional
+from typing import Any, BinaryIO, Dict, List, Optional, Union
 
 import yaml
 
 @dataclass
-class SharedAction:
-    """Shared action definition"""
-    path: str  # Format: "module:function_name"
+class EnvironmentVariable:
+    """Environment variable definition"""
+    name: str
+    description: str
+    required: bool = False
+    default: Optional[str] = None
+
+@dataclass
+class Agent:
+    """Agent configuration"""
+    name: str
+    class_name: str  # Maps to 'class' in YAML
+    description: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Agent':
+        return cls(
+            name=data['name'],
+            class_name=data['class'],
+            description=data.get('description')
+        )
+
+@dataclass
+class InstructionItem:
+    """Instruction item definition"""
+    name: str
+    path: str  # Original path from config
+    description: Optional[str] = None
+    full_path: str = ""  # Full filesystem path constructed as module_path/instructions/path
+
+@dataclass
+class Instructions:
+    """Instructions configuration"""
+    documentation: List[InstructionItem] = field(default_factory=list)
+    specification: List[InstructionItem] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any], kit_path: Optional[Path] = None) -> 'Instructions':
+        def create_instruction_item(item: Dict[str, Any]) -> InstructionItem:
+            instruction = InstructionItem(
+                name=item['name'],
+                path=item['path'],
+                description=item.get('description')
+            )
+            if kit_path:
+                instruction.full_path = str(kit_path / "instructions" / item['path'])
+            return instruction
+
+        documentation = [
+            create_instruction_item(item)
+            for item in data.get('documentation', [])
+        ]
+        specification = [
+            create_instruction_item(item)
+            for item in data.get('specification', [])
+        ]
+        return cls(documentation=documentation, specification=specification)
+
+@dataclass
+class WorkflowAction:
+    """Workflow action definition"""
+    path: str  # Original path in format "module:function"
     name: str
     description: Optional[str] = None
+    full_file_path: str = ""  # Full path to the action file
+    function_name: str = ""  # Function name extracted from path
+
+@dataclass
+class Workflow:
+    """Workflow configuration"""
+    agent: str
+    instruction: str
+    actions: List[WorkflowAction]
+    instruction_file_path: str = ""  # Full path to instruction file
+    instruction_content: str = ""  # Instruction content
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any], kit_path: Optional[Path] = None) -> 'Workflow':
+        def create_workflow_action(action: Dict[str, Any]) -> WorkflowAction:
+            workflow_action = WorkflowAction(
+                path=action['path'],
+                name=action['name'],
+                description=action.get('description')
+            )
+            action_file_path, func_name = action['path'].split(':')
+            workflow_action.full_file_path = str(kit_path / "actions" / f"{action_file_path}.py")
+            workflow_action.function_name = func_name
+            return workflow_action
+
+        instruction_file_path = str(kit_path / "instructions" / f"{data['instruction']}")
+        with open(instruction_file_path) as f:
+            instruction_content = f.read()
+        return cls(
+            agent=data['agent'],
+            instruction=data['instruction'],
+            actions=[create_workflow_action(action) for action in data.get('actions', [])],
+            instruction_file_path=instruction_file_path,
+            instruction_content=instruction_content
+        )
+
+@dataclass
+class WorkspaceFile:
+    """Workspace file definition"""
+    path: str
+    description: Optional[str] = None
+
+@dataclass
+class KitConfig:
+    """Complete kit configuration"""
+    doc_version: str
+    id: str
+    version: str
+    name: str
+    owner: str
+    environment: List[EnvironmentVariable]
+    agents: List[Agent]
+    instructions: Instructions
+    workflows: Dict[str, Workflow]
+    shared_actions: List[WorkflowAction]
+    dependencies: List[str]
+    workspace: Dict[str, List[WorkspaceFile]] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'KitConfig':
+        return cls(
+            doc_version=data['docVersion'],
+            id=data['id'],
+            version=data['version'],
+            name=data['name'],
+            owner=data['owner'],
+            environment=[
+                EnvironmentVariable(**env) 
+                for env in data.get('environment', [])
+            ],
+            agents=[Agent.from_dict(agent) for agent in data.get('agents', [])],
+            instructions=Instructions.from_dict(data.get('instructions', {}), kit_path=data['kit_path']),
+            workflows={
+                name: Workflow.from_dict(workflow, kit_path=data['kit_path'])
+                for name, workflow in data.get('workflows', {}).items()
+            },
+            shared_actions=[
+                WorkflowAction(
+                    path=action['path'],
+                    name=action['name'],
+                    description=action.get('description'),
+                    full_file_path=str(data['kit_path'] / "actions" / f"{action['path'].split(':')[0]}.py"),
+                    function_name=action['path'].split(':')[1]
+                )
+                for action in data.get('shared_actions', [])
+            ],
+            dependencies=data.get('dependencies', []),
+            workspace={
+                category: [WorkspaceFile(**f) for f in files]
+                for category, files in data.get('workspace', {}).items()
+            }
+        )
+
 
 
 class KitError(Exception):
@@ -44,12 +196,7 @@ class InvalidVersionError(KitError):
     """Invalid semantic version"""
     pass
 
-@dataclass
-class SharedAction:
-    """Shared action definition"""
-    path: str  # Format: "module:function_name"
-    name: str
-    description: Optional[str] = None
+
 
 @dataclass
 class KitMetadata:
@@ -66,35 +213,13 @@ class KitMetadata:
     def __post_init__(self):
         if self.environment is None:
             self.environment = []
-    
-    @staticmethod
-    def validate_shared_actions(shared_actions: Optional[List[Dict[str, Any]]] = None) -> List[SharedAction]:
-        """Validate shared_actions section from kit.yaml"""
-        if not shared_actions:
-            return []
-            
-        validated = []
-        for action in shared_actions:
-            if not isinstance(action, dict):
-                raise KitError("Shared action must be a dictionary")
-                
-            if 'path' not in action or 'name' not in action:
-                raise KitError("Shared action must have path and name")
-                
-            if ':' not in action['path']:
-                raise KitError("Shared action path must be in format 'module:function'")
-                
-            validated.append(SharedAction(
-                path=action['path'],
-                name=action['name'],
-                description=action.get('description')
-            ))
-        return validated
 
 class VersionSort(Enum):
     """Version sorting options"""
     ASCENDING = "asc"
     DESCENDING = "desc"
+
+
 
 class KitService:
     """Core kit management service"""
@@ -109,15 +234,8 @@ class KitService:
         self.base_path = Path(base_path)
         self.base_path.mkdir(exist_ok=True)
 
-    @staticmethod
-    def get_kit_shared_actions(self, owner: str, kit_id: str, version: str) -> List[SharedAction]:
-        """Get shared actions defined in a kit"""
-        kit_path = self._get_kit_path(owner, kit_id, version)
-        with open(kit_path / "kit.yaml") as f:
-            kit_data = yaml.safe_load(f)
-            return KitMetadata.validate_shared_actions(kit_data.get('shared_actions'))
 
-    def validate_semantic_version(version: str) -> bool:
+    def validate_semantic_version(self, version: str) -> bool:
         """
         Validate semantic versioning format (X.Y.Z)
         
@@ -130,7 +248,7 @@ class KitService:
         pattern = r'^\d+\.\d+\.\d+$'
         return bool(re.match(pattern, version))
 
-    def _get_kit_path(self, owner: str, kit_id: str, version: Optional[str] = None) -> Path:
+    def get_kit_path(self, owner: str, kit_id: str, version: Optional[str] = None) -> Path:
         """
         Get path for kit or specific version using owner/id/version structure
         
@@ -146,6 +264,8 @@ class KitService:
         if version:
             path = path / version
         return path
+
+
 
     def _get_metadata(self, kit_path: Path) -> Optional[KitMetadata]:
         """Get metadata for kit version"""
@@ -277,7 +397,7 @@ class KitService:
 
 
             # Get final kit path
-            kit_path = self._get_kit_path(owner, kit_id, version)
+            kit_path = self.get_kit_path(owner, kit_id, version)
 
             if kit_path.exists():
                 raise VersionExistsError(
@@ -307,6 +427,36 @@ class KitService:
         finally:
             # Clean up temp directory
             shutil.rmtree(temp_dir)
+            
+    def get_kit_config(self, owner: str, kit_id: str, version: str) -> KitConfig:
+        """
+        Get full kit configuration excluding metadata
+        
+        Args:
+            owner: Kit owner
+            kit_id: Kit identifier
+            version: Kit version
+            
+        Returns:
+            KitConfig: Complete kit configuration
+            
+        Raises:
+            KitNotFoundError: If kit/version not found
+            KitError: If kit.yaml is invalid or missing
+        """
+        kit_path = self.get_kit_path(owner, kit_id, version)
+        config_path = kit_path / "kit.yaml"
+        
+        if not config_path.exists():
+            raise KitError(f"kit.yaml not found in {kit_path}")
+            
+        try:
+            with open(config_path) as f:
+                config_data = yaml.safe_load(f)
+                config_data['kit_path'] = kit_path
+                return KitConfig.from_dict(config_data)
+        except Exception as e:
+            raise KitError(f"Failed to parse kit.yaml: {str(e)}")
 
 
     def get_all_kits(self, sort_by_name: bool = True) -> List[KitMetadata]:
@@ -359,7 +509,7 @@ class KitService:
         Raises:
             ModuleNotFoundError: If kit doesn't exist
         """
-        kit_path = self._get_kit_path(owner, kit_id)
+        kit_path = self.get_kit_path(owner, kit_id)
 
         if not kit_path.exists():
             raise KitNotFoundError(f"Kit not found: {owner}/{kit_id}")
@@ -396,7 +546,7 @@ class KitService:
         if not self.validate_semantic_version(version):
             raise InvalidVersionError(f"Invalid version: {version}")
 
-        path = self._get_kit_path(owner, kit_id, version)
+        path = self.get_kit_path(owner, kit_id, version)
         if not path.exists():
             raise KitNotFoundError(f"Module {owner}/{kit_id} version {version} not found")
 
@@ -418,7 +568,7 @@ class KitService:
         if not self.validate_semantic_version(version):
             raise InvalidVersionError(f"Invalid version: {version}")
 
-        kit_path = self._get_kit_path(owner, kit_id, version)
+        kit_path = self.get_kit_path(owner, kit_id, version)
 
         if not kit_path.exists():
             raise KitNotFoundError(f"Module {owner}/{kit_id} version {version} not found")
@@ -448,7 +598,7 @@ class KitService:
         Raises:
             ModuleNotFoundError: If kit not found
         """
-        kit_path = self._get_kit_path(owner, kit_id)
+        kit_path = self.get_kit_path(owner, kit_id)
 
         if not kit_path.exists():
             raise KitNotFoundError(f"Kit not found: {owner}/{kit_id}")

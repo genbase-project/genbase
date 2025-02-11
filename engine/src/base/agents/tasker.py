@@ -63,42 +63,6 @@ Your question goes here
 
 If asked what you can do, explain your capabilities based on the available tools and actions."""
 
-    async def _get_shared_actions(
-        self,
-        context: AgentContext,
-        module_id: str
-    ) -> List[Dict[str, Any]]:
-        """Get tools for module's shared actions"""
-        try:
-            # Get metadata for module's shared actions
-            shared_actions = await self.services.workflow_service.get_shared_actions_metadata(module_id)
-            
-            tools = []
-            action_map = {}
-            for action in shared_actions.actions:
-                if not action.error:
-                    # Create function schema from metadata
-                    schema = {
-                        "name": action.name,
-                        "description": action.description or "",
-                        "function": action.metadata
-                    }
-                    tools.append(schema)
-                    
-                    # Store action info for looking up execution details
-                    action_map[action.name] = ActionInfo(
-                        module_id=module_id,
-                        workflow="",  # Not part of a workflow
-                        action_path=action.action,
-                        name=action.name,
-                        description=action.description
-                    )
-            
-            return tools, action_map
-        except Exception as e:
-            logger.error(f"Error getting shared actions: {str(e)}")
-            return [], {}
-
     async def _process_workflow(
         self,
         context: AgentContext,

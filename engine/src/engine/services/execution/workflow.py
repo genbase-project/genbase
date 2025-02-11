@@ -3,27 +3,30 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict, NotRequired
 
 import yaml
+import os
 from engine.services.storage.repository import RepoService
 from engine.utils.yaml import YAMLUtils
 from pydantic import BaseModel
+from engine.services.core.kit import KitConfig, KitService
 
 from engine.services.execution.action import ActionError, ActionService, FunctionMetadata
 from engine.services.core.module import ModuleError, ModuleService, RelationType
 from engine.services.storage.resource import ResourceService
 from engine.utils.logging import logger
 
-class WorkflowStepMetadata(BaseModel):
+class WorkflowActionMetadata(BaseModel):
     """Pydantic model for workflow step metadata"""
     name: str
     action: str
     description: Optional[str] = None
     metadata: Optional[FunctionMetadata] = None
     error: Optional[str] = None
+    module_id: Optional[str] = None
 
 class WorkflowMetadataResult(BaseModel):
     """Pydantic model for complete workflow metadata response"""
     instructions: str
-    actions: List[WorkflowStepMetadata]
+    actions: List[WorkflowActionMetadata]
     requirements: List[str]
 
 @dataclass
@@ -46,16 +49,12 @@ class ActionInfo:
         }
 
 
-class WorkflowStep(BaseModel):
-    """Workflow step metadata"""
-    path: str  # Format: "path/to/file:function_name"
-    name: str
-    description: Optional[str] = None
+from engine.services.core.kit import WorkflowAction
 
 class Workflow(BaseModel):
     """Workflow metadata"""
     instruction: Optional[str] = None
-    actions: List[WorkflowStep] = []  # Make actions optional with empty default
+    actions: List[WorkflowAction] = []  # Make actions optional with empty default
 
 class WorkflowExecutionResult(BaseModel):
     """Pydantic model for workflow execution result"""
@@ -77,7 +76,8 @@ class WorkflowService:
         module_service: ModuleService,
         action_service: ActionService,
         resource_service: ResourceService,
-        repo_service: RepoService
+        repo_service: RepoService,
+        kit_service: KitService
     ):
         self.workspace_base = Path(workspace_base)
         self.module_base = Path(module_base)
@@ -85,119 +85,57 @@ class WorkflowService:
         self.action_service = action_service
         self.resource_service = resource_service
         self.repo_service = repo_service
+        self.kit_service = kit_service
 
-
-    def _read_instruction_file(self, instruction_path: Path) -> str:
-        """Read instruction file content"""
-        try:
-            if instruction_path.exists():
-                with open(instruction_path, 'r') as f:
-                    return f.read()
-            logger.warning(f"Instruction file not found: {instruction_path}")
-            return ""
-        except Exception as e:
-            logger.error(f"Failed to read instruction file {instruction_path}: {str(e)}")
-            raise WorkflowError(f"Failed to read instruction file: {str(e)}")
-
-    def _resolve_action_path(self, module_path: Path, action_path: str) -> tuple[Path, str, str]:
-        """
-        Resolve action path to actual file path and function name
-        Returns: (actions_dir, file_path, function_name)
-        """
-        # Split into module and function parts (e.g., "prerequisites:check_node")
-        module_part, function_name = action_path.split(":")
-        
-        # Ensure .py extension
-        file_path = f"{module_part}.py"
-        
-        # Actions directory is under module root
-        actions_dir = module_path / "actions"
-        if not actions_dir.exists():
-            raise WorkflowError(f"Actions directory not found: {actions_dir}")
-            
-        # Verify file exists
-        full_path = actions_dir / file_path
-        if not full_path.exists():
-            raise WorkflowError(f"Action file not found: {full_path}")
-            
-        return actions_dir, file_path, function_name
 
 
     def get_workflow_metadata(self, module_id: str, workflow: str) -> WorkflowMetadataResult:
         """Get workflow metadata including instructions and steps"""
         try:
-            # Get module info
-            module_path = self.module_service.get_module_path(module_id)
-            # Read and validate kit
-            kit = YAMLUtils.read_kit(module_path)
-            if not kit.get('workflows', {}).get(workflow):
-                logger.error(f"Workflow '{workflow}' not found in kit.yaml")
+            # Get kit config which has all paths resolved and content loaded
+            kit_config = self.module_service.get_module_kit_config(module_id)
+            
+            if workflow not in kit_config.workflows:
+                logger.error(f"Workflow '{workflow}' not found in kit config")
                 raise WorkflowError(f"Workflow '{workflow}' not found")
 
-            workflow_data = kit['workflows'][workflow]
+            workflow_data = kit_config.workflows[workflow]
             
-            # Handle instruction file separately from model validation
-            instruction_file = workflow_data.get('instruction')
-            instruction_content = ""
-            if instruction_file:
-                instruction_path = module_path / "instructions" / instruction_file
-                instruction_content = self._read_instruction_file(instruction_path)
-                
-            try:
-                # Create normalized workflow data for validation
-                validated_data = {
-                    "instruction": instruction_file,
-                    "actions": workflow_data.get('actions', [])
-                }
-                workflow_model = Workflow.model_validate(validated_data)
-                logger.info(f"""Workflow {workflow} validated:
-                Instruction file: {instruction_file}
-                Actions: {len(workflow_model.actions)}
-                Content length: {len(instruction_content)}
-                """)
-            except Exception as e:
-                logger.error(f"""Failed to validate workflow {workflow}:
-                Error: {str(e)}
-                Data: {workflow_data}
-                """)
-                raise WorkflowError(f"Invalid workflow configuration: {str(e)}")
-
-            # Get function metadata for each step
+            # Get function metadata for each action
             steps_metadata = []
-            for step in workflow_model.actions:
+            for action in workflow_data.actions:
                 try:
-                    # Resolve action path
-                    actions_dir, file_path, function_name = self._resolve_action_path(
-                        module_path, step.path
-                    )
-
-                    # Reuse action service to get function metadata
+                    # Extract file info from pre-resolved paths
+                    actions_dir = str(Path(action.full_file_path).parent)
+                    file_path = Path(action.full_file_path).name
+                    
+                    # Get function metadata
                     metadata = self.action_service.get_function_metadata(
-                        folder_path=str(actions_dir),
+                        folder_path=actions_dir,
                         file_path=file_path,
-                        function_name=function_name
+                        function_name=action.function_name
                     )
 
                     steps_metadata.append({
-                        "name": step.name,
-                        "description": step.description,
-                        "action": step.path,
+                        "name": action.name,
+                        "description": action.description,
+                        "action": action.path,
                         "metadata": metadata
                     })
                 except (ActionError, WorkflowError) as e:
-                    logger.error(f"Failed to get metadata for step {step.name}: {str(e)}")
-                    # Add error information but continue processing other steps
+                    logger.error(f"Failed to get metadata for action {action.name}: {str(e)}")
+                    # Add error information but continue processing other actions
                     steps_metadata.append({
-                        "name": step.name,
-                        "description": step.description,
-                        "action": step.path,
+                        "name": action.name,
+                        "description": action.description,
+                        "action": action.path,
                         "error": str(e)
                     })
 
             result = WorkflowMetadataResult(
-                instructions=instruction_content,
-                actions=[WorkflowStepMetadata(**step) for step in steps_metadata],
-                requirements=kit.get('dependencies', [])
+                instructions=workflow_data.instruction_content,
+                actions=[WorkflowActionMetadata(**step) for step in steps_metadata],
+                requirements=kit_config.dependencies
             )
             logger.info(f"Got workflow metadata for {workflow}:\n{result}")
             return result
@@ -210,51 +148,57 @@ class WorkflowService:
 
 
     def get_shared_actions_metadata(self, module_id: str) -> WorkflowMetadataResult:
-        """Get metadata for all shared actions in a module"""
+        """Get metadata for all shared actions from this module and context modules"""
         try:
-            # Get module info
-            module_path = self.module_service.get_module_path(module_id)
-            
-            # Read kit config
-            kit = YAMLUtils.read_kit(module_path)
-            
-            # Get shared actions
-            shared_actions = kit.get('shared_actions', [])
-            
-            steps_metadata = []
-            for action in shared_actions:
+            # Get all modules with CONTEXT relation (including this module)
+            context_modules = self.module_service.get_linked_modules(
+                module_id=module_id,
+                relation_type=RelationType.CONTEXT
+            )
+
+            all_steps_metadata = []
+            all_requirements = set()
+
+            for module in context_modules:
                 try:
-                    # Resolve action path
-                    actions_dir, file_path, function_name = self._resolve_action_path(
-                        module_path, action['path']
-                    )
+                    # Get kit config for module
+                    kit_config = self.module_service.get_module_kit_config(module.module_id)
+                    
+                    # Add any requirements
+                    all_requirements.update(kit_config.dependencies)
 
-                    # Get function metadata
-                    metadata = self.action_service.get_function_metadata(
-                        folder_path=str(actions_dir),
-                        file_path=file_path,
-                        function_name=function_name
-                    )
+                    # Get actions from this module
+                    for action in kit_config.shared_actions:
+                        try:
+                            # Extract file info from paths
+                            actions_dir = self.kit_service.get_kit_path(module.module_id) / "actions"
+                            file_path = str(Path(action.path))
 
-                    steps_metadata.append({
-                        "name": action['name'],
-                        "description": action.get('description'),
-                        "action": action['path'],
-                        "metadata": metadata
-                    })
-                except (ActionError, WorkflowError) as e:
-                    logger.error(f"Failed to get metadata for shared action {action['name']}: {str(e)}")
-                    steps_metadata.append({
-                        "name": action['name'],
-                        "description": action.get('description'),
-                        "action": action['path'],
-                        "error": str(e)
-                    })
+                            # Get function metadata
+                            metadata = self.action_service.get_function_metadata(
+                                folder_path=actions_dir,
+                                file_path=file_path,
+                                function_name=action.function_name
+                            )
+
+                            all_steps_metadata.append({
+                                "name": action.name,
+                                "description": action.description,
+                                "action": action.path,
+                                "metadata": metadata,
+                                "module_id": module.module_id  # Include source module ID
+                            })
+                        except (ActionError, WorkflowError) as e:
+                            logger.error(f"Failed to get metadata for shared action {action.name} in module {module.module_id}: {str(e)}")
+
+                except Exception as e:
+                    logger.error(f"Failed to process shared actions for module {module.module_id}: {str(e)}")
+                    continue
 
             return WorkflowMetadataResult(
                 instructions="",  # Shared actions don't have instructions
-                actions=[WorkflowStepMetadata(**step) for step in steps_metadata],
-                requirements=kit.get('dependencies', [])
+                actions=[WorkflowActionMetadata(**step) for step in all_steps_metadata],
+                requirements=list(all_requirements)  # Convert set back to list
             )
 
         except (ModuleError, WorkflowError) as e:
@@ -269,39 +213,40 @@ class WorkflowService:
         action_info: ActionInfo,
         parameters: Dict[str, Any]
     ) -> WorkflowExecutionResult:
-        """Execute a shared action"""
+        """Execute a shared action from any accessible module"""
         try:
-            # Get module info
-            module_path = self.module_service.get_module_path(module_id)
-            module_metadata = self.module_service.get_module_metadata(module_id)
+            # Get target module metadata
+            target_module = self.module_service.get_module_metadata(action_info.module_id)
 
-            # Read kit
-            kit = YAMLUtils.read_kit(module_path)
+            # Get kit config for target module
+            kit_config = self.module_service.get_module_kit_config(action_info.module_id)
             
             # Verify action exists
-            shared_actions = kit.get('shared_actions', [])
-            if not any(a['name'] == action_info.name for a in shared_actions):
+            action = next(
+                (a for a in kit_config.shared_actions if a.name == action_info.name),
+                None
+            )
+            if not action:
                 raise WorkflowError(f"Shared action '{action_info.name}' not found")
 
-            # Resolve action path
-            actions_dir, file_path, function_name = self._resolve_action_path(
-                module_path, action_info.action_path
-            )
+            # Get action path info
+            actions_dir = self.kit_service.get_kit_path(action_info.module_id) / "actions"
+            file_path = str(Path(action.path))
 
-            # Execute function
+            # Execute function using module context
             result = self.action_service.execute_function(
                 folder_path=str(actions_dir),
                 file_path=file_path,
-                function_name=function_name,
+                function_name=action.function_name,
                 parameters=parameters,
-                requirements=kit.get('dependencies', []),
-                env_vars=module_metadata.env_vars,
-                repo_name=module_metadata.repo_name
+                requirements=kit_config.dependencies,
+                env_vars=target_module.env_vars,
+                repo_name=target_module.repo_name
             )
 
             return WorkflowExecutionResult(
                 status="success",
-                message=f"Successfully executed shared action {action_info.name}",
+                message=f"Successfully executed shared action {action_info.name} from module {action_info.module_id}",
                 result=result
             )
 
@@ -317,43 +262,24 @@ class WorkflowService:
     ) -> WorkflowExecutionResult:
         """Execute a workflow action with full context."""
         try:
-            # Get module info for the module that owns the action
             module_path = self.module_service.get_module_path(action_info.module_id)
+            # Get kit config which has all paths resolved
+            kit_config = self.module_service.get_module_kit_config(action_info.module_id)
             module_metadata = self.module_service.get_module_metadata(action_info.module_id)
 
             logger.info(f"Executing action {action_info.name} in workflow {action_info.workflow}")
             
-            # Read kit
-            kit = YAMLUtils.read_kit(module_path)
-            if not kit.get('workflows', {}).get(action_info.workflow):
+            if action_info.workflow not in kit_config.workflows:
                 raise WorkflowError(f"Workflow '{action_info.workflow}' not found")
 
-            # Get workflow data
-            workflow_data = kit['workflows'][action_info.workflow]
-            
-            # Handle instruction file separately from model validation 
-            instruction_file = workflow_data.get('instruction')
+            workflow_data = kit_config.workflows[action_info.workflow]
             logger.info(f"""Executing action '{action_info.name}' in workflow {action_info.workflow}
             Config: {workflow_data}
             """)
-                
-            try:
-                # Create normalized workflow data for validation
-                validated_data = {
-                    "instruction": instruction_file,
-                    "actions": workflow_data.get('actions', [])
-                }
-                workflow_model = Workflow.model_validate(validated_data)
-            except Exception as e:
-                logger.error(f"""Failed to validate workflow:
-                Error: {str(e)}
-                Data: {workflow_data}
-                """)
-                raise WorkflowError(f"Invalid workflow configuration: {str(e)}")
 
-            # Find the action in workflow model
+            # Find the action in workflow
             action = next(
-                (s for s in workflow_model.actions if s.name == action_info.name), 
+                (a for a in workflow_data.actions if a.name == action_info.name), 
                 None
             )
             
@@ -362,21 +288,17 @@ class WorkflowService:
                     f"Action '{action_info.name}' not found in workflow '{action_info.workflow}'"
                 )
 
-            # Resolve action path
-            actions_dir, file_path, function_name = self._resolve_action_path(
-                module_path, action.path
-            )
+            # Extract file info from pre-resolved paths
+            actions_dir = str(module_path / "actions")
+            file_path = str(Path(action.path))
 
-            # Get requirements
-            requirements = kit.get('dependencies', [])
-
-            # Execute function
+            # Execute function using resolved paths
             result = self.action_service.execute_function(
-                folder_path=str(actions_dir),
+                folder_path=actions_dir,
                 file_path=file_path,
-                function_name=function_name,
+                function_name=action.function_name,
                 parameters=parameters,
-                requirements=requirements,
+                requirements=kit_config.dependencies,
                 env_vars=module_metadata.env_vars,
                 repo_name=module_metadata.repo_name
             )

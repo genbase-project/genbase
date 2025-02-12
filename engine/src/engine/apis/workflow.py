@@ -12,7 +12,7 @@ from engine.services.execution.workflow import WorkflowError, WorkflowService
 from engine.config.workflow_config import WorkflowConfigService
 from engine.utils.yaml import YAMLUtils
 from engine.utils.logging import logger
-from engine.services.execution.stage_state import StateService
+from engine.services.execution.state import StateService
 
 class ExecuteStepRequest(BaseModel):
     """Request body for executing a workflow step"""

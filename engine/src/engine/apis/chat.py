@@ -7,8 +7,6 @@ from pydantic import BaseModel
 from engine.config.workflow_config import WorkflowConfigurations
 from engine.services.agents.base_agent import BaseAgent
 from engine.services.agents.base_agent import AgentError, AgentServices, AgentContext
-from engine.services.agents.tasker import TaskerAgent
-from engine.services.agents.coder_agent import CoderAgent
 from engine.config.workflow_config import WorkflowConfigService
 
 class WorkflowExecuteRequest(BaseModel):

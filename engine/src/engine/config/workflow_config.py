@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Set, Any
 
-from engine.services.execution.stage_state import StateService
+from engine.services.execution.state import StateService
 
 @dataclass
 class WorkflowAction:

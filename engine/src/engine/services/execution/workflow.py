@@ -14,19 +14,36 @@ from engine.services.core.module import ModuleError, ModuleService, RelationType
 from engine.services.storage.resource import ResourceService
 from engine.utils.logging import logger
 
-class WorkflowActionMetadata(BaseModel):
-    """Pydantic model for workflow step metadata"""
-    name: str
-    action: str
-    description: Optional[str] = None
+from engine.services.core.kit import WorkflowAction
+
+class EnhancedWorkflowAction(WorkflowAction, BaseModel):
+    """Enhanced workflow action that extends WorkflowAction with additional metadata"""
+    # Additional fields beyond WorkflowAction
+    module_id: str
+    workflow: Optional[str] = None  # Workflow name if part of workflow
     metadata: Optional[FunctionMetadata] = None
     error: Optional[str] = None
-    module_id: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation"""
+        return {
+            # Base WorkflowAction fields
+            "path": self.path,
+            "name": self.name,
+            "description": self.description,
+            "full_file_path": self.full_file_path,
+            "function_name": self.function_name,
+            # Additional fields
+            "module_id": self.module_id,
+            "workflow": self.workflow,
+            "metadata": self.metadata.dict() if self.metadata else None,
+            "error": self.error
+        }
 
 class WorkflowMetadataResult(BaseModel):
     """Pydantic model for complete workflow metadata response"""
     instructions: str
-    actions: List[WorkflowActionMetadata]
+    actions: List[EnhancedWorkflowAction]
     requirements: List[str]
 
 @dataclass
@@ -102,7 +119,7 @@ class WorkflowService:
             workflow_data = kit_config.workflows[workflow]
             
             # Get function metadata for each action
-            steps_metadata = []
+            steps_metadata: List[EnhancedWorkflowAction] = []
             for action in workflow_data.actions:
                 try:
                     # Extract file info from pre-resolved paths
@@ -110,31 +127,32 @@ class WorkflowService:
                     file_path = Path(action.full_file_path).name
                     
                     # Get function metadata
-                    metadata = self.action_service.get_function_metadata(
+                    metadata: FunctionMetadata = self.action_service.get_function_metadata(
                         folder_path=actions_dir,
                         file_path=file_path,
                         function_name=action.function_name
                     )
+                    steps_metadata.append(EnhancedWorkflowAction(
+                        module_id=module_id,
+                        workflow=workflow,
+                        metadata=metadata,
+                       **action.dict()
+                    ))
 
-                    steps_metadata.append({
-                        "name": action.name,
-                        "description": action.description,
-                        "action": action.path,
-                        "metadata": metadata
-                    })
+                    # steps_metadata.append({
+                    #     "name": action.name,
+                    #     "description": action.description,
+                    #     "action": action.path,
+                    #     "metadata": metadata
+                    # })
                 except (ActionError, WorkflowError) as e:
                     logger.error(f"Failed to get metadata for action {action.name}: {str(e)}")
                     # Add error information but continue processing other actions
-                    steps_metadata.append({
-                        "name": action.name,
-                        "description": action.description,
-                        "action": action.path,
-                        "error": str(e)
-                    })
+               
 
             result = WorkflowMetadataResult(
                 instructions=workflow_data.instruction_content,
-                actions=[WorkflowActionMetadata(**step) for step in steps_metadata],
+                actions=steps_metadata,
                 requirements=kit_config.dependencies
             )
             logger.info(f"Got workflow metadata for {workflow}:\n{result}")
@@ -197,7 +215,7 @@ class WorkflowService:
 
             return WorkflowMetadataResult(
                 instructions="",  # Shared actions don't have instructions
-                actions=[WorkflowActionMetadata(**step) for step in all_steps_metadata],
+                actions=all_steps_metadata,
                 requirements=list(all_requirements)  # Convert set back to list
             )
 

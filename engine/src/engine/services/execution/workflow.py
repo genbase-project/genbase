@@ -13,7 +13,7 @@ from engine.services.execution.action import ActionError, ActionService, Functio
 from engine.services.core.module import ModuleError, ModuleService, RelationType
 from engine.services.storage.resource import ResourceService
 from engine.utils.logging import logger
-
+from engine.services.core.kit import WorkflowAction
 from engine.services.core.kit import WorkflowAction
 
 class EnhancedWorkflowAction(WorkflowAction, BaseModel):
@@ -66,7 +66,6 @@ class ActionInfo:
         }
 
 
-from engine.services.core.kit import WorkflowAction
 
 class Workflow(BaseModel):
     """Workflow metadata"""
@@ -76,8 +75,16 @@ class Workflow(BaseModel):
 class WorkflowExecutionResult(BaseModel):
     """Pydantic model for workflow execution result"""
     status: str
-    message: str
+    message: str 
     result: Any
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation"""
+        return {
+            "status": self.status,
+            "message": self.message,
+            "result": self.result
+        }
 
 class WorkflowError(Exception):
     """Base exception for workflow actions"""
@@ -271,7 +278,7 @@ class WorkflowService:
         except (ModuleError, ActionError, WorkflowError) as e:
             raise WorkflowError(str(e))
 
-    def execute_workflow_step(
+    def execute_workflow_action(
         self,
         module_id: str,
         workflow: str,

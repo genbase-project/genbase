@@ -7,6 +7,7 @@ from typing import Dict, Type, Optional, Union
 from engine.services.agents.base_agent import BaseAgent, AgentServices
 from engine.config.workflow_config import WorkflowConfig
 from engine.utils.logging import logger
+from engine.base.agents import __all__ as base_agents
 
 class AgentLoaderError(Exception):
     """Base exception for agent loading errors"""
@@ -18,6 +19,19 @@ class AgentLoader:
     def __init__(self, agent_services: AgentServices):
         self.agent_services = agent_services
         self.loaded_agents: Dict[str, Type[BaseAgent]] = {}
+        self._load_base_agents()
+
+    def _load_base_agents(self):
+        """Load built-in agents from base.agents"""
+        try:
+            from engine.base.agents import __all__ as agent_classes
+            for agent_class in agent_classes:
+                # Create instance to get agent_type
+                agent = agent_class(self.agent_services)
+                self.loaded_agents[agent.agent_type] = agent_class
+        except Exception as e:
+            logger.error(f"Failed to load base agents: {str(e)}")
+            raise AgentLoaderError(f"Failed to load base agents: {str(e)}")
 
     def get_agent(self, kit_path: Path, agent_name: str, class_name: str) -> BaseAgent:
         """
@@ -35,6 +49,12 @@ class AgentLoader:
             AgentLoaderError: If agent cannot be loaded
         """
         try:
+            # Check if it's a base agent first
+            if agent_name in self.loaded_agents:
+                agent_class = self.loaded_agents[agent_name]
+                return agent_class(self.agent_services)
+
+            # Load from kit
             agents_dir = kit_path / "agents"
             if not agents_dir.exists():
                 raise AgentLoaderError(f"Agents directory not found: {agents_dir}")
@@ -45,57 +65,46 @@ class AgentLoader:
             # Return cached agent class if available
             if cache_key in self.loaded_agents:
                 agent_class = self.loaded_agents[cache_key]
-            else:
-                # Import agent module
-                module_path = agents_dir / f"{agent_name}.py"
-                if not module_path.exists():
-                    module_path = agents_dir / "__init__.py"
+                return agent_class(self.agent_services)
 
-                if not module_path.exists():
-                    raise AgentLoaderError(f"No agent module found for {agent_name}")
+            # Import agent module from kit
+            module_path = agents_dir / f"{agent_name}.py"
+            if not module_path.exists():
+                module_path = agents_dir / "__init__.py"
 
-                # Create module spec
-                spec = importlib.util.spec_from_file_location(
-                    f"dynamic_agents_{kit_path.name}_{agent_name}",
-                    str(module_path)
-                )
-                if not spec or not spec.loader:
-                    raise AgentLoaderError(f"Failed to load module spec from {module_path}")
+            if not module_path.exists():
+                raise AgentLoaderError(f"No agent module found for {agent_name}")
 
-                # Load module
-                module_name = f"dynamic_agents_{kit_path.name}_{agent_name}"
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[module_name] = module
-                spec.loader.exec_module(module)
+            # Create module spec
+            spec = importlib.util.spec_from_file_location(
+                f"dynamic_agents_{kit_path.name}_{agent_name}",
+                str(module_path)
+            )
+            if not spec or not spec.loader:
+                raise AgentLoaderError(f"Failed to load module spec from {module_path}")
 
-                # Get agent class - first try in module
-                if not hasattr(module, class_name):
-                    # If not in kit module, try base.agents
-                    try:
-                        from base.agents import __all__ as base_agents
-                        base_module = __import__('base.agents', fromlist=base_agents)
-                        if hasattr(base_module, class_name):
-                            agent_class = getattr(base_module, class_name)
-                            if issubclass(agent_class, BaseAgent):
-                                return agent_class(self.agent_services)
-                    except ImportError:
-                        pass
-                    raise AgentLoaderError(f"Agent class {class_name} not found in {module_path} or base.agents")
+            # Load module
+            module_name = f"dynamic_agents_{kit_path.name}_{agent_name}"
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
 
-                agent_class = getattr(module, class_name)
-                if not issubclass(agent_class, BaseAgent):
-                    raise AgentLoaderError(f"{class_name} in {module_path} is not a BaseAgent subclass")
+            # Get agent class
+            if not hasattr(module, class_name):
+                raise AgentLoaderError(f"Agent class {class_name} not found in {module_path}")
+
+            agent_class = getattr(module, class_name)
+            if not issubclass(agent_class, BaseAgent):
+                raise AgentLoaderError(f"{class_name} in {module_path} is not a BaseAgent subclass")
                 
-                # Create instance to get agent_type value
-                agent_instance = agent_class(self.agent_services)
-                if agent_instance.agent_type != agent_name:
-                    raise AgentLoaderError(f"Agent type mismatch: class {class_name} has agent_type '{agent_instance.agent_type}' but kit.yaml specifies '{agent_name}'")
+            # Create instance to get agent_type value
+            agent_instance = agent_class(self.agent_services)
+            if agent_instance.agent_type != agent_name:
+                raise AgentLoaderError(f"Agent type mismatch: class {class_name} has agent_type '{agent_instance.agent_type}' but kit.yaml specifies '{agent_name}'")
 
-                # Cache agent class
-                self.loaded_agents[cache_key] = agent_class
-
-            # Create and return agent instance
-            return agent_class(self.agent_services)
+            # Cache agent class
+            self.loaded_agents[cache_key] = agent_class
+            return agent_instance
 
         except Exception as e:
             raise AgentLoaderError(f"Failed to get agent {agent_name}: {str(e)}")
@@ -142,8 +151,16 @@ class AgentLoader:
                 # Check default agent at workflow root
                 agent_name = kit_config.get("workflows", {}).get("agent")
 
-            if not agent_name or agent_name not in agents:
-                return None
+            if not agent_name:
+                raise AgentLoaderError(f"No agent specified for workflow {workflow_name}")
+                
+            # First try loading from base agents
+            if agent_name in self.loaded_agents:
+                return self.get_agent(kit_path, agent_name, agent_name)
+                
+            # Load from kit if not a base agent
+            if agent_name not in agents:
+                raise AgentLoaderError(f"Agent '{agent_name}' not found in kit.yaml agents")
 
             agent_config = agents[agent_name]
             return self.get_agent(

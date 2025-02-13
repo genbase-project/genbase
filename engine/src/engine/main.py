@@ -119,13 +119,13 @@ kit_service = KitService(base_path=KIT_BASE_DIR)
 project_service = ProjectService()
 
 # Add after other service initializations
-stage_state_service = StateService()
+state_service = StateService()
 
 module_service = ModuleService(
     workspace_base=str(KIT_BASE_DIR),
     module_base=str(KIT_BASE_DIR),
     repo_service=repo_service,
-    stage_state_service=stage_state_service,
+    stage_state_service=state_service,
     kit_service=kit_service
 )
 
@@ -207,8 +207,7 @@ app.include_router(workflow_router.router)
 agent_services = AgentServices(
     model_service=model_service,
     workflow_service=workflow_service,
-    stage_state_service=stage_state_service,
-    repo_service=repo_service,
+    state_service=state_service,
     module_service=module_service
 )
 

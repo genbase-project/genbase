@@ -1,39 +1,29 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, UTC
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
-import importlib.util
-import inspect
-import uuid
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from engine.config.workflow_config import WorkflowConfigService
-
-from engine.db.session import SessionLocal
-from engine.services.agents.chat_history import AgentError, ChatHistoryManager
+from typing import Any, Dict, List, Optional
+import json
+from engine.services.core.kit import KitConfig
+from engine.services.execution.action import FunctionMetadata
 from engine.services.execution.model import ModelService
-from engine.services.execution.state import StateService, AgentState
-from engine.services.core.module import ModuleService, RelationType
+from engine.services.execution.state import StateService
 from engine.services.execution.workflow import (
-    ActionInfo,
+    EnhancedWorkflowAction,
+    WorkflowExecutionResult,
     WorkflowService,
     WorkflowMetadataResult,
-    WorkflowActionMetadata
+    ActionInfo
 )
-from engine.services.storage.repository import RepoService
+from engine.services.agents.chat_history import ChatHistoryManager
+from engine.services.core.module import ModuleService, RelationType
 from engine.utils.logging import logger
-from pathlib import Path
-
 
 @dataclass
 class AgentServices:
-    """Container for all services required by agents"""
-    model_service: ModelService
-    workflow_service: WorkflowService
-    stage_state_service: StateService
-    repo_service: RepoService
-    module_service: ModuleService
+    """Essential services required by all agents"""
+    model_service: ModelService     # For LLM interactions
+    workflow_service: WorkflowService  # For workflow execution
+    module_service: ModuleService   # For module management
+    state_service: StateService     # For agent state management
 
 @dataclass
 class AgentContext:
@@ -43,345 +33,293 @@ class AgentContext:
     user_input: str
     session_id: Optional[str] = None
 
-
-@dataclass
-class Action:
-    """Represents an action with both schema and implementation"""
-    name: str
-    description: str
-    schema: Dict[str, Any]  # OpenAPI function schema
-    function: Callable[..., Any]  # Actual function implementation
-
 class BaseAgent(ABC):
-    """Base class for all agents with shared infrastructure"""
-
+    """Next generation base agent with core functionality"""
+    
     def __init__(self, services: AgentServices):
+        """Initialize base agent with required services"""
         self.services = services
         self.history_manager = ChatHistoryManager()
-        self.workflow_config_service = WorkflowConfigService()
+        self.context: Optional[AgentContext] = None
+        self.tag_elements = self._get_tag_elements()
+        self.tools: List[Dict[str, Any]] = []
+        self.system_prompt: Optional[str] = None
 
-    def create_xml_prompt(self, question: str, options: List[dict]) -> str:
-        """Create an XML prompt with the specified question and options.
-        
-        Args:
-            question: The question to ask the user
-            options: List of dicts with 'text' and optional 'description' keys
-        
-        Example:
-            options = [
-                {"text": "Yes", "description": "Continue with changes"},
-                {"text": "No", "description": "Cancel the operation"}
-            ]
-        """
-        option_tags = []
-        for opt in options:
-            desc = f' description="{opt["description"]}"' if "description" in opt else ''
-            option_tags.append(f'<option{desc}>{opt["text"]}</option>')
-            
-        return f"""<user_prompt>
+    def _get_tag_elements(self) -> Dict[str, str]:
+        """Get XML element templates and descriptions"""
+        return {
+            "user_prompt":{"format": """
+<user_prompt>
 <question>
-{question}
+Your question here
 </question>
 <options>
-{"".join(option_tags)}
+<option description="Description of what this option means">Option text</option>
 </options>
-</user_prompt>"""
+</user_prompt>""",
+"use": "Prompt the user with a question and multiple choice options"}
+
+,
+            
+            "code_change": {"format":"""
+<code_change file="path/to/file">
+<original>
+Original code to replace
+</original>
+<updated>
+Updated code
+</updated>
+<description>
+Explanation of the change
+</description>
+</code_change>""", "use":"Describe a code change with original and updated code"},
+        }
+
+    async def build_context(
+        self,
+        agent_instructions: str = None,
+        action_names: Optional[List[str]] = None,
+        include_shared_actions: bool = False,
+        required_xml_elements: List[str] = None,
+        custom_instructions: Optional[str] = None
+    ) -> tuple[str, List[Dict[str, Any]]]:
+        """
+        Build system prompt with selected actions as tools
+        
+        Args:
+            workflow_instructions: Optional workflow-specific instructions
+            action_names: List of action names to include, or None for all actions
+            include_shared_actions: Whether to include shared actions as tools
+            required_xml_elements: List of XML element templates to include
+            custom_instructions: Additional instructions to append
+            
+        Returns:
+            Tuple of (system prompt, list of tools)
+        """
+        if not self.context:
+            raise ValueError("No active context")
+            
+        parts: Dict[str, str] = {"Agent Instructions": agent_instructions}
+        tools = []
+
+        # Get workflow metadata
+        workflow_data: WorkflowMetadataResult = self.services.workflow_service.get_workflow_metadata(
+            self.context.module_id,
+            self.context.workflow
+        )
+
+        if action_names is None:  # Include all actions
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": action.name,
+                        "description": action.description,
+                        "parameters": action.metadata.parameters if action.metadata else {}
+                    }
+                }
+                for action in workflow_data.actions
+            ]
+        else:  # Include only specified actions
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": action.name,
+                        "description": action.description,
+                        "parameters": action.metadata.parameters if action.metadata else {}
+                    }
+                }
+                for action in workflow_data.actions
+                if action.name in action_names
+            ]
+
+        # Add tool descriptions to prompt
+        workflow_tool_descriptions = []
+        for tool in tools:
+            workflow_tool_descriptions.append(
+                f"- {tool['function']['name']}: {tool['function']['description']}"
+            )
+
+        if workflow_tool_descriptions:
+            parts["Available tools"]= "\n".join(workflow_tool_descriptions)
+
+        # Add XML element documentation
+        if required_xml_elements:
+            xml_docs = []
+            for element in required_xml_elements:
+                if element in self.tag_elements:
+                    xml_docs.append(f"Element f{element}\n format: {self.tag_elements[element]['format']}\n use: {self.tag_elements[element]['use']}")
+            if xml_docs:
+                parts["Tag Elements"]= "\n\n".join(xml_docs)
+
+        # Add custom instructions at the end if provided
+        if custom_instructions:
+            parts["Additional Instructions"]=custom_instructions
+
+        final_instruction = ""
+        for key, value in parts.items():
+            if value:
+                final_instruction += f"\n\n##{key}:\n{value}"
+            
+        self.tools = tools
+        self.system_prompt = final_instruction
+        return final_instruction, tools
+
+    def add_to_history(
+        self, 
+        role: str,
+        content: str,
+        message_type: str = "text", 
+        tools_info: Optional[List[Dict[str, Any]]] = None,
+        tool_call_id: Optional[str] = None,
+        tool_name: Optional[str] = None,
+    ):
+        """
+        Add a message to chat history
+        
+        Args:
+            role: The role of the message sender (user/assistant/tool)
+            content: The message content
+            message_type: Message type (text/tool_call/tool_result)
+            tools_info: Optional list of tool info dictionaries
+            tool_call_id: Optional ID of the tool call this message is responding to
+            tool_name: Optional name of the tool this message is from
+        """
+        if not self.context:
+            raise ValueError("No active context")
+
+        message = {
+            "role": role,
+            "content": content
+        }
+
+        if tool_call_id:
+            message["tool_call_id"] = tool_call_id
+        if tool_name:
+            message["name"] = tool_name
+        
+        self.history_manager.add_to_history(
+            module_id=self.context.module_id,
+            workflow=self.context.workflow,
+            role=role,
+            content=content,
+            message_type=message_type,
+            tool_data=tools_info,
+            session_id=self.context.session_id
+        )
+
+    def get_chat_history(self) -> List[Dict[str, Any]]:
+        """Get complete chat history"""
+        if not self.context:
+            raise ValueError("No active context")
+            
+        return self.history_manager.get_chat_history(
+            module_id=self.context.module_id,
+            workflow=self.context.workflow,
+            session_id=self.context.session_id
+        )
+
+    async def execute_workflow_action(
+        self,
+        action_name: str,
+        parameters: Dict[str, Any]
+    ) -> Any:
+        """Execute a workflow action"""
+        try:
+            if not self.context:
+                raise ValueError("No active context")
+
+            action_info = ActionInfo(
+                module_id=self.context.module_id,
+                workflow=self.context.workflow,
+                action_path="",  # Will be filled by workflow service
+                name=action_name
+            )
+
+            result: WorkflowExecutionResult = self.services.workflow_service.execute_workflow_action(
+                module_id=self.context.module_id,
+                workflow=self.context.workflow,
+                action_info=action_info,
+                parameters=parameters
+            )
+
+            return result
+        except Exception as e:
+            logger.error(f"Error executing workflow action: {str(e)}")
+            raise
+
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        stream: bool = False,
+        tool_choice: Optional[str] = "auto",
+        **kwargs
+    ):
+        """Wrapper for model service chat completion that handles tools and history"""
+        try:
+            if not self.context:
+                raise ValueError("No active context")
+
+            # Get current chat history
+            history = self.get_chat_history()
+
+            # Always include system message first if we have one
+            all_messages = []
+            if self.system_prompt:
+                all_messages.append({"role": "system", "content": self.system_prompt})
+            
+            # Add history and new messages
+            all_messages.extend(history + messages)
+            
+            # Execute chat completion with current tools
+            response = await self.services.model_service.chat_completion(
+                messages=all_messages,
+                stream=stream,
+                tools=self.tools if self.tools else None,
+                tool_choice=tool_choice if self.tools else None,
+                **kwargs
+            )
+            
+            return response
+        except Exception as e:
+            logger.error(f"Chat completion failed: {str(e)}")
+            raise
+
+    async def process_request(self, context: AgentContext) -> Dict[str, Any]:
+        """Process an agent request"""
+        try:
+            self.context = context
+            # Get workflow metadata
+            workflow_data: WorkflowMetadataResult =  self.services.workflow_service.get_workflow_metadata(
+                context.module_id,
+                context.workflow
+            )
+            
+            # Add user input to history
+            self.add_to_history("user", context.user_input)
+
+            # Process workflow
+            result = await self.process_workflow(context, workflow_data)
+
+            return result
+        except Exception as e:
+            logger.error(f"Error processing request: {str(e)}")
+            raise
+        finally:
+            self.context = None  # Clear context
 
     @property
     @abstractmethod
     def agent_type(self) -> str:
-        """Return agent type"""
+        """Return agent type identifier"""
         pass
 
-    @property
     @abstractmethod
-    def default_actions(self) -> List[Action]:
-        """Return list of default actions available to this agent type"""
-        pass
-
-
-    async def process_request(self, context: AgentContext) -> Dict[str, Any]:
-        """Standard request processing flow"""
-        try:            
-
-
-
-            # Set executing state
-            self.services.stage_state_service.set_executing(context.module_id)
-            
-            try:
-                # Get chat history
-                messages = self.history_manager.get_chat_history(
-                    context.module_id,
-                    context.workflow,
-                    context.session_id
-                )
-                
-                # Add user input to history
-                self.history_manager.add_to_history(
-                    context.module_id,
-                    context.workflow,
-                    "user",
-                    context.user_input,
-                    session_id=context.session_id
-                )
-
-                messages.append({
-                    "role": "user",
-                    "content": context.user_input
-                })
-                
-                # Process the workflow according to agent type
-                result = await self._process_workflow(context, messages, [])
-                
-                return result
-                
-            finally:
-                # Reset state when done
-                self.services.stage_state_service.set_standby(context.module_id)
-                
-        except Exception as e:
-            logger.error(f"Error processing request: {str(e)}")
-            # Ensure state is reset on error
-            self.services.stage_state_service.set_standby(context.module_id)
-            raise AgentError(f"Failed to process request: {str(e)}")
-
-    async def get_shared_actions(self, module_id: str) -> Tuple[List[Dict[str, Any]], Dict[str, ActionInfo]]:
-        """
-        Get shared actions from all connected modules
-        
-        Args:
-            module_id: Module ID to get shared actions for
-            
-        Returns:
-            Tuple of:
-            - List of shared actions in tool format
-            - Dict mapping tool names to ActionInfo
-        """
-        tools = []
-        action_map = {}
-        try:
-            # Get all modules with CONNECTION relation
-            connected_modules = self.services.module_service.get_linked_modules(
-                module_id=module_id,
-                relation_type=RelationType.CONNECTION
-            )
-            
-            for module in connected_modules:
-                # Get shared actions metadata
-                metadata = self.services.workflow_service.get_shared_actions_metadata(module.module_id)
-                
-                for action in metadata.actions:
-                    if not action.error:
-                        tool_name = f"{module.module_id}:{action.name}"
-                        tools.append({
-                            "type": "function",
-                            "function": {
-                                "name": tool_name,
-                                "description": action.description or "",
-                                "parameters": {} if action.metadata.parameters is None else action.metadata.parameters,
-                            }
-                        })
-                        
-                        action_map[tool_name] = ActionInfo(
-                            module_id=module.module_id,
-                            workflow="",  # Not part of a workflow
-                            action_path=action.action,
-                            name=action.name,
-                            description=action.description
-                        )
-                    
-            return tools, action_map
-        except Exception as e:
-            logger.error(f"Failed to get shared actions: {str(e)}")
-            return [], {}
-            
-    async def get_workflow_metadata(self, context: AgentContext) -> WorkflowMetadataResult:
-        """Get workflow metadata"""
-        try:
-            workflow = self.services.workflow_service.get_workflow_metadata(
-                module_id=context.module_id,
-                workflow=context.workflow
-            )
-            return workflow
-        except Exception as e:
-            logger.error(f"Error getting workflow metadata: {str(e)}")
-            raise AgentError(f"Failed to get workflow metadata: {str(e)}")
-
-    async def get_workflow_actions(
+    async def process_workflow(
         self,
         context: AgentContext,
-        workflow_actions: List[WorkflowActionMetadata]
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, ActionInfo]]:
-        """Convert workflow actions to tools format with action mapping"""
-        tools = []
-        action_map = {}
-        
-        for action in workflow_actions:
-            if not action.metadata:
-                continue
-
-            action_info = ActionInfo(
-                module_id=context.module_id,
-                workflow=context.workflow,
-                action_path=action.action,
-                name=action.name,
-                description=action.description or action.metadata.description
-            )
-            
-            tool = {
-                "type": "function",
-                "function": {
-                    "name": action_info.name,
-                    "description": action_info.description,
-                    "parameters": {} if action.metadata.parameters is None else action.metadata.parameters,
-                }
-            }
-            
-            tools.append(tool)
-            action_map[action_info.name] = action_info
-            
-        return tools, action_map
-
-    def _add_instruction_prompts(
-        self,
-        messages: List[Dict[str, str]],
-        workflow_data: WorkflowMetadataResult,
-        context: AgentContext
-    ) -> List[Dict[str, str]]:
-        """Add instruction prompts to messages"""
-        instructions = [self._get_base_instructions()]
-
-        instructions.append(f"Current workflow is {context.workflow}")
-        
-        if workflow_data.instructions:
-            instructions.append(workflow_data.instructions)
-            
-        combined_instructions = "\n\n".join(instructions)
-        
-        if not any(msg["role"] == "system" for msg in messages):
-            messages.insert(0, {
-                "role": "system",
-                "content": combined_instructions
-            })
-        else:
-            for msg in messages:
-                if msg["role"] == "system":
-                    msg["content"] = f"{msg['content']}\n\n{combined_instructions}"
-                    break
-                    
-        return messages
-
-    @abstractmethod
-    def _get_base_instructions(self) -> str:
-        """Get base instructions for the agent type"""
-        pass
-
-    @abstractmethod
-    async def _process_workflow(
-        self,
-        context: AgentContext,
-        messages: List[Dict[str, str]],
-        tools: List[Dict[str, Any]]
+        workflow_data: WorkflowMetadataResult
     ) -> Dict[str, Any]:
-        """Process workflow according to specific agent type"""
+        """Process a workflow request"""
         pass
-
-    async def execute_function_by_name(
-        self,
-        module_id: str,
-        file_path: str,
-        function_name: str,
-        params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """
-        Dynamically execute a function from a given file by name
-        
-        Args:
-            module_id: ID of the module containing the function
-            file_path: Path to the Python file containing the function (relative to module root)
-            function_name: Name of the function to execute
-            params: Optional parameters to pass to the function
-            
-        Returns:
-            Dictionary containing the result of the function execution
-        """
-        try:
-            # Get absolute path to module
-            module_path = self.services.module_service.get_module_path(module_id)
-            full_path = module_path / file_path
-            
-            if not full_path.exists():
-                raise AgentError(f"Function file not found: {file_path}")
-            
-            # Load module dynamically
-            spec = importlib.util.spec_from_file_location(
-                f"dynamic_module_{function_name}",
-                str(full_path)
-            )
-            if not spec or not spec.loader:
-                raise AgentError(f"Could not load module spec for {file_path}")
-                
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            
-            # Get function from module
-            if not hasattr(module, function_name):
-                raise AgentError(f"Function {function_name} not found in {file_path}")
-                
-            function = getattr(module, function_name)
-            if not callable(function):
-                raise AgentError(f"{function_name} in {file_path} is not callable")
-
-            # Inspect function signature
-            sig = inspect.signature(function)
-            if params is None:
-                params = {}
-                
-            # Filter only parameters that exist in function signature
-            valid_params = {}
-            for param_name, param in sig.parameters.items():
-                if param_name in params:
-                    valid_params[param_name] = params[param_name]
-                elif param.default is inspect.Parameter.empty:
-                    raise AgentError(f"Required parameter {param_name} missing for function {function_name}")
-
-            # Execute function
-            result = function(**valid_params)
-            
-            # Handle coroutines
-            if inspect.iscoroutine(result):
-                import asyncio
-                result = await result
-
-            return {
-                "success": True,
-                "result": result
-            }
-            
-        except Exception as e:
-            logger.error(f"Error executing function {function_name}: {str(e)}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
-
-    def get_workflow_default_actions(self, workflow: str, module_id: str) -> List[Action]:
-        """Get default actions for specific workflow type"""
-        module_path = self.services.module_service.get_module_path(module_id)
-        
-        # Get kit config
-        with open(module_path / "kit.yaml") as f:
-            import yaml
-            kit_config = yaml.safe_load(f)
-            
-        workflow_config = self.workflow_config_service.get_workflow_config(workflow, kit_config)
-        actions = []
-        for wf_action in workflow_config.default_actions:
-            actions.append(Action(
-                name=wf_action.name,
-                description=wf_action.description,
-                schema=wf_action.schema,
-                function=wf_action.function
-            ))
-        return actions

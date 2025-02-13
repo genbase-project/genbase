@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from engine.config.workflow_config import WorkflowConfigurations
 from engine.services.agents.base_agent import BaseAgent
-from engine.services.agents.base_agent import AgentError, AgentServices, AgentContext
+from engine.services.agents.base_agent import AgentServices, AgentContext
 from engine.config.workflow_config import WorkflowConfigService
 
 class WorkflowExecuteRequest(BaseModel):
@@ -33,6 +33,7 @@ class StatusResponse(BaseModel):
     state: str
     last_updated: str
 
+from engine.services.agents.chat_history import AgentError
 from engine.services.core.agent_loader import AgentLoader, AgentLoaderError
 
 class ChatRouter:

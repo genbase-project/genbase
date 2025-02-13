@@ -227,7 +227,7 @@ class WorkflowRouter:
             if request is None:
                 request = ExecuteStepRequest()
 
-            result = self.service.execute_workflow_step(
+            result = self.service.execute_workflow_action(
                 module_id=module_id,
                 workflow=workflow,
                 action_name=step_name,

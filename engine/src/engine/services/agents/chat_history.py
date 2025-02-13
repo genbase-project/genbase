@@ -18,8 +18,7 @@ from engine.services.core.module import ModuleService, RelationType
 from engine.services.execution.workflow import (
     ActionInfo,
     WorkflowService,
-    WorkflowMetadataResult,
-    WorkflowActionMetadata
+    WorkflowMetadataResult
 )
 from engine.services.storage.repository import RepoService
 from engine.utils.logging import logger

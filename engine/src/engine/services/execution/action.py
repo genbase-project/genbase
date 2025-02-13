@@ -23,6 +23,15 @@ class FunctionMetadata(BaseModel):
     description: str
     parameters: Dict[str, Any]
     is_async: bool
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert metadata to dictionary format"""
+        return {
+            "name": self.name,
+            "description": self.description, 
+            "parameters": self.parameters,
+            "is_async": self.is_async
+        }
 
 def _get_type_info(type_hint: Any) -> Dict[str, Any]:
     """Convert Python type hint to JSON schema type info"""

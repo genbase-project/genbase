@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sidebar, SidebarClose, Settings } from "lucide-react";
+import { Sidebar, SidebarClose, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 Dialog,
@@ -29,7 +29,7 @@ DialogFooter,
 DialogDescription,
 } from "@/components/ui/dialog"
 import { SidebarHeader } from '@/components/ui/sidebar';
-import { ENGINE_BASE_URL } from '@/config';
+import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
 interface LeftSidebarProps {
   initialModules?: Kit[];
   onExpand:  (expand: boolean) => void;
@@ -38,6 +38,12 @@ interface LeftSidebarProps {
 
 
 const LeftSidebar: React.FC<LeftSidebarProps> = ({ initialModules = [], onExpand: onExpand, expanded  }) => {
+  // Add handleLogout function
+  const handleLogout = () => {
+    localStorage.removeItem('auth_credentials');
+    window.location.reload();
+  };
+
 const { toast } = useToast();
 const { selectedModuleId, setSelectedModule } = useModuleStore();
 
@@ -84,7 +90,7 @@ useEffect(() => {
 
 const fetchKits = async () => {
   try {
-    const response = await fetch(`${ENGINE_BASE_URL}/kit`);
+    const response = await fetchWithAuth(`${ENGINE_BASE_URL}/kit`);
     if (!response.ok) throw new Error('Failed to fetch kits');
     const result = await response.json();
     setKits(result.kits);
@@ -103,8 +109,8 @@ useEffect(() => {
   const fetchModels = async () => {
     try {
       const [availableRes, currentRes] = await Promise.all([
-        fetch(`${ENGINE_BASE_URL}/model/list`),
-        fetch(`${ENGINE_BASE_URL}/model/current`)
+        fetchWithAuth(`${ENGINE_BASE_URL}/model/list`),
+        fetchWithAuth(`${ENGINE_BASE_URL}/model/current`)
       ]);
       
       if (availableRes.ok) {
@@ -144,7 +150,7 @@ const handleSaveModelSettings = async () => {
   if (!selectedModel) return;
   
   try {
-    const res = await fetch(`${ENGINE_BASE_URL}/model/set`, {
+    const res = await fetchWithAuth(`${ENGINE_BASE_URL}/model/set`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -213,7 +219,7 @@ const handleSaveModelSettings = async () => {
 
 const fetchModules = async () => {
   try {
-    const response = await fetch(`${ENGINE_BASE_URL}/module/project/${DEFAULT_PROJECT_ID}/list`);
+    const response = await fetchWithAuth(`${ENGINE_BASE_URL}/module/project/${DEFAULT_PROJECT_ID}/list`);
     if (!response.ok) throw new Error('Failed to fetch modules');
     const allModules: Module[] = await response.json();
     setTreeData(buildTreeFromModules(allModules));
@@ -257,7 +263,7 @@ const handleRenameConfirm = async () => {
 
   try {
     const moduleId = (moduleToRename.id).replace('module-', '');
-    const response = await fetch(`${ENGINE_BASE_URL}/module/${moduleId}/name`, {
+    const response = await fetchWithAuth(`${ENGINE_BASE_URL}/module/${moduleId}/name`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -298,7 +304,7 @@ const createModule = async (
   moduleName: string
 ) => {
   try {
-    const response = await fetch(`${ENGINE_BASE_URL}/module`, {
+    const response = await fetchWithAuth(`${ENGINE_BASE_URL}/module`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -366,7 +372,7 @@ const handleCreateConfirm = async () => {
 
 const updateModulePath = async (moduleId: string, newPath: string) => {
   try {
-    const response = await fetch(`${ENGINE_BASE_URL}/module/${moduleId}/path`, {
+    const response = await fetchWithAuth(`${ENGINE_BASE_URL}/module/${moduleId}/path`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -459,7 +465,7 @@ return (
           />
         </div>
         
-        <div className="p-2  border-gray-200">
+        <div className="p-2 space-y-2 border-gray-200">
           <Button
             variant="ghost"
             onClick={() => setIsSettingsOpen(true)}
@@ -469,11 +475,20 @@ return (
             <Settings size={16} />
             Settings
           </Button>
+          <Button
+            variant="ghost"
+            onClick={handleLogout}
+            className="w-full justify-start gap-2 hover:bg-gray-200/70 text-red-600 hover:text-red-700 transition-colors"
+            aria-label="Logout"
+          >
+            <LogOut size={16} />
+            Logout
+          </Button>
         </div>
       </>
     ) : (
       <div className="flex-1 flex flex-col justify-end">
-        <div className="p-2  border-gray-200">
+        <div className="p-2 space-y-2 border-gray-200">
           <Button
             variant="ghost"
             size="icon"
@@ -482,6 +497,15 @@ return (
             aria-label="Settings"
           >
             <Settings size={16} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            className="w-10 h-10 rounded-full hover:bg-gray-200/70 text-red-600 hover:text-red-700 transition-colors"
+            aria-label="Logout"
+          >
+            <LogOut size={16} />
           </Button>
         </div>
       </div>

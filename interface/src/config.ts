@@ -1,1 +1,0 @@
-export const ENGINE_BASE_URL = process.env.VITE_ENGINE_URL;

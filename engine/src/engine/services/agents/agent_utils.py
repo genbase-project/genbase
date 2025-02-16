@@ -4,6 +4,7 @@ from engine.services.core.module import ModuleService
 from engine.services.storage.repository import RepoService
 from engine.services.agents.code_edit import CodeEdit, CodeEditResult, CodeBlockEditUtil
 from loguru import logger
+from directory_tree import DisplayTree
 
 class AgentUtils:
     """Utility class for common agent operations"""
@@ -111,3 +112,22 @@ class AgentUtils:
         except Exception as e:
             logger.error(f"Error applying code changes to {file_path}: {str(e)}")
             return CodeEditResult(success=False, error=str(e))
+
+
+    def get_repo_tree(self, path: Optional[Path]) -> str:
+        """
+        Get the repository tree
+
+        args:
+
+            path: Optional path to get tree for
+            
+        """
+        if path:
+            return DisplayTree(
+                dir_path=path,
+            )
+
+        return DisplayTree(
+         dir_path=self.repo_path,
+        )

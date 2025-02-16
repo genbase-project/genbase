@@ -253,7 +253,8 @@ class WorkflowService:
                 parameters=parameters,
                 requirements=kit_config.dependencies,
                 env_vars=target_module.env_vars,
-                repo_name=target_module.repo_name
+                repo_name=target_module.repo_name,
+                base_image=kit_config.image
             )
 
             return WorkflowExecutionResult(
@@ -312,7 +313,8 @@ class WorkflowService:
                 parameters=parameters,
                 requirements=kit_config.dependencies,
                 env_vars=module_metadata.env_vars,
-                repo_name=module_metadata.repo_name
+                repo_name=module_metadata.repo_name,
+                base_image=kit_config.image
             )
 
             return result

@@ -2,9 +2,7 @@ import { useState, useCallback } from 'react';
 import { Module } from '../components/TreeView';
 import { toast } from '@/hooks/use-toast';
 import { DEFAULT_PROJECT_ID } from '../lib/tree';
-import { ENGINE_BASE_URL } from '@/config';
-
-
+import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
 
 export const useModuleRelationships = (moduleId: string) => {
   const [context, setContext] = useState<Module[]>([]);
@@ -13,8 +11,7 @@ export const useModuleRelationships = (moduleId: string) => {
 
   const fetchContext = useCallback(async () => {
     try {
-      const response = await fetch(`${ENGINE_BASE_URL}/module/${moduleId}/context`);
-      if (!response.ok) throw new Error('Failed to fetch context');
+      const response = await fetchWithAuth(`${ENGINE_BASE_URL}/module/${moduleId}/context`);
       const data = await response.json();
       setContext(data);
     } catch (error) {
@@ -29,8 +26,7 @@ export const useModuleRelationships = (moduleId: string) => {
 
   const fetchConnections = useCallback(async () => {
     try {
-      const response = await fetch(`${ENGINE_BASE_URL}/module/${moduleId}/connections`);
-      if (!response.ok) throw new Error('Failed to fetch connections');
+      const response = await fetchWithAuth(`${ENGINE_BASE_URL}/module/${moduleId}/connections`);
       const data = await response.json();
       setConnections(data);
     } catch (error) {
@@ -45,8 +41,7 @@ export const useModuleRelationships = (moduleId: string) => {
 
   const fetchAvailableModules = useCallback(async () => {
     try {
-      const response = await fetch(`${ENGINE_BASE_URL}/module/project/${DEFAULT_PROJECT_ID}/list`);
-      if (!response.ok) throw new Error('Failed to fetch available modules');
+      const response = await fetchWithAuth(`${ENGINE_BASE_URL}/module/project/${DEFAULT_PROJECT_ID}/list`);
       const data = await response.json();
       return data;
     } catch (error) {
@@ -62,7 +57,7 @@ export const useModuleRelationships = (moduleId: string) => {
 
   const createConnection = useCallback(async (targetId: string, relationType: 'context' | 'connection') => {
     try {
-      const response = await fetch(`${ENGINE_BASE_URL}/module/relation`, {
+      const response = await fetchWithAuth(`${ENGINE_BASE_URL}/module/relation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -73,8 +68,6 @@ export const useModuleRelationships = (moduleId: string) => {
           relation_type: relationType
         }),
       });
-
-      if (!response.ok) throw new Error('Failed to create connection');
 
       toast({
         title: "Success",
@@ -99,12 +92,10 @@ export const useModuleRelationships = (moduleId: string) => {
 
   const removeConnection = useCallback(async (targetId: string, relationType: 'context' | 'connection') => {
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${ENGINE_BASE_URL}/module/relation/${moduleId}/${targetId}/${relationType}`, 
         { method: 'DELETE' }
       );
-
-      if (!response.ok) throw new Error('Failed to remove connection');
 
       toast({
         title: "Success",

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import React, { useState, useRef, useMemo } from 'react';
 
-import { Module } from '../components/TreeView';
+import { Module } from './TreeView';
 import { Tree, NodeRendererProps } from 'react-arborist';
 import {
   Dialog,

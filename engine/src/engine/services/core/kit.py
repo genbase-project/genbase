@@ -147,6 +147,7 @@ class KitConfig:
     name: str
     owner: str
     environment: List[EnvironmentVariable]
+    image: str = None
     agents: List[Agent]
     instructions: Instructions
     workflows: Dict[str, Workflow]
@@ -166,6 +167,7 @@ class KitConfig:
                 EnvironmentVariable(**env) 
                 for env in data.get('environment', [])
             ],
+            image=data.get('image', 'python:3.11-slim'),
             agents=[Agent.from_dict(agent) for agent in data.get('agents', [])],
             instructions=Instructions.from_dict(data.get('instructions', {}), kit_path=data['kit_path']),
             workflows={

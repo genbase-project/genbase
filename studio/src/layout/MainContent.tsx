@@ -44,7 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { ENGINE_BASE_URL } from '@/config';
+import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
 
 interface TreeItem {
   id: string;
@@ -155,7 +155,42 @@ const [isExpanded, setIsExpanded] = useState(false);
   const [showRelations, setShowRelations] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [envVarName, setEnvVarName] = useState('');
+  const [envVarValue, setEnvVarValue] = useState('');
   const deleteInputRef = useRef<HTMLInputElement>(null);
+
+  const handleEnvVarUpdate = async () => {
+    if (!selectedModule || !envVarName || !envVarValue) return;
+    
+    try {
+      const response = await fetchWithAuth(
+        `${ENGINE_BASE_URL}/module/${selectedModule.module_id}/env`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            env_var_name: envVarName,
+            env_var_value: envVarValue,
+          }),
+        }
+      );
+      
+      if (response.ok) {
+        const updatedModule = await response.json();
+        // Update the module with new env vars
+        selectedModule.env_vars = updatedModule.env_vars;
+  
+        setEnvVarName('');
+        setEnvVarValue('');
+      } else {
+        console.error('Failed to update environment variable');
+      }
+    } catch (error) {
+      console.error('Error updating environment variable:', error);
+    }
+  };
 
   useEffect(() => {
     if (selectedModule?.module_id) {
@@ -187,7 +222,7 @@ const [isExpanded, setIsExpanded] = useState(false);
     
     setIsLoading(true);
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/${selectedResourceType}`
       );
       const data: ApiResponse[] = await response.json();
@@ -209,7 +244,7 @@ const [isExpanded, setIsExpanded] = useState(false);
     if (!selectedModule) return;
     
     try {
-      await fetch(
+      await fetchWithAuth(
         `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/manifest`,
         { method: 'GET' }
       );
@@ -384,9 +419,61 @@ const [isExpanded, setIsExpanded] = useState(false);
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="font-mono text-sm grid gap-2">
                           {Object.entries(selectedModule.env_vars).map(([key, value]) => (
-                            <div key={key} className="grid grid-cols-[200px_1fr] gap-2 items-baseline">
+                            <div 
+                              key={key} 
+                              className="group grid grid-cols-[200px_1fr_auto] gap-2 items-baseline hover:bg-gray-100 p-1 rounded"
+                            >
                               <span className="text-gray-500">{key}:</span>
-                              <span>{value}</span>
+                              {envVarName === key ? (
+                                <div className="flex gap-2 items-baseline">
+                                  <Input
+                                    size={30}
+                                    value={envVarValue}
+                                    onChange={(e) => setEnvVarValue(e.target.value)}
+                                    className="font-mono h-6 text-sm py-0"
+                                  />
+                                  <div className="flex gap-1">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      className="h-6 px-2"
+                                      onClick={async () => {
+                                        await handleEnvVarUpdate();
+                                        setEnvVarName('');
+                                        setEnvVarValue('');
+                                      }}
+                                    >
+                                      Save
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 px-2"
+                                      onClick={() => {
+                                        setEnvVarName('');
+                                        setEnvVarValue('');
+                                      }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <span>{value}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="opacity-0 group-hover:opacity-100 h-6 px-2"
+                                    onClick={() => {
+                                      setEnvVarName(key);
+                                      setEnvVarValue(value);
+                                    }}
+                                  >
+                                    Edit
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -396,7 +483,6 @@ const [isExpanded, setIsExpanded] = useState(false);
                         No environment variables configured
                       </div>
                     )}
-                  
                   </TabsContent>
                   <TabsContent value="destroy" className="space-y-4">
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -463,7 +549,7 @@ const [isExpanded, setIsExpanded] = useState(false);
                       if (!selectedModule) return;
                       
                       try {
-                        await fetch(
+                        await fetchWithAuth(
                           `${ENGINE_BASE_URL}/module/${selectedModule.module_id}`,
                           { method: 'DELETE' }
                         );

@@ -12,13 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { ENGINE_BASE_URL } from '@/config';
+import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
+import { useChatStore } from '@/stores/chatStore';
 
 interface Workflow {
   workflow_type: string;
   agent_type: string;
   base_instructions: string;
-  prerequisites: string[];
   metadata: {
     instructions: string;
     actions: any[];
@@ -48,18 +48,40 @@ interface Session {
 
 const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // const [messages, setMessages] = useState<Message[]>([]);
   const [localInputValue, setLocalInputValue] = useState('');
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [currentSection, setCurrentSection] = useState<string>('maintain');
   const [currentSession, setCurrentSession] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  // const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [completionTime, setCompletionTime] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+
+
+  const { 
+    messages, 
+    isLoading, 
+    setCurrentContext, 
+    refreshChat ,
+    sendMessage
+  } = useChatStore();
+
+  useEffect(() => {
+    if (selectedModule?.module_id && currentSection && currentSession) {
+      setCurrentContext(
+        selectedModule.module_id,
+        currentSection,
+        currentSession
+      );
+      refreshChat();
+    }
+  }, [selectedModule?.module_id, currentSection, currentSession]);
+
+  
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -114,7 +136,7 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
     if (!selectedModule?.module_id || !currentSection) return;
 
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${ENGINE_BASE_URL}/workflow/sessions?module_id=${selectedModule.module_id}&workflow=${currentSection}`
       );
       if (response.ok) {
@@ -134,7 +156,7 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
     if (!selectedModule?.module_id) return;
 
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${ENGINE_BASE_URL}/workflow/workflows?module_id=${selectedModule.module_id}`
       );
       const data: Workflow[] = await response.json();
@@ -149,21 +171,22 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
     }
   };
 
-  const fetchHistory = async () => {
-    if (!selectedModule?.module_id || !currentSession) return;
+  // const fetchHistory = async () => {
+  //   if (!selectedModule?.module_id || !currentSession) return;
 
-    try {
-      const url = new URL(`${ENGINE_BASE_URL}/chat/${selectedModule.module_id}/workflow/${currentSection}/history`);
-      if (currentSession) {
-        url.searchParams.append('session_id', currentSession);
-      }
-      const response = await fetch(url.toString());
-      const data: HistoryResponse = await response.json();
-      setMessages(data.history || []);
-    } catch (error) {
-      console.error('Error fetching history:', error);
-    }
-  };
+  //   try {
+  //     const url = new URL(`${ENGINE_BASE_URL}/chat/${selectedModule.module_id}/workflow/${currentSection}/history`);
+  //     if (currentSession) {
+  //       url.searchParams.append('session_id', currentSession);
+  //     }
+  //     const response = await fetchWithAuth(url.toString());
+  //     const data: HistoryResponse = await response.json();
+  //     setMessages(data.history || []);
+  //   } catch (error) {
+  //     console.error('Error fetching history:', error);
+  //   }
+  // };
+
 
   useEffect(() => {
     fetchWorkflows();
@@ -175,59 +198,30 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
     }
   }, [currentSection, selectedModule?.module_id]);
 
-  useEffect(() => {
-    if (currentSection) {
-      fetchHistory();
-    }
-  }, [currentSection, selectedModule?.module_id, currentSession]);
+  // useEffect(() => {
+  //   if (currentSection) {
+  //     fetchHistory();
+  //   }
+  // }, [currentSection, selectedModule?.module_id, currentSession]);
 
   const { inputValue: storeInputValue, setInputValue: setStoreInputValue } = useChatPromptStore();
   
-  const handleTextInput = (text: string) => {
-    setStoreInputValue(text);
+
+  const handleSend = async (text: string) => {
+    if (!text.trim()) return;
+    await sendMessage(text);
   };
 
-  const handleSend = async (value?: string) => {
-    const textToSend = value || storeInputValue;
-    if (!textToSend.trim() || !selectedModule?.module_id) return;
 
-    setIsLoading(true);
-    if (!value) {
-      setStoreInputValue('');
-    }
-    setError(null);
-    try {
-      const url = new URL(`${ENGINE_BASE_URL}/chat/${selectedModule.module_id}/execute`);
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          section: currentSection,
-          input: textToSend,
-          session_id: currentSession  || "00000000-0000-0000-0000-000000000000"
-        })
-      });
-      
-      if (response.ok) {
-        setStoreInputValue('');
-        await fetchHistory();
-      } else {
-        const errorData = await response.json();
-        // Handle FastAPI validation error format
-        if (errorData.detail && Array.isArray(errorData.detail)) {
-          setError(errorData.detail.map((err: { msg: any; }) => err.msg).join(', '));
-        } else {
-          setError(typeof errorData.detail === 'object' ? JSON.stringify(errorData.detail) : errorData.detail || 'Failed to send message');
-        }
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred while sending message';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
+
+
+
+
+
+
+
+  
   // Show a message when no module is selected
   if (!selectedModule) {
     return (
@@ -246,17 +240,15 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
       <div className={`flex-1 flex flex-col ${isFullscreen ? 'border rounded-l-lg' : 'border-t'} min-w-0`}>
         <ChatContainer 
           messages={messages}
-          onSend={(text) => {
-            console.log(text);
-            if (!isLoading) {
-              handleSend(text);
-            }
-          }}
         />
         
         <div className="p-4 border-t shrink-0">
           <div className="max-w-3xl mx-auto flex gap-2">
             <div className="flex-1">
+
+
+
+
                 <Textarea
                   ref={textareaRef}
                   value={storeInputValue}
@@ -269,9 +261,11 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     if (!isLoading) {
-                      handleSend();
+                      handleSend(storeInputValue);
+                      setStoreInputValue('');
                     }
                   }
+
                 }}
                 placeholder="Send a message... (Shift+Enter for new line)"
                 disabled={isLoading}
@@ -289,7 +283,11 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
               )}
             </div>
             <Button 
-              onClick={() => handleSend()}
+              onClick={() => {
+                handleSend(storeInputValue);
+                setStoreInputValue('');
+
+              }}
               disabled={isLoading}
               variant="secondary"
             >
@@ -370,16 +368,7 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
                       </Badge>
                     </div>
                     
-                    {workflow.prerequisites.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {workflow.prerequisites.map(prereq => (
-                          <Badge key={prereq} variant="outline" className="text-[10px] flex items-center gap-1 py-0 h-4">
-                            <GitBranchPlus className="h-2.5 w-2.5" />
-                            {prereq}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
+               
                       <div className="pt-1">
                     <Dialog>
                       <DialogTrigger asChild>
@@ -559,7 +548,7 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
                 className="w-full my-2 text-xs"
                 onClick={async () => {
                   try {
-                    const response = await fetch(
+                    const response = await fetchWithAuth(
                       `${ENGINE_BASE_URL}/workflow/session/create?module_id=${selectedModule?.module_id}&workflow=${currentSection}`,
                       { method: 'POST' }
                     );

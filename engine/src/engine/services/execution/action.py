@@ -161,131 +161,61 @@ class ActionError(Exception):
     pass
 
 
-
 class ActionService:
-    """Service for executing Python functions with shared environment"""
-
-    def __init__(self, repo_service: RepoService, venv_base_path: str = ".data/.venvs" , docker_image: str = "python:3.9-slim"):
-        self.venv_base_path = Path(venv_base_path)
-        self.venv_base_path.mkdir(exist_ok=True)
-        self.installed_packages: Dict[str, Set[str]] = {}
+    def __init__(self, repo_service: RepoService):
         self.repo_service = repo_service
-
-        self.docker_image = docker_image
         self.docker_client = docker.from_env()
+        self.cached_images = {}  # Cache for storing prepared images
+
+    def _get_cache_tag(self, base_image: str, requirements: List[str]) -> str:
+        """Generate a unique tag for caching based on base image and requirements"""
+        # Create a unique identifier based on base image and requirements
+        requirements_str = ','.join(sorted(requirements))
+        cache_key = hashlib.md5(requirements_str.encode()).hexdigest()[:12]
         
-        # Try to pull the image on initialization
+        # Remove any invalid characters from base image name
+        base_name = base_image.replace(":", "-").replace("/", "-")
+        
+        # Create a valid Docker tag
+        return f"function-runner-{base_name}-{cache_key}"
+
+
+    def _prepare_image(self, base_image: str, requirements: List[str]) -> str:
+        """Prepare and cache a Docker image with required packages"""
+        cache_tag = self._get_cache_tag(base_image, requirements)
+        
         try:
-            self.docker_client.images.pull(docker_image)
-        except DockerException as e:
-            logger.warning(f"Failed to pull Docker image: {e}")
-
-    def _get_venv_path(self, folder_path: str) -> Path:
-        """Get virtual environment path for a folder"""
-        folder_hash = hashlib.md5(str(folder_path).encode()).hexdigest()[:8]
-        return self.venv_base_path / f"venv_{folder_hash}"
-
-    def _get_python_path(self, folder_path: str) -> Path:
-        """Get Python executable path for a folder's virtual environment"""
-        venv_path = self._get_venv_path(folder_path)
-        return venv_path / ('Scripts' if os.name == 'nt' else 'bin') / ('python.exe' if os.name == 'nt' else 'python')
-
-    def _get_pip_path(self, folder_path: str) -> Path:
-        """Get pip executable path for a folder's virtual environment"""
-        venv_path = self._get_venv_path(folder_path)
-        return venv_path / ('Scripts' if os.name == 'nt' else 'bin') / ('pip.exe' if os.name == 'nt' else 'pip')
-
-    def setup_environment(
-        self,
-        folder_path: str,
-        requirements: List[str]
-    ) -> Path:
-        """Set up or update virtual environment for a folder"""
-        try:
-            folder_path = str(Path(folder_path).resolve())
-            python_path = self._get_python_path(folder_path)
-
-            # Create virtual environment if it doesn't exist
-            if not python_path.exists():
-                print(f"Creating new virtual environment for {folder_path}")
-                venv.create(self._get_venv_path(folder_path), with_pip=True)
-                self.installed_packages[folder_path] = set(['cloudpickle'])
-
-                # Install cloudpickle by default
-                subprocess.run(
-                    [str(self._get_pip_path(folder_path)), 'install', 'cloudpickle'],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-
-                # Add folder to Python path
-                site_packages = self._get_venv_path(folder_path) / 'Lib' / 'site-packages' if os.name == 'nt' else self._get_venv_path(folder_path) / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
-                with open(site_packages / 'folder_path.pth', 'w') as f:
-                    f.write(folder_path)
-
-            # Install any missing requirements
-            if folder_path not in self.installed_packages:
-                self.installed_packages[folder_path] = set(['cloudpickle'])
-
-            missing_packages = set(requirements) - self.installed_packages[folder_path]
-            if missing_packages:
-                print(f"Installing missing packages: {missing_packages}")
+            # Check if cached image exists
+            self.docker_client.images.get(cache_tag)
+            logger.info(f"Using cached image: {cache_tag}")
+            return cache_tag
+        except docker.errors.ImageNotFound:
+            logger.info(f"Creating new image from {base_image} with requirements: {requirements}")
+            
+            # Create Dockerfile for the prepared image
+            dockerfile = f"""
+            FROM {base_image}
+            
+            # Install cloudpickle and requirements
+            RUN pip install --no-cache-dir cloudpickle {' '.join(requirements)}
+            """
+            
+            # Build the image
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                (temp_path / 'Dockerfile').write_text(dockerfile)
+                
                 try:
-                    subprocess.run(
-                        [str(self._get_pip_path(folder_path)), 'install'] + list(missing_packages),
-                        check=True, 
-                        capture_output=True,
-                        text=True
+                    image, _ = self.docker_client.images.build(
+                        path=str(temp_path),
+                        tag=cache_tag,
+                        rm=True
                     )
-                    logger.info(f"Installed missing packages: {missing_packages}")
-                    self.installed_packages[folder_path].update(missing_packages)
-                    logger.info(f"Installed missing packages: {missing_packages}")
-                except subprocess.CalledProcessError as e:
-                    raise ActionError(f"Failed to install requirements: {e.stderr}")
-
-            return python_path
-
-        except Exception as e:
-            raise ActionError(f"Error setting up environment: {str(e)}")
-
-    def get_function_metadata(
-        self,
-        folder_path: str,
-        file_path: str,
-        function_name: str
-    ) -> FunctionMetadata:
-        """Get function metadata in OpenAI function calling format"""
-        logger.info(f"Getting metadata for function {function_name} in {file_path}")
-        
-        try:
-            full_path = Path(folder_path) / file_path
-            logger.debug(f"Full path: {full_path}")
-
-            # Read the source code
-            with open(full_path, 'r') as f:
-                source = f.read()
-
-            # Parse using AST
-            tree = ast.parse(source)
-            parser = FunctionParser(function_name)
-            parser.visit(tree)
-
-            if not parser.found:
-                raise ActionError(f"Function {function_name} not found in {file_path}")
-
-            return FunctionMetadata(
-                name=function_name,
-                description=parser.description,
-                parameters=parser.parameters,
-                is_async=parser.is_async
-            )
-
-        except Exception as e:
-            logger.error(f"Error analyzing function: {str(e)}")
-            raise ActionError(f"Error analyzing function: {str(e)}")
-
-
+                    logger.info(f"Successfully created cached image: {cache_tag}")
+                    return cache_tag
+                except Exception as e:
+                    logger.error(f"Failed to create cached image: {e}")
+                    raise
 
     def execute_function(
             self,
@@ -295,26 +225,22 @@ class ActionService:
             parameters: Dict[str, Any],
             requirements: List[str],
             env_vars: Dict[str, str],
-            repo_name: str
+            repo_name: str,
+            base_image: str
         ) -> Any:
-            """Execute a function in the shared environment"""
-            try:
-                # Convert to absolute paths
-                venv_base = Path(self.venv_base_path).resolve()
-                repo_path = Path(self.repo_service.get_repo_path(repo_name)).resolve()
-                actions_path = Path(folder_path).resolve()
+        """Execute a function in a Docker container using cached images"""
+        try:
+            # Get or create cached image
+            image_tag = self._prepare_image(base_image, requirements)
+            
+            # Convert to absolute paths
+            repo_path = Path(self.repo_service.get_repo_path(repo_name)).resolve()
+            actions_path = Path(folder_path).resolve()
+            
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
                 
-                # Setup/update virtual environment
-                python_path = self.setup_environment(str(actions_path), requirements)
-
-                logger.info(f"Executing function {function_name} in {file_path}")
-                logger.info(f"Repository path: {repo_path}")
-                logger.info(f"Actions folder path: {actions_path}")
-                logger.info(f"Venv base path: {venv_base}")
-
-                # Create venv directories if they don't exist
-                venv_base.mkdir(parents=True, exist_ok=True)
-
+                # Create execution script (no need for setup script anymore)
                 exec_script = f"""
 import sys
 import json
@@ -333,14 +259,10 @@ try:
     for key, value in env_vars.items():
         os.environ[key] = str(value)
 
-    # Convert paths to Path objects
-    repo_path = Path(r'{repo_path}')
-    action_path = Path(r'{actions_path}')
-    
-    logger.info(f"Repository path: {{repo_path}}")
-    logger.info(f"Action path: {{action_path}}")
-    
     # Add paths to sys.path
+    repo_path = Path('/repo')
+    action_path = Path('/actions')
+    
     if str(repo_path) not in sys.path:
         sys.path.insert(0, str(repo_path))
     if str(action_path) not in sys.path:
@@ -349,8 +271,8 @@ try:
     # Set current working directory to repo path
     os.chdir(repo_path)
     
-    # Get absolute path to the module file
-    module_file = action_path / r'{file_path}'
+    # Get path to the module file
+    module_file = action_path / '{file_path}'
     logger.info(f"Loading module from: {{module_file}}")
     
     if not module_file.exists():
@@ -370,149 +292,216 @@ try:
     
     # Get and execute the function
     if not hasattr(module, '{function_name}'):
-        raise AttributeError(f"Function {{function_name}} not found in {{module_file}}")
+        raise AttributeError(f"Function {function_name} not found in {{module_file}}")
         
     func = getattr(module, '{function_name}')
     
-    # Load parameters from absolute path
-    params_file = Path(r'{venv_base}/params.json')
-    with open(params_file, 'r') as f:
+    # Load parameters
+    with open('/data/params.json', 'r') as f:
         parameters = json.load(f)
     
     # Execute
     result = func(**parameters)
     
-    # Save result to absolute path
-    result_file = Path(r'{venv_base}/result.json')
-    with open(result_file, 'wb') as f:
+    # Save result
+    with open('/data/result.json', 'wb') as f:
         cloudpickle.dump(result, f)
         
 except Exception as e:
     import traceback
-    error_file = Path(r'{venv_base}/error.txt')
-    error_file.write_text(traceback.format_exc())
+    with open('/data/error.txt', 'w') as f:
+        f.write(traceback.format_exc())
     raise
 """
-                # Use absolute paths for all files
-                exec_path = (venv_base / "exec.py").resolve()
-                params_path = (venv_base / "params.json").resolve()
-                result_path = (venv_base / "result.json").resolve()
-                error_path = (venv_base / "error.txt").resolve()
+                # Write execution script and parameters
+                (temp_path / 'exec.py').write_text(exec_script)
+                with open(temp_path / 'params.json', 'w') as f:
+                    json.dump(parameters, f)
 
+                # Run in container using cached image
                 try:
-                    # Write execution script
-                    logger.info(f"Writing execution script to {exec_path}")
-                    exec_path.write_text(exec_script)
+                    container = self.docker_client.containers.run(
+                        image_tag,  # Use cached image
+                        command=['python', '/data/exec.py'],  # No setup needed
+                        volumes={
+                            str(repo_path): {'bind': '/repo', 'mode': 'rw'},
+                            str(actions_path): {'bind': '/actions', 'mode': 'ro'},
+                            str(temp_path): {'bind': '/data', 'mode': 'rw'}
+                        },
+                        environment={
+                            **env_vars,
+                            'PYTHONUNBUFFERED': '1',
+                        },
+                        user=0,
+                        detach=True
+                    )
+
+                    # Wait for container to finish and get logs
+                    result = container.wait()
+                    logs = container.logs().decode()
                     
-                    # Save parameters
-                    logger.info(f"Writing parameters to {params_path}")
-                    with open(params_path, 'w') as f:
-                        json.dump(parameters, f)
-                    
-
-                    process_env = {}
-                    process_env.update({key: str(value) for key, value in env_vars.items()})
-
-                    # Execute
-                    try:
-                        process = subprocess.run(
-                            [str(python_path), str(exec_path)],
-                            check=True,
-                            capture_output=True,
-                            text=True,
-                            env=process_env
-                        )
-                    except subprocess.CalledProcessError as e:
-                        error_msg = f"Process failed with exit code {e.returncode}\nSTDOUT:\n{e.stdout}\nSTDERR:\n{e.stderr}"
-                        raise ActionError(f"Error executing function: {error_msg}")
-
-                    if process.returncode != 0:
-                        logger.info(process.stdout)
-                        logger.info(process.stderr)
-
-                    # Check for errors
-                    if error_path.exists():
-                        error_msg = error_path.read_text()
-                        raise ActionError(f"Function execution failed: {error_msg}")
+                    if result['StatusCode'] != 0:
+                        if (temp_path / 'error.txt').exists():
+                            error_msg = (temp_path / 'error.txt').read_text()
+                            raise ActionError(f"Function execution failed: {error_msg}")
+                        raise ActionError(f"Container execution failed: {logs}")
 
                     # Load result
-                    with open(result_path, "rb") as f:
-                        result = cloudpickle.load(f)
-
-                    return result
+                    with open(temp_path / 'result.json', 'rb') as f:
+                        return cloudpickle.load(f)
 
                 finally:
-                    # Cleanup
-                    for path in [exec_path, params_path, result_path, error_path]:
-                        try:
-                            if path.exists():
-                                path.unlink()
-                        except:
-                            pass
+                    # Cleanup container
+                    try:
+                        container.remove(force=True)
+                    except:
+                        pass
 
-            except Exception as e:
-                raise ActionError(f"Error executing function: {str(e)}")
+        except DockerException as e:
+            raise ActionError(f"Docker error: {str(e)}")
+        except Exception as e:
+            raise ActionError(f"Error executing function: {str(e)}")
 
-# # Example test code demonstrating function metadata parsing capabilities
+    def cleanup_cache(self):
+        """Remove all cached images"""
+        try:
+            images = self.docker_client.images.list(filters={'reference': 'function-runner-*'})
+            for image in images:
+                self.docker_client.images.remove(image.id, force=True)
+            logger.info("Cleaned up all cached images")
+        except Exception as e:
+            logger.error(f"Failed to cleanup cached images: {e}")
+
+
+
+
+
+
 # if __name__ == "__main__":
-#     from enum import Enum
-#     from typing import List, Optional, Union, Literal
-#     from pydantic import BaseModel, Field
+#     import tempfile
+#     import shutil
+#     from pathlib import Path
+
+#     # Test function to write in a temporary file
+#     test_function_content = """
+# def test_function(message: str, number: int):
+#     '''Test function that creates a file and returns data
     
-#     # Example enum and Pydantic models
-#     class UserRole(str, Enum):
-#         ADMIN = "admin"
-#         USER = "user"
-#         GUEST = "guest"
+#     Args:
+#         message: Message to write
+#         number: Number to include
+#     '''
+#     # Write to a file in the repository
+#     with open('test_output.txt', 'w') as f:
+#         f.write(f"{message} - {number}")
     
-#     class UserProfile(BaseModel):
-#         """User profile information"""
-#         name: str = Field(..., description="User's full name")
-#         age: Optional[int] = Field(None, description="User's age")
-#         roles: List[UserRole] = Field(default_factory=list, description="User's roles")
-    
-#     class TeamSettings(BaseModel):
-#         """Team configuration settings"""
-#         team_name: str = Field(..., description="Name of the team")
-#         max_members: int = Field(default=10, description="Maximum number of team members")
-#         features: List[str] = Field(default_factory=list, description="Enabled features")
-    
-#     # Example function with various type hints
-#     async def create_team(
-#         profile: UserProfile,
-#         team_config: TeamSettings,
-#         team_type: Literal["public", "private", "internal"],
-#         metadata: Optional[Dict[str, Any]] = None,
-#         sync_data: Union[bool, List[str]] = False
-#     ) -> Dict[str, Any]:
-#         """Create a new team with the given configuration.
-        
-#         Args:
-#             profile: User profile creating the team
-#             team_config: Team configuration settings
-#             team_type: Type of team to create
-#             metadata: Optional metadata for the team
-#             sync_data: Whether to sync data or list of data types to sync
-            
-#         Returns:
-#             Dictionary with team creation result
-#         """
-#         pass  # Function implementation not needed for schema generation example
-    
-#     # Example usage
+#     # Return some data
+#     return {
+#         "message": message,
+#         "number": number,
+#         "doubled": number * 2
+#     }
+# """
+
 #     try:
-#         logger.info("Generating schema for example function...")
-#         schema = function_to_schema(create_team)
-#         logger.info("Generated schema:")
-#         logger.info(json.dumps(schema, indent=2))
-        
-#         # The schema will include:
-#         # - Complex types from Pydantic models (UserProfile, TeamSettings)
-#         # - Literal types with specific allowed values
-#         # - Optional parameters with defaults
-#         # - Union types
-#         # - Async function detection
-#         # - Parameter descriptions from docstrings
-        
+#         # Create temporary directories for testing
+#         with tempfile.TemporaryDirectory() as repo_dir, \
+#              tempfile.TemporaryDirectory() as actions_dir:
+            
+#             # Setup test repository
+#             repo_path = Path(repo_dir)
+#             actions_path = Path(actions_dir)
+
+#             # Create test function file
+#             with open(actions_path / "test_function.py", "w") as f:
+#                 f.write(test_function_content)
+
+#             # Create a mock RepoService
+#             class MockRepoService:
+#                 def get_repo_path(self, repo_name: str) -> str:
+#                     return str(repo_path)
+
+#             # Initialize services
+#             repo_service = MockRepoService()
+#             action_service = ActionService(repo_service)
+
+#             print("Testing function execution...")
+            
+#             # First execution - will create cached image
+#             print("\nFirst execution (creating cached image)...")
+#             result1 = action_service.execute_function(
+#                 folder_path=str(actions_path),
+#                 file_path="test_function.py",
+#                 function_name="test_function",
+#                 parameters={
+#                     "message": "Hello from Docker",
+#                     "number": 42
+#                 },
+#                 requirements=["requests"],
+#                 env_vars={"TEST_VAR": "test_value"},
+#                 repo_name="test-repo",
+#                 base_image="python:3.9-slim"  # Specify base image
+#             )
+
+#             print("\nFirst execution completed!")
+#             print("Results:")
+#             print(f"Returned data: {result1}")
+            
+#             # Check if file was created in repository
+#             output_file = repo_path / "test_output.txt"
+#             if output_file.exists():
+#                 print(f"\nContent of created file:")
+#                 print(output_file.read_text())
+#             else:
+#                 print("\nWarning: Output file was not created")
+
+#             # Second execution - should use cached image
+#             print("\nSecond execution (using cached image)...")
+#             result2 = action_service.execute_function(
+#                 folder_path=str(actions_path),
+#                 file_path="test_function.py",
+#                 function_name="test_function",
+#                 parameters={
+#                     "message": "Hello again from Docker",
+#                     "number": 84
+#                 },
+#                 requirements=["requests"],  # Same requirements to use cached image
+#                 env_vars={"TEST_VAR": "test_value"},
+#                 repo_name="test-repo",
+#                 base_image="python:3.9-slim"
+#             )
+
+#             print("\nSecond execution completed!")
+#             print("Results:")
+#             print(f"Returned data: {result2}")
+
+#             # Test with different requirements (should create new cached image)
+#             print("\nThird execution (with different requirements)...")
+#             result3 = action_service.execute_function(
+#                 folder_path=str(actions_path),
+#                 file_path="test_function.py",
+#                 function_name="test_function",
+#                 parameters={
+#                     "message": "Hello with new requirements",
+#                     "number": 100
+#                 },
+#                 requirements=["requests", "pandas"],  # Different requirements
+#                 env_vars={"TEST_VAR": "test_value"},
+#                 repo_name="test-repo",
+#                 base_image="python:3.9-slim"
+#             )
+
+#             print("\nThird execution completed!")
+#             print("Results:")
+#             print(f"Returned data: {result3}")
+
+#             # Cleanup cached images
+#             print("\nCleaning up cached images...")
+#             action_service.cleanup_cache()
+
 #     except Exception as e:
-#         logger.error(f"Error in example: {str(e)}")
+#         print(f"\nError during testing: {str(e)}")
+#         # Print full traceback for debugging
+#         import traceback
+#         print("\nFull traceback:")
+#         print(traceback.format_exc())

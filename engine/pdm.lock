@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:08699a785020cca2a0deaf7cd2d9ee9011a0e70e2c53b9dc28e69122e6d2eeee"
+content_hash = "sha256:90d93aedd6a24e8ddd7ded490399d7dcacd6001888ff7a56ec18982e7f0c412b"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -248,6 +248,16 @@ groups = ["default"]
 files = [
     {file = "diff_match_patch-20241021-py3-none-any.whl", hash = "sha256:93cea333fb8b2bc0d181b0de5e16df50dd344ce64828226bda07728818936782"},
     {file = "diff_match_patch-20241021.tar.gz", hash = "sha256:beae57a99fa48084532935ee2968b8661db861862ec82c6f21f4acdd6d835073"},
+]
+
+[[package]]
+name = "directory-tree"
+version = "1.0.0"
+summary = "Utility Package that Displays out the Tree Structure of a Particular Directory."
+groups = ["default"]
+files = [
+    {file = "directory_tree-1.0.0-py3-none-any.whl", hash = "sha256:2484ba5e9d35e087703913cc85e920f08b9b942859b9f5a0eae24699d3364734"},
+    {file = "directory_tree-1.0.0.tar.gz", hash = "sha256:d65b404d7e561db62e6321f36c612cd12da2e9fbe5cbae98da73ce14c0ec910d"},
 ]
 
 [[package]]

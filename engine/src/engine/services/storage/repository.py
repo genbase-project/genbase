@@ -62,7 +62,7 @@ class RepoService:
         # Create necessary directories
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-    def _get_repo_path(self, repo_name: str) -> Path:
+    def get_repo_path(self, repo_name: str) -> Path:
         """Get repository path"""
         return self.base_path / repo_name
 
@@ -79,8 +79,8 @@ class RepoService:
 
             if not git_config.has_section('user'):
                 git_config.add_section('user')
-            git_config.set_value('user', 'name', 'FastAPI Git Service')
-            git_config.set_value('user', 'email', 'fastapi@localhost')
+            git_config.set_value('user', 'name', 'Genbase Agent')
+            git_config.set_value('user', 'email', 'genbase@localhost')
 
         return repo
 
@@ -106,7 +106,7 @@ class RepoService:
         Raises:
             RepoExistsError: If repository already exists
         """
-        repo_path = self._get_repo_path(repo_name)
+        repo_path = self.get_repo_path(repo_name)
 
         if repo_path.exists():
             raise RepoExistsError(f"Repository {repo_name} already exists")
@@ -162,7 +162,7 @@ class RepoService:
         Raises:
             RepoNotFoundError: If repository doesn't exist
         """
-        repo_path = self._get_repo_path(repo_name)
+        repo_path = self.get_repo_path(repo_name)
 
         if not repo_path.exists():
             raise RepoNotFoundError(f"Repository {repo_name} not found")
@@ -184,7 +184,7 @@ class RepoService:
         Raises:
             RepoNotFoundError: If repository doesn't exist
         """
-        repo_path = self._get_repo_path(repo_name)
+        repo_path = self.get_repo_path(repo_name)
         index_path = self._get_index_path(repo_name)
 
         if not repo_path.exists():
@@ -215,7 +215,7 @@ class RepoService:
         Raises:
             RepoNotFoundError: If repository doesn't exist
         """
-        repo_path = self._get_repo_path(repo_name)
+        repo_path = self.get_repo_path(repo_name)
 
         if not repo_path.exists():
             raise RepoNotFoundError(f"Repository {repo_name} not found")
@@ -300,7 +300,7 @@ class RepoService:
         Raises:
             RepoNotFoundError: If repository doesn't exist
         """
-        repo_path = self._get_repo_path(repo_name)
+        repo_path = self.get_repo_path(repo_name)
 
         if not repo_path.exists():
             raise RepoNotFoundError(f"Repository {repo_name} not found")

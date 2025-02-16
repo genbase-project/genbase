@@ -11,7 +11,7 @@ from engine.db.session import SessionLocal
 from engine.services.execution.workflow import WorkflowError, WorkflowService
 from engine.config.workflow_config import WorkflowConfigService
 from engine.utils.yaml import YAMLUtils
-from engine.utils.logging import logger
+from loguru import logger
 from engine.services.execution.state import StateService
 
 class ExecuteStepRequest(BaseModel):
@@ -51,7 +51,7 @@ class WorkflowRouter:
             with SessionLocal() as db:
                 stmt = insert(ChatHistory).values(
                     module_id=module_id,
-                    section=workflow,
+                    workflow=workflow,
                     role="system",
                     content="Session created",
                     timestamp=timestamp,
@@ -228,8 +228,6 @@ class WorkflowRouter:
                 request = ExecuteStepRequest()
 
             result = self.service.execute_workflow_action(
-                module_id=module_id,
-                workflow=workflow,
                 action_name=step_name,
                 parameters=request.parameters
             )
@@ -256,7 +254,7 @@ class WorkflowRouter:
                     .distinct()
                     .where(
                         ChatHistory.module_id == module_id,
-                        ChatHistory.section == workflow
+                        ChatHistory.workflow == workflow
                     )
                 )
                 sessions = db.execute(stmt).scalars().all()
@@ -268,7 +266,7 @@ class WorkflowRouter:
                         db.query(ChatHistory)
                         .filter(
                             ChatHistory.module_id == module_id,
-                            ChatHistory.section == workflow,
+                            ChatHistory.workflow == workflow,
                             ChatHistory.session_id == session_id
                         )
                         .order_by(ChatHistory.timestamp.desc())

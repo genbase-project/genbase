@@ -84,6 +84,15 @@ class WorkflowAction:
     full_file_path: str = ""  # Full path to the action file
     function_name: str = ""  # Function name extracted from path
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "path": self.path,
+            "name": self.name,
+            "description": self.description,
+            "full_file_path": self.full_file_path,
+            "function_name": self.function_name
+        }
+
 @dataclass
 class Workflow:
     """Workflow configuration"""
@@ -124,6 +133,12 @@ class WorkspaceFile:
     description: Optional[str] = None
 
 @dataclass
+class WorkspaceConfig:
+    """Workspace configuration"""
+    files: List[WorkspaceFile] = field(default_factory=list)
+    ignore: List[str] = field(default_factory=list)
+
+@dataclass
 class KitConfig:
     """Complete kit configuration"""
     doc_version: str
@@ -137,7 +152,7 @@ class KitConfig:
     workflows: Dict[str, Workflow]
     shared_actions: List[WorkflowAction]
     dependencies: List[str]
-    workspace: Dict[str, List[WorkspaceFile]] = field(default_factory=dict)
+    workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'KitConfig':
@@ -168,10 +183,10 @@ class KitConfig:
                 for action in data.get('shared_actions', [])
             ],
             dependencies=data.get('dependencies', []),
-            workspace={
-                category: [WorkspaceFile(**f) for f in files]
-                for category, files in data.get('workspace', {}).items()
-            }
+            workspace=WorkspaceConfig(
+                files=[WorkspaceFile(**f) for f in data.get('workspace', {}).get('files', [])],
+                ignore=data.get('workspace', {}).get('ignore', [])
+            )
         )
 
 

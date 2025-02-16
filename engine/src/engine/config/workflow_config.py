@@ -15,7 +15,7 @@ class WorkflowAction:
 class WorkflowConfig:
     """Complete configuration for a workflow"""
     workflow_type: str
-    agent_type: str  # "tasker" or "coder"
+    agent_type: str  # "tasker"
     base_instructions: str  # Default instructions always included
     default_actions: List[WorkflowAction] = field(default_factory=list)  # Default actions available to this workflow
     allow_multiple: bool = False  # Whether multiple chat sessions are allowed

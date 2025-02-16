@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from engine.services.core.module import ModuleError, ModuleService
-from engine.utils.logging import logger
+from loguru import logger
 from engine.db.models import WorkManifest, ChatHistory
 from engine.db.session import get_db
 
@@ -162,7 +162,7 @@ class ResourceService:
             formatted_messages = []
             for msg in reversed(messages):  # Show in chronological order
                 formatted_messages.append(
-                    f"[{msg.timestamp.strftime('%Y-%m-%d %H:%M:%S')} - {msg.section}]\n"
+                    f"[{msg.timestamp.strftime('%Y-%m-%d %H:%M:%S')} - {msg.workflow}]\n"
                     f"{msg.role}: {msg.content}\n"
                 )
                 

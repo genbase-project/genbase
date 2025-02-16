@@ -14,8 +14,10 @@ import cloudpickle
 from pydantic import BaseModel, create_model
 
 from engine.services.storage.repository import RepoService
-from engine.utils.logging import logger
-
+from loguru import logger
+import docker
+import tempfile
+from docker.errors import DockerException
 
 class FunctionMetadata(BaseModel):
     """Function metadata in OpenAI function calling format"""
@@ -33,144 +35,126 @@ class FunctionMetadata(BaseModel):
             "is_async": self.is_async
         }
 
-def _get_type_info(type_hint: Any) -> Dict[str, Any]:
-    """Convert Python type hint to JSON schema type info"""
-    logger.debug(f"Processing type hint: {type_hint}")
-    
-    # Handle None type
-    if type_hint is type(None):
-        return {"type": "null"}
-
-    # Handle basic types
-    type_map = {
-        str: {"type": "string"},
-        int: {"type": "integer"},
-        float: {"type": "number"},
-        bool: {"type": "boolean"},
-        list: {"type": "array"},
-        dict: {"type": "object"},
-        Any: {"type": "object"}
-    }
-    
-    if type_hint in type_map:
-        return type_map[type_hint]
-
-    # Get origin/args for complex types
-    origin = get_origin(type_hint)
-    args = get_args(type_hint)
-    
-    logger.debug(f"Type origin: {origin}, args: {args}")
-
-    # Handle Optional (Union with None)
-    if origin in (Union, UnionType) and type(None) in args:
-        non_none_args = [arg for arg in args if arg is not type(None)]
-        if len(non_none_args) == 1:
-            type_info = _get_type_info(non_none_args[0])
-            if isinstance(type_info["type"], list):
-                if "null" not in type_info["type"]:
-                    type_info["type"].append("null")
-            else:
-                type_info["type"] = [type_info["type"], "null"]
-            return type_info
-
-    # Handle Union types
-    if origin in (Union, UnionType):
-        types = []
-        for arg in args:
-            type_info = _get_type_info(arg)
-            if isinstance(type_info["type"], list):
-                types.extend(type_info["type"])
-            else:
-                types.append(type_info["type"])
-        return {"type": list(set(types))}
-
-    # Handle List
-    if origin == list:
-        return {
-            "type": "array",
-            "items": _get_type_info(args[0]) if args else {"type": "object"}
-        }
-
-    # Handle Dict
-    if origin == dict:
-        return {
+class FunctionParser(ast.NodeVisitor):
+    """AST parser to extract function information in OpenAI schema format"""
+    def __init__(self, function_name: str):
+        self.function_name = function_name
+        self.description = ""
+        self.parameters: Dict[str, Any] = {
             "type": "object",
-            "additionalProperties": True
-        }
-
-    # Handle Literal
-    if origin == Literal:
-        return {
-            "type": "string",
-            "enum": list(args)
-        }
-
-    # Handle Pydantic models
-    if inspect.isclass(type_hint) and issubclass(type_hint, BaseModel):
-        return type_hint.model_json_schema()
-
-    logger.warning(f"Unhandled type hint: {type_hint}, defaulting to object")
-    return {"type": "object"}
-
-def function_to_schema(func: Callable) -> Dict[str, Any]:
-    """Convert a Python function to an OpenAPI-compatible JSON schema"""
-    logger.info(f"Generating schema for function: {func.__name__}")
-    
-    try:
-        # Get function signature
-        sig = inspect.signature(func)
-        logger.debug(f"Function signature: {sig}")
-
-        # Get docstring
-        description = inspect.getdoc(func) or ""
-        logger.debug(f"Function description: {description}")
-
-        # Process parameters
-        properties = {}
-        required = []
-
-        for name, param in sig.parameters.items():
-            logger.debug(f"Processing parameter: {name}")
-            
-            # Get parameter type
-            param_type = param.annotation if param.annotation != inspect.Parameter.empty else Any
-            type_info = _get_type_info(param_type)
-            
-            # Add description from docstring if available
-            if description:
-                param_desc = [
-                    line.strip()
-                    for line in description.split("\n")
-                    if f":param {name}:" in line
-                ]
-                if param_desc:
-                    type_info["description"] = param_desc[0].split(":", 2)[-1].strip()
-
-            properties[name] = type_info
-            
-            # Check if parameter is required
-            if param.default == inspect.Parameter.empty:
-                required.append(name)
-
-        parameters = {
-            "type": "object",
-            "properties": properties,
-            "required": required,
+            "properties": {},
+            "required": [],
             "additionalProperties": False
         }
+        self.found = False
+        self.is_async = False
+
+    def _get_type_schema(self, annotation) -> Dict[str, Any]:
+        """Convert Python type annotation to JSON schema"""
+        if annotation is None:
+            return {"type": "object"}
+
+        if isinstance(annotation, ast.Name):
+            type_map = {
+                "str": {"type": "string"},
+                "int": {"type": "integer"},
+                "float": {"type": "number"},
+                "bool": {"type": "boolean"},
+                "list": {"type": "array"},
+                "Dict": {"type": "object"},  # Handle Dict as a name directly
+                "dict": {"type": "object"},
+                "Any": {"type": "object"}
+            }
+            return type_map.get(annotation.id, {"type": "object"})
+
+        elif isinstance(annotation, ast.Subscript):
+            if isinstance(annotation.value, ast.Name):
+                if annotation.value.id == "Dict":
+                    # For Dict type, we specify it's an object that can have additional properties
+                    return {
+                        "type": "object",
+                        "additionalProperties": True
+                    }
+                elif annotation.value.id == "List":
+                    return {
+                        "type": "array",
+                        "items": self._get_type_schema(annotation.slice)
+                    }
+                elif annotation.value.id == "Tuple":
+                    # For tuples, represent as array with fixed items
+                    if isinstance(annotation.slice, ast.Tuple):
+                        return {
+                            "type": "array",
+                            "items": [self._get_type_schema(item) for item in annotation.slice.elts],
+                            "minItems": len(annotation.slice.elts),
+                            "maxItems": len(annotation.slice.elts)
+                        }
+                    else:
+                        return {"type": "array"}
+                elif annotation.value.id == "Optional":
+                    type_schema = self._get_type_schema(annotation.slice)
+                    if isinstance(type_schema["type"], list):
+                        if "null" not in type_schema["type"]:
+                            type_schema["type"].append("null")
+                    else:
+                        type_schema["type"] = [type_schema["type"], "null"]
+                    return type_schema
+                elif annotation.value.id == "Union":
+                    if isinstance(annotation.slice, ast.Tuple):
+                        types = []
+                        for elt in annotation.slice.elts:
+                            type_schema = self._get_type_schema(elt)
+                            if "type" in type_schema:
+                                if isinstance(type_schema["type"], list):
+                                    types.extend(type_schema["type"])
+                                else:
+                                    types.append(type_schema["type"])
+                        return {"type": list(set(types))} if types else {"type": "object"}
         
-        logger.debug(f"Generated parameters schema: {parameters}")
+        # Default fallback
+        return {"type": "object"}
         
-        return {
-            "name": func.__name__,
-            "description": description,
-            "parameters": parameters,
-            "is_async": inspect.iscoroutinefunction(func)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error generating schema for function {func.__name__}: {str(e)}")
-        raise
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        """Visit a function definition"""
+        if node.name == self.function_name:
+            self.found = True
+            
+            # Get docstring
+            docstring = ast.get_docstring(node)
+            self.description = docstring or ""
+            
+            # Process parameters
+            for arg in node.args.args:
+                if arg.arg == 'self':  # Skip self parameter
+                    continue
+                    
+                # Get type annotation if available
+                annotation = arg.annotation
+                param_schema = self._get_type_schema(annotation)
+                
+                # Add description from docstring
+                if docstring:
+                    param_docs = [
+                        line.strip()
+                        for line in docstring.split("\n")
+                        if f":param {arg.arg}:" in line
+                    ]
+                    if param_docs:
+                        param_desc = param_docs[0].split(":", 2)[-1].strip()
+                        param_schema["description"] = param_desc
+
+                self.parameters["properties"][arg.arg] = param_schema
+                
+                # If no default value, parameter is required
+                defaults_offset = len(node.args.defaults)
+                args_offset = len(node.args.args) - defaults_offset
+                if node.args.args.index(arg) < args_offset:
+                    self.parameters["required"].append(arg.arg)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        """Visit an async function definition"""
+        self.is_async = True
+        self.visit_FunctionDef(node)
 
 class ActionError(Exception):
     """Base exception for action errors"""
@@ -181,11 +165,20 @@ class ActionError(Exception):
 class ActionService:
     """Service for executing Python functions with shared environment"""
 
-    def __init__(self, repo_service: RepoService, venv_base_path: str = ".data/.venvs"  ):
+    def __init__(self, repo_service: RepoService, venv_base_path: str = ".data/.venvs" , docker_image: str = "python:3.9-slim"):
         self.venv_base_path = Path(venv_base_path)
         self.venv_base_path.mkdir(exist_ok=True)
         self.installed_packages: Dict[str, Set[str]] = {}
         self.repo_service = repo_service
+
+        self.docker_image = docker_image
+        self.docker_client = docker.from_env()
+        
+        # Try to pull the image on initialization
+        try:
+            self.docker_client.images.pull(docker_image)
+        except DockerException as e:
+            logger.warning(f"Failed to pull Docker image: {e}")
 
     def _get_venv_path(self, folder_path: str) -> Path:
         """Get virtual environment path for a folder"""
@@ -241,7 +234,7 @@ class ActionService:
                 try:
                     subprocess.run(
                         [str(self._get_pip_path(folder_path)), 'install'] + list(missing_packages),
-                        check=True,
+                        check=True, 
                         capture_output=True,
                         text=True
                     )
@@ -269,31 +262,23 @@ class ActionService:
             full_path = Path(folder_path) / file_path
             logger.debug(f"Full path: {full_path}")
 
-            # Import the module to get the actual function
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("dynamic_module", str(full_path))
-            if not spec or not spec.loader:
-                raise ActionError(f"Could not load module spec for {file_path}")
-                
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            
-            if not hasattr(module, function_name):
-                raise ActionError(f"Function {function_name} not found in {file_path}")
-                
-            func = getattr(module, function_name)
-            if not callable(func):
-                raise ActionError(f"{function_name} in {file_path} is not callable")
+            # Read the source code
+            with open(full_path, 'r') as f:
+                source = f.read()
 
-            # Generate schema from function
-            schema = function_to_schema(func)
-            logger.debug(f"Generated schema: {schema}")
+            # Parse using AST
+            tree = ast.parse(source)
+            parser = FunctionParser(function_name)
+            parser.visit(tree)
+
+            if not parser.found:
+                raise ActionError(f"Function {function_name} not found in {file_path}")
 
             return FunctionMetadata(
-                name=schema["name"],
-                description=schema["description"],
-                parameters=schema["parameters"],
-                is_async=schema["is_async"]
+                name=function_name,
+                description=parser.description,
+                parameters=parser.parameters,
+                is_async=parser.is_async
             )
 
         except Exception as e:
@@ -316,7 +301,7 @@ class ActionService:
             try:
                 # Convert to absolute paths
                 venv_base = Path(self.venv_base_path).resolve()
-                repo_path = Path(self.repo_service._get_repo_path(repo_name)).resolve()
+                repo_path = Path(self.repo_service.get_repo_path(repo_name)).resolve()
                 actions_path = Path(folder_path).resolve()
                 
                 # Setup/update virtual environment
@@ -423,6 +408,10 @@ except Exception as e:
                     logger.info(f"Writing parameters to {params_path}")
                     with open(params_path, 'w') as f:
                         json.dump(parameters, f)
+                    
+
+                    process_env = {}
+                    process_env.update({key: str(value) for key, value in env_vars.items()})
 
                     # Execute
                     try:
@@ -430,7 +419,8 @@ except Exception as e:
                             [str(python_path), str(exec_path)],
                             check=True,
                             capture_output=True,
-                            text=True
+                            text=True,
+                            env=process_env
                         )
                     except subprocess.CalledProcessError as e:
                         error_msg = f"Process failed with exit code {e.returncode}\nSTDOUT:\n{e.stdout}\nSTDERR:\n{e.stderr}"

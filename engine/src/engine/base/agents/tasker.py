@@ -1,8 +1,8 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Tuple
 import json
 from engine.services.agents.base_agent import BaseAgent, AgentContext
 from engine.services.execution.workflow import WorkflowMetadataResult
-from engine.utils.logging import logger
+from loguru import logger
 
 TASKER_INSTRUCTIONS = """You are a task execution agent responsible for managing workflow operations.
 
@@ -45,12 +45,38 @@ class TaskerAgent(BaseAgent):
     async def process_workflow(
         self,
         context: AgentContext,
-        workflow_data: WorkflowMetadataResult
+        workflow_data: WorkflowMetadataResult,
+        responses: Optional[List[Tuple[str, str, str]]] = None
     ) -> Dict[str, Any]:
         """Process a workflow request"""
         try:
+
+            # response processing
+            if responses:
+                for response in responses:
+                    if response[0] == "code_change":
+                        # code change response
+                        pass
+                    elif response[0] == "user_prompt":
+                        # user prompt response
+                        pass
+                    else:
+                        logger.warning(f"Unknown response type: {response[1]}")
+
+
+
+
+
+
+
+
+
             # Build initial context with workflow-specific instructions
             instructions = TASKER_INSTRUCTIONS
+
+
+
+
 
             # Add workflow-specific instructions if available
             if workflow_data.instructions:
@@ -61,118 +87,21 @@ class TaskerAgent(BaseAgent):
                 agent_instructions=instructions,
                 required_xml_elements=["user_prompt"]
             )
+            
 
             # Initial response based on user input
             response = await self.chat_completion(
                 messages=[{"role": "user", "content": context.user_input}]
             )
 
+            
+
             assistant_message = response.choices[0].message
-            results = []
 
-            # Handle assistant message
-            if assistant_message.content:
-                self.add_to_history(
-                    role="assistant",
-                    content=assistant_message.content
-                )
-
-            # Process tool calls if any
-            if hasattr(assistant_message, "tool_calls") and assistant_message.tool_calls:
-                tool_responses = []
-
-                for tool_call in assistant_message.tool_calls:
-                    try:
-                        # Parse parameters
-                        parameters = json.loads(tool_call.function.arguments)
-
-                        # Execute the workflow action
-                        result = await self.execute_workflow_action(
-                            tool_call.function.name,
-                            parameters
-                        )
-
-                        # Format successful result
-                        result_entry = {
-                            "action": tool_call.function.name,
-                            "result": result
-                        }
-                        results.append(result_entry)
-                        
-                        # Add result message entry for LLM context
-                        tool_responses.append({
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "name": tool_call.function.name,
-                            "content": json.dumps(result)
-                        })
-
-                        # Add to history with tool call ID
-                        self.add_to_history(
-                            role="tool",
-                            content=json.dumps(result),
-                            message_type="tool_result",
-                            tool_call_id=tool_call.id,
-                            tool_name=tool_call.function.name,
-                            tools_info=[{
-                                "type": "function",
-                                "data": result_entry
-                            }]
-                        )
-
-                    except Exception as e:
-                        error_msg = str(e)
-                        logger.error(f"Error executing tool {tool_call.function.name}: {error_msg}")
-                        
-                        # Format error result
-                        error_result = {
-                            "action": tool_call.function.name,
-                            "error": error_msg
-                        }
-                        results.append(error_result)
-
-                        # Add error message entry for LLM context
-                        tool_responses.append({
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "name": tool_call.function.name,
-                            "content": json.dumps({"error": error_msg})
-                        })
-
-                        # Add error to history
-                        self.add_to_history(
-                            role="tool",
-                            content=json.dumps({"error": error_msg}),
-                            message_type="error",
-                            tool_call_id=tool_call.id,
-                            tool_name=tool_call.function.name,
-                            tools_info=[{
-                                "type": "function",
-                                "data": error_result
-                            }]
-                        )
-
-                # Get final response after tool executions
-                final_response = await self.chat_completion(
-                    messages=[{
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": assistant_message.tool_calls
-                    }] + tool_responses + [
-                        {"role": "user", "content": "What should I do next based on the tool results?"}
-                    ]
-                )
-
-                final_message = final_response.choices[0].message
-                if final_message.content:
-                    self.add_to_history(
-                        role="assistant",
-                        content=final_message.content
-                    )
 
             return {
                 "response": assistant_message.content if assistant_message.content else "",
-                "results": results
+                "results": []
             }
 
         except Exception as e:

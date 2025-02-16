@@ -6,7 +6,7 @@ from typing import Dict, Type, Optional, Union
 
 from engine.services.agents.base_agent import BaseAgent, AgentServices
 from engine.config.workflow_config import WorkflowConfig
-from engine.utils.logging import logger
+from loguru import logger
 from engine.base.agents import __all__ as base_agents
 
 class AgentLoaderError(Exception):

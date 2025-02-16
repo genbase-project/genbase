@@ -1,14 +1,14 @@
 [project]
 name = "engine"
 version = "0.1.0"
-description = "Default template for PDM package"
+description = "Genbase Engine"
 authors = [
     {name = "Utkarsh Kanwat", email = "utkarshkanwat@gmail.com"},
 ]
 
 
 
-dependencies = ["GitPython>=3.1.44", "pydantic>=2.10.5", "whoosh>=2.7.4", "fastapi>=0.115.6", "uvicorn>=0.34.0", "python-multipart>=0.0.20", "networkx>=3.4.2", "PyYAML>=6.0.2", "litellm>=1.58.4", "python-dotenv>=1.0.1", "RestrictedPython>=7.4", "cloudpickle>=3.1.1", "SQLAlchemy>=2.0.37", "psycopg2-binary>=2.9.10", "alembic>=1.14.1", "aider-install>=0.1.3", "bigtree>=0.23.1", "sentence-transformers>=3.4.0", "faiss-cpu>=1.9.0.post1", "httpx>=0.27.2"]
+dependencies = ["GitPython>=3.1.44", "pydantic>=2.10.5", "whoosh>=2.7.4", "fastapi>=0.115.6", "uvicorn>=0.34.0", "python-multipart>=0.0.20", "networkx>=3.4.2", "PyYAML>=6.0.2", "litellm>=1.58.4", "python-dotenv>=1.0.1", "RestrictedPython>=7.4", "cloudpickle>=3.1.1", "SQLAlchemy>=2.0.37", "psycopg2-binary>=2.9.10", "alembic>=1.14.1", "bigtree>=0.23.1", "sentence-transformers>=3.4.0", "faiss-cpu>=1.9.0.post1", "httpx>=0.27.2", "loguru>=0.7.3", "diff-match-patch>=20241021", "xmltodict>=0.14.2", "docker>=7.1.0"]
 requires-python = "==3.12.*"
 readme = "README.md"
 license = {text = "MIT"}

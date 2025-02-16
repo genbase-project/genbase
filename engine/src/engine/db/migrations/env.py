@@ -1,11 +1,14 @@
+import os
 import sys
 from pathlib import Path
 from logging.config import fileConfig
 
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+load_dotenv()
 
 # Add src to Python path
 src_path = Path(__file__).parent.parent.parent.parent.parent / "src"
@@ -25,7 +28,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
+    url = config.get_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
     context.configure(
         url=url,
         target_metadata=target_metadata,

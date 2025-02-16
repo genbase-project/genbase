@@ -7901,3 +7901,5 @@ https://api.openai.com/v1/ \
 2025-02-07 16:23:46,491 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
 2025-02-07 16:23:46,491 - LiteLLM - DEBUG - completion_response response ms: None 
 2025-02-07 16:23:46,491 - LiteLLM - DEBUG - Logging Details LiteLLM-Success Call: Cache_hit=None
+2025-02-13 15:53:55,313 - asyncio - DEBUG - Using selector: EpollSelector
+2025-02-13 15:54:27,863 - asyncio - DEBUG - Using selector: EpollSelector

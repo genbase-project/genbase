@@ -1,8 +1,8 @@
 from datetime import datetime, UTC
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, PrimaryKeyConstraint, String, Text, UniqueConstraint, text
+from sqlalchemy import JSON, UUID, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -30,16 +30,18 @@ class ChatHistory(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True)
     module_id: Mapped[str] = mapped_column(String, nullable=False)
-    section: Mapped[str] = mapped_column(String, nullable=False)
+    workflow: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     message_type: Mapped[str] = mapped_column(String, nullable=False, default="text")
-    tool_data: Mapped[Optional[Dict]] = mapped_column(JSON, nullable=True)
+    tool_calls: Mapped[Optional[List]] = mapped_column(JSON, nullable=True)
     session_id: Mapped[str] = mapped_column(String, nullable=False, default=lambda: str(uuid.UUID(int=0)))
+    tool_call_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     
     __table_args__ = (
-        UniqueConstraint('module_id', 'section', 'timestamp', 'session_id'),
+        UniqueConstraint('module_id', 'workflow', 'timestamp', 'session_id'),
     )
 
 # From modules, project_module_mappings, and module_relations tables in module.py
@@ -86,6 +88,49 @@ class Module(Base):
         back_populates="module", 
         cascade="all, delete-orphan"
     )
+    workflow_stores: Mapped[List["WorkflowStore"]] = relationship(
+        back_populates="module",
+        cascade="all, delete-orphan"
+    )
+
+
+
+class WorkflowStore(Base):
+    """Store for workflow-specific data"""
+    __tablename__ = "workflow_stores"
+    
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), 
+        primary_key=True, 
+        default=uuid.uuid4
+    )
+    module_id: Mapped[str] = mapped_column(
+        String, 
+        ForeignKey('modules.module_id', ondelete='CASCADE'),  # This line is crucial
+        nullable=False
+    )
+
+    workflow: Mapped[str] = mapped_column(String, nullable=False)
+    collection: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[Dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, 
+        nullable=False, 
+        server_default=text('CURRENT_TIMESTAMP')
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=text('CURRENT_TIMESTAMP'),
+        onupdate=text('CURRENT_TIMESTAMP')
+    )
+    # Add relationship to Module
+    module: Mapped["Module"] = relationship(back_populates="workflow_stores")
+
+    __table_args__ = (
+        Index('idx_workflow_store_lookup', 'module_id', 'workflow', 'collection'),
+    )
+
 
 
 class ProjectModuleMapping(Base):
@@ -175,8 +220,7 @@ class WorkflowStatus(Base):
 
 
 
-# Create indexes (these will be created by Alembic)
-from sqlalchemy import Index
+
 
 # Index for chat_history
-Index('idx_module_section', ChatHistory.module_id, ChatHistory.section)
+Index('idx_module_workflow', ChatHistory.module_id, ChatHistory.workflow)

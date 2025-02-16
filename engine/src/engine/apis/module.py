@@ -11,7 +11,7 @@ from engine.services.core.module import (
     ModuleService,
     RelationType,
 )
-from engine.utils.logging import logger
+from loguru import logger
 
 
 class CreateModuleRequest(BaseModel):

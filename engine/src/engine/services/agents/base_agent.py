@@ -1,7 +1,13 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+import re
+from typing import Any, Dict, List, Optional, Tuple
 import json
+import uuid
+import xml.etree.ElementTree as ET
+import xmltodict
+from litellm import ChatCompletionMessageToolCall, Choices
 from engine.services.core.kit import KitConfig
 from engine.services.execution.action import FunctionMetadata
 from engine.services.execution.model import ModelService
@@ -15,7 +21,21 @@ from engine.services.execution.workflow import (
 )
 from engine.services.agents.chat_history import ChatHistoryManager
 from engine.services.core.module import ModuleService, RelationType
-from engine.utils.logging import logger
+from engine.services.execution.workflow_store import WorkflowStoreInfo, WorkflowStoreRecord, WorkflowStoreService
+from engine.services.storage.repository import RepoService
+from engine.services.agents.agent_utils import AgentUtils
+from loguru import logger
+from dataclasses import dataclass
+from typing import Optional, List, Dict
+
+@dataclass
+class GimlResponse:
+    """Structured response for GIML elements"""
+    id: str                  # ID of the GIML element
+    giml_type: str          # Type of GIML element (select, code_diff, etc)
+    response_value: Optional[str]  # User's response value if provided
+    structured_giml: Dict    # Full GIML structure as dictionary
+
 
 @dataclass
 class AgentServices:
@@ -24,6 +44,7 @@ class AgentServices:
     workflow_service: WorkflowService  # For workflow execution
     module_service: ModuleService   # For module management
     state_service: StateService     # For agent state management
+    repo_service: RepoService       # For repository operations
 
 @dataclass
 class AgentContext:
@@ -41,38 +62,79 @@ class BaseAgent(ABC):
         self.services = services
         self.history_manager = ChatHistoryManager()
         self.context: Optional[AgentContext] = None
-        self.tag_elements = self._get_tag_elements()
+        self.tag_elements = self.get_giml()
         self.tools: List[Dict[str, Any]] = []
         self.system_prompt: Optional[str] = None
+        self._utils: Optional[AgentUtils] = None
 
-    def _get_tag_elements(self) -> Dict[str, str]:
-        """Get XML element templates and descriptions"""
+    @property
+    def utils(self) -> AgentUtils:
+        """Get agent utils instance for current module and workflow context"""
+        if not self.context:
+            raise ValueError("No active context - utils cannot be accessed")
+        if not self._utils or self._utils.module_id != self.context.module_id or self._utils.workflow != self.context.workflow:
+            self._utils = AgentUtils(
+                self.services.module_service,
+                self.services.repo_service,
+                self.context.module_id,
+                self.context.workflow
+            )
+        return self._utils
+
+    def get_giml(self) -> Dict[str, Dict[str, Any]]:
+        """Get GIML (Generative Interface Markup Language) element schemas and descriptions"""
         return {
-            "user_prompt":{"format": """
-<user_prompt>
-<question>
-Your question here
-</question>
-<options>
-<option description="Description of what this option means">Option text</option>
-</options>
-</user_prompt>""",
-"use": "Prompt the user with a question and multiple choice options"}
-
-,
-            
-            "code_change": {"format":"""
-<code_change file="path/to/file">
-<original>
-Original code to replace
-</original>
-<updated>
-Updated code
-</updated>
-<description>
-Explanation of the change
-</description>
-</code_change>""", "use":"Describe a code change with original and updated code"},
+            "select": {
+                "format": """
+    <giml>
+        <label  id="<unique id>">Your question here</label>
+        <select id="<unique id>">
+                <item description="Description of what this option means">Option text1</item>
+                <item description="Description of what this second option means">Option text2</item>
+                ....
+        </select>
+    </giml>""",
+                "use": "Prompt the user with a question and multiple choice options",
+                "schema": {
+                    "children": {
+                        "label": {
+                            "attributes": ["id"],
+                            "type": "text"
+                        },
+                        "select": {
+                            "attributes": ["id"],
+                            "children": {
+                                "item": {
+                                    "attributes": ["description"],
+                                    "type": "text",
+                                    "multiple": True
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "code_diff": {
+                "format": """
+    <giml>
+        <code file="path/to/file" id="<unique id>">
+            <original>Original code block</original>
+            <updated>Updated code block</updated>
+        </code>
+    </giml>""",
+                "use": "Show code changes with original and updated versions",
+                "schema": {
+                    "children": {
+                        "code": {
+                            "attributes": ["file", "id"],
+                            "children": {
+                                "original": {"type": "text"},
+                                "updated": {"type": "text"}
+                            }
+                        }
+                    }
+                }
+            }
         }
 
     async def build_context(
@@ -108,13 +170,13 @@ Explanation of the change
             self.context.workflow
         )
 
-        if action_names is None:  # Include all actions
-            tools = [
+        if action_names is None:
+            tools: List[EnhancedWorkflowAction] = [
                 {
                     "type": "function",
                     "function": {
-                        "name": action.name,
-                        "description": action.description,
+                        "name": action.action.name,
+                        "description": action.action.description,
                         "parameters": action.metadata.parameters if action.metadata else {}
                     }
                 }
@@ -125,13 +187,13 @@ Explanation of the change
                 {
                     "type": "function",
                     "function": {
-                        "name": action.name,
-                        "description": action.description,
+                        "name": action.action.name,
+                        "description": action.action.description,
                         "parameters": action.metadata.parameters if action.metadata else {}
                     }
                 }
                 for action in workflow_data.actions
-                if action.name in action_names
+                if action.action.name in action_names
             ]
 
         # Add tool descriptions to prompt
@@ -171,7 +233,7 @@ Explanation of the change
         role: str,
         content: str,
         message_type: str = "text", 
-        tools_info: Optional[List[Dict[str, Any]]] = None,
+        tool_calls: Optional[List[ChatCompletionMessageToolCall]] = None,
         tool_call_id: Optional[str] = None,
         tool_name: Optional[str] = None,
     ):
@@ -189,23 +251,16 @@ Explanation of the change
         if not self.context:
             raise ValueError("No active context")
 
-        message = {
-            "role": role,
-            "content": content
-        }
 
-        if tool_call_id:
-            message["tool_call_id"] = tool_call_id
-        if tool_name:
-            message["name"] = tool_name
-        
         self.history_manager.add_to_history(
             module_id=self.context.module_id,
             workflow=self.context.workflow,
             role=role,
             content=content,
+            tool_call_id=tool_call_id,
+            name=tool_name,
             message_type=message_type,
-            tool_data=tools_info,
+            tool_calls=tool_calls if tool_calls else None,
             session_id=self.context.session_id
         )
 
@@ -214,10 +269,39 @@ Explanation of the change
         if not self.context:
             raise ValueError("No active context")
             
-        return self.history_manager.get_chat_history(
+        chat_history = self.history_manager.get_chat_history(
             module_id=self.context.module_id,
             workflow=self.context.workflow,
             session_id=self.context.session_id
+        )
+        # Select only few attributes: role, content(optional), tool_call_id(optional), name(optional), tool calls(optional)
+        formatted_history = []
+        for msg in chat_history:
+            formatted_msg = {k: v for k, v in msg.items() if k in ["role", "content", "tool_call_id", "name", "tool_calls"]}
+            formatted_history.append(formatted_msg)
+        return formatted_history
+
+    def get_last_assistant_message(self, return_json: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        Get the last message from the assistant in chat history
+        
+        Args:
+            return_json: Whether to return tool calls as JSON rather than model instances
+            
+        Returns:
+            Last assistant message as a dictionary, or None if no assistant messages found
+            
+        Raises:
+            ValueError: If no active context
+        """
+        if not self.context:
+            raise ValueError("No active context")
+            
+        return self.history_manager.get_last_assistant_message(
+            module_id=self.context.module_id,
+            workflow=self.context.workflow,
+            session_id=self.context.session_id,
+            return_json=return_json
         )
 
     async def execute_workflow_action(
@@ -233,13 +317,10 @@ Explanation of the change
             action_info = ActionInfo(
                 module_id=self.context.module_id,
                 workflow=self.context.workflow,
-                action_path="",  # Will be filled by workflow service
                 name=action_name
             )
 
-            result: WorkflowExecutionResult = self.services.workflow_service.execute_workflow_action(
-                module_id=self.context.module_id,
-                workflow=self.context.workflow,
+            result = self.services.workflow_service.execute_workflow_action(
                 action_info=action_info,
                 parameters=parameters
             )
@@ -254,6 +335,9 @@ Explanation of the change
         messages: List[Dict[str, str]],
         stream: bool = False,
         tool_choice: Optional[str] = "auto",
+        save_messages: bool = True,
+        process_response: bool = True,
+        include_history: bool = True,
         **kwargs
     ):
         """Wrapper for model service chat completion that handles tools and history"""
@@ -262,15 +346,25 @@ Explanation of the change
                 raise ValueError("No active context")
 
             # Get current chat history
-            history = self.get_chat_history()
+            history = []
+            if include_history:
+                history = self.get_chat_history()
 
             # Always include system message first if we have one
             all_messages = []
             if self.system_prompt:
                 all_messages.append({"role": "system", "content": self.system_prompt})
+
+            if save_messages:
+                for message in messages:
+                    # Add user message to history
+                    self.add_to_history(message["role"], message["content"])
             
             # Add history and new messages
             all_messages.extend(history + messages)
+
+            logger.debug(f"Chat completion messages: {all_messages}")
+            logger.debug(f"Chat completion tools: {self.tools}")
             
             # Execute chat completion with current tools
             response = await self.services.model_service.chat_completion(
@@ -280,7 +374,69 @@ Explanation of the change
                 tool_choice=tool_choice if self.tools else None,
                 **kwargs
             )
+            logger.debug(f"Chat completion response: {response}")
+
+            if process_response:
+                # Add response to history
+                # check if response has tool calls
+                assistant_message = response.choices[0].message
+                
+                if hasattr(assistant_message, "tool_calls") and assistant_message.tool_calls:
+                    # Add assistant message with tool calls info
+                    self.add_to_history(
+                        "assistant",
+                        None,
+                        message_type="tool_calls",
+                        tool_calls=assistant_message.tool_calls
+                    )
+
+                    for tool_call in assistant_message.tool_calls:
+                        try:
+                            # Parse parameters
+                            parameters = json.loads(tool_call.function.arguments)
+
+                            # Execute the workflow action
+                            result = await self.execute_workflow_action(
+                                tool_call.function.name,
+                                parameters
+                            )
+
+                            # Add to history with tool call ID
+                            self.add_to_history(
+                                role="tool",
+                                content=json.dumps(result),
+                                message_type="tool_result",
+                                tool_call_id=tool_call.id,
+                                tool_name=tool_call.function.name
+                            )
+
+                        except Exception as e:
+                            error_msg = str(e)
+                            logger.error(f"Error executing tool {tool_call.function.name}: {error_msg}")
+
+
+
+
+
+
+
+
+
+
+                elif assistant_message.content:
+                    # Add regular assistant message to history
+                   self.add_to_history("assistant", assistant_message.content)
+
             
+
+
+
+
+
+
+
+
+
             return response
         except Exception as e:
             logger.error(f"Chat completion failed: {str(e)}")
@@ -295,12 +451,14 @@ Explanation of the change
                 context.module_id,
                 context.workflow
             )
-            
-            # Add user input to history
-            self.add_to_history("user", context.user_input)
 
+            # Get responses
+            responses = self.get_response_values(context.user_input)
+
+            logger.debug(f"Responses: {responses}")
+            
             # Process workflow
-            result = await self.process_workflow(context, workflow_data)
+            result = await self.process_workflow(context, workflow_data, responses)
 
             return result
         except Exception as e:
@@ -309,6 +467,114 @@ Explanation of the change
         finally:
             self.context = None  # Clear context
 
+
+    def get_response_values(self, response_text: str) -> Optional[List[GimlResponse]]:
+        """
+        Extract GIML elements from last assistant message and match with responses
+        
+        Args:
+            response_text: Text containing responses in GIML format
+                Expected format:
+                <giml>
+                    <responses>
+                        <response id="corresponding-id" value="Yes"/>
+                    </responses>
+                </giml>
+                        
+        Returns:
+            List of GimlResponse objects containing:
+            - id: ID of the GIML element
+            - giml_type: Type of GIML element (select, code_diff, etc)
+            - response_value: User's response value if provided
+            - structured_giml: Full GIML structure as dictionary
+
+        Example:
+            For assistant message with multiple GIML blocks:
+                Some text here
+                <giml>
+                    <label id="q1">First question</label>
+                    <select id="s1">
+                        <item description="desc1">Yes</item>
+                        <item description="desc2">No</item>
+                    </select>
+                </giml>
+                More text here
+                <giml>
+                    <label id="q2">Second question</label>
+                    <select id="s2">
+                        <item description="desc3">Option A</item>
+                        <item description="desc4">Option B</item>
+                    </select>
+                </giml>
+        """
+        try:
+            # Parse response GIML
+            response_root = ET.fromstring(response_text)
+            if response_root.tag != 'giml':
+                return None
+
+            # Get all response id/value pairs
+            responses = {}
+            for resp in response_root.findall(".//response"):
+                resp_id = resp.get("id")
+                resp_value = resp.get("value")
+                if resp_id and resp_value:
+                    responses[resp_id] = resp_value
+
+            # Get assistant message
+            message = self.get_last_assistant_message()
+            if not message or 'content' not in message:
+                return None
+
+            result = []
+            
+            # Find all GIML blocks in the message
+            message_content = message['content']
+            giml_blocks = re.findall(r'<giml>.*?</giml>', message_content, re.DOTALL)
+            
+            for giml_block in giml_blocks:
+                try:
+                    # Parse each GIML block
+                    giml_root = ET.fromstring(giml_block)
+                    giml_dict = xmltodict.parse(giml_block)
+
+                    # Check each GIML type we support
+                    for giml_type in self.get_giml().keys():
+                        for elem in giml_root.findall(f".//{giml_type}"):
+                            elem_id = elem.get("id")
+                            if elem_id:
+                                result.append(GimlResponse(
+                                    id=elem_id,
+                                    giml_type=giml_type,
+                                    response_value=responses.get(elem_id),
+                                    structured_giml=giml_dict
+                                ))
+
+                except ET.ParseError:
+                    logger.warning(f"Failed to parse GIML block: {giml_block}")
+                    continue
+
+            return result if result else None
+
+        except ET.ParseError:
+            return None
+        except Exception as e:
+            logger.error(f"Error processing GIML: {str(e)}")
+            return None
+
+
+    def get_store(self, collection: str) -> Optional[str]:
+        """Get a stored value by key"""
+        if not self.context:
+            raise ValueError("No active context")
+        return   WorkflowStoreService(
+        storeInfo=WorkflowStoreInfo(
+            module_id=self.context.module_id,
+            workflow=self.context.workflow,
+            collection=collection
+        )
+    )
+
     @property
     @abstractmethod
     def agent_type(self) -> str:
@@ -316,10 +582,11 @@ Explanation of the change
         pass
 
     @abstractmethod
-    async def process_workflow(
+    async def   process_workflow(
         self,
         context: AgentContext,
-        workflow_data: WorkflowMetadataResult
+        workflow_data: WorkflowMetadataResult,
+        responses: Optional[List[GimlResponse]] = None
     ) -> Dict[str, Any]:
         """Process a workflow request"""
         pass

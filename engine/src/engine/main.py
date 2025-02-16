@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 import traceback
 from pathlib import Path
 from typing import Any, Dict
@@ -11,6 +12,7 @@ from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from engine.apis.action import ActionRouter
@@ -42,24 +44,59 @@ from engine.services.execution.workflow import WorkflowService
 
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('app.log')
-    ]
-)
 
-logger = logging.getLogger(__name__)
 
 # Basic auth configuration
 security = HTTPBasic()
 
+class LogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        
+        try:
+            logger.info(f"{request.method} {request.url.path}")
+            
+            # Try to log request body for debugging if needed
+            if request.method in ["POST", "PUT", "PATCH"]:
+                try:
+                    body = await request.body()
+                    logger.debug(f"Request body: {body.decode()}")
+                except:
+                    pass
+                    
+            response = await call_next(request)
+            
+            process_time = time.time() - start_time
+            logger.info(f"Completed {request.method} {request.url.path} in {process_time:.2f}s")
+            
+            return response
+            
+        except Exception as e:
+            # Enhanced error logging
+            logger.error(f"""
+REQUEST FAILED!
+URL: {request.url.path}
+Method: {request.method}
+Error: {str(e)}
+Stack Trace:
+{traceback.format_exc()}
+            """)
+            
+            # Return error response with stack trace in development
+            if os.getenv("DEBUG"):
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "error": str(e),
+                        "stack_trace": traceback.format_exc().split('\n')
+                    }
+                )
+            raise
+
+
 def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
-    correct_username = os.getenv("API_USERNAME")
-    correct_password = os.getenv("API_PASSWORD")
+    correct_username = os.getenv("ADMIN_USERNAME")
+    correct_password = os.getenv("ADMIN_PASSWORD")
     
     if not secrets.compare_digest(credentials.username, correct_username) or \
        not secrets.compare_digest(credentials.password, correct_password):
@@ -70,34 +107,13 @@ def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
-class ErrorLoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: Any) -> Any:
-        try:
-            return await call_next(request)
-        except Exception as e:
-            logger.error(
-                f"Exception occurred: {str(e)}\n"
-                f"Path: {request.url.path}\n"
-                f"Method: {request.method}\n"
-                f"Stacktrace:\n{traceback.format_exc()}"
-            )
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "detail": str(e),
-                    "stacktrace": traceback.format_exc().split("\n")
-                }
-            )
-
 # Create FastAPI app with exception handlers
 app = FastAPI(
     title="Repository and Module Management API",
     debug=True,  # Enable debug mode for detailed error responses
     dependencies=[Depends(get_current_user)]  # Apply basic auth to all routes
 )
-
-# Add error logging middleware
-app.add_middleware(ErrorLoggingMiddleware)
+app.add_middleware(LogMiddleware)
 
 # Configuration
 BASE_DATA_DIR = Path(os.getenv("DATA_DIR"))
@@ -208,7 +224,8 @@ agent_services = AgentServices(
     model_service=model_service,
     workflow_service=workflow_service,
     state_service=state_service,
-    module_service=module_service
+    module_service=module_service,
+    repo_service=repo_service
 )
 
 chat_router = ChatRouter(

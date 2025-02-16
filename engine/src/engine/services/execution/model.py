@@ -4,7 +4,7 @@ import os
 from litellm import completion
 import litellm
 
-from engine.utils.logging import logger
+from loguru import logger
 
 litellm.suppress_debug_info = True
 

@@ -21,7 +21,7 @@ from engine.services.storage.repository import (
 from engine.services.execution.state import StateService
 from engine.services.core.kit import KitService, KitConfig
 from engine.utils.file import extract_zip
-from engine.utils.logging import logger
+from loguru import logger
 
 
 class RelationType(Enum):

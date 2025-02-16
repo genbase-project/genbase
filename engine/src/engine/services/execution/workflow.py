@@ -12,13 +12,12 @@ from engine.services.core.kit import KitConfig, KitService
 from engine.services.execution.action import ActionError, ActionService, FunctionMetadata
 from engine.services.core.module import ModuleError, ModuleService, RelationType
 from engine.services.storage.resource import ResourceService
-from engine.utils.logging import logger
-from engine.services.core.kit import WorkflowAction
+from loguru import logger
 from engine.services.core.kit import WorkflowAction
 
-class EnhancedWorkflowAction(WorkflowAction, BaseModel):
-    """Enhanced workflow action that extends WorkflowAction with additional metadata"""
-    # Additional fields beyond WorkflowAction
+class EnhancedWorkflowAction(BaseModel):
+    """Enhanced workflow action that wraps WorkflowAction with additional metadata"""
+    action: WorkflowAction
     module_id: str
     workflow: Optional[str] = None  # Workflow name if part of workflow
     metadata: Optional[FunctionMetadata] = None
@@ -26,14 +25,9 @@ class EnhancedWorkflowAction(WorkflowAction, BaseModel):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation"""
+        action_dict = self.action.to_dict()
         return {
-            # Base WorkflowAction fields
-            "path": self.path,
-            "name": self.name,
-            "description": self.description,
-            "full_file_path": self.full_file_path,
-            "function_name": self.function_name,
-            # Additional fields
+            "action":action_dict,
             "module_id": self.module_id,
             "workflow": self.workflow,
             "metadata": self.metadata.dict() if self.metadata else None,
@@ -51,7 +45,6 @@ class ActionInfo:
     """Stores information about an action"""
     module_id: str
     workflow: str
-    action_path: str
     name: str
     description: Optional[str] = None
     
@@ -140,18 +133,13 @@ class WorkflowService:
                         function_name=action.function_name
                     )
                     steps_metadata.append(EnhancedWorkflowAction(
+                        action=action,
                         module_id=module_id,
                         workflow=workflow,
-                        metadata=metadata,
-                       **action.dict()
+                        metadata=metadata
                     ))
 
-                    # steps_metadata.append({
-                    #     "name": action.name,
-                    #     "description": action.description,
-                    #     "action": action.path,
-                    #     "metadata": metadata
-                    # })
+
                 except (ActionError, WorkflowError) as e:
                     logger.error(f"Failed to get metadata for action {action.name}: {str(e)}")
                     # Add error information but continue processing other actions
@@ -181,7 +169,7 @@ class WorkflowService:
                 relation_type=RelationType.CONTEXT
             )
 
-            all_steps_metadata = []
+            steps_metadata: List[EnhancedWorkflowAction] = []
             all_requirements = set()
 
             for module in context_modules:
@@ -206,13 +194,12 @@ class WorkflowService:
                                 function_name=action.function_name
                             )
 
-                            all_steps_metadata.append({
-                                "name": action.name,
-                                "description": action.description,
-                                "action": action.path,
-                                "metadata": metadata,
-                                "module_id": module.module_id  # Include source module ID
-                            })
+                            steps_metadata.append(EnhancedWorkflowAction(
+                                action=action,
+                                module_id=module.module_id,
+                                workflow=None,  # Shared actions don't belong to a workflow
+                                metadata=metadata
+                            ))
                         except (ActionError, WorkflowError) as e:
                             logger.error(f"Failed to get metadata for shared action {action.name} in module {module.module_id}: {str(e)}")
 
@@ -222,7 +209,7 @@ class WorkflowService:
 
             return WorkflowMetadataResult(
                 instructions="",  # Shared actions don't have instructions
-                actions=all_steps_metadata,
+                actions=steps_metadata,
                 requirements=list(all_requirements)  # Convert set back to list
             )
 
@@ -280,11 +267,9 @@ class WorkflowService:
 
     def execute_workflow_action(
         self,
-        module_id: str,
-        workflow: str,
         action_info: ActionInfo,
         parameters: Dict[str, Any]
-    ) -> WorkflowExecutionResult:
+    ) -> Any:
         """Execute a workflow action with full context."""
         try:
             module_path = self.module_service.get_module_path(action_info.module_id)
@@ -315,7 +300,9 @@ class WorkflowService:
 
             # Extract file info from pre-resolved paths
             actions_dir = str(module_path / "actions")
-            file_path = str(Path(action.path))
+            file_path = str(Path(action.path.split(":")[0]+".py"))
+
+            logger.info(f"Folder Path: {actions_dir}, File Path: {file_path}, Function Name: {action.function_name}, Parameters: {parameters}, Requirements: {kit_config.dependencies}, Env Vars: {module_metadata.env_vars}, Repo Name: {module_metadata.repo_name}")
 
             # Execute function using resolved paths
             result = self.action_service.execute_function(
@@ -328,11 +315,7 @@ class WorkflowService:
                 repo_name=module_metadata.repo_name
             )
 
-            return WorkflowExecutionResult(
-                status="success",
-                message=f"Successfully executed {action_info.name}",
-                result=result
-            )
+            return result
 
         except (ModuleError, ActionError, WorkflowError) as e:
             raise WorkflowError(str(e))

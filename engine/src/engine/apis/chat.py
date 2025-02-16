@@ -11,7 +11,7 @@ from engine.config.workflow_config import WorkflowConfigService
 
 class WorkflowExecuteRequest(BaseModel):
     """Request model for workflow execution"""
-    section: str
+    workflow: str
     input: str 
     session_id: Optional[str] = "00000000-0000-0000-0000-000000000000"  # Default UUID(0)
 
@@ -23,13 +23,12 @@ class WorkflowResponse(BaseModel):
 class HistoryResponse(BaseModel):
     """Response model for history"""
     history: List[Dict[str, Any]]
-    section: str
+    workflow: str
     module_id: str
 
 class StatusResponse(BaseModel):
     """Response model for module status"""
     module_id: str
-    stage: str
     state: str
     last_updated: str
 
@@ -94,14 +93,14 @@ class ChatRouter:
         """Handle workflow execution request"""
         try:
             # Get appropriate agent
-            agent = self._get_agent_for_workflow(request.section, module_id)
+            agent = self._get_agent_for_workflow(request.workflow, module_id)
             
             # Create context - force string session ID
             session_id = request.session_id or "00000000-0000-0000-0000-000000000000"
             
             context = AgentContext(
                 module_id=module_id,
-                workflow=request.section,
+                workflow=request.workflow,
                 user_input=request.input,
                 session_id=session_id
             )
@@ -122,7 +121,7 @@ class ChatRouter:
     async def _get_workflow_history(
         self,
         module_id: str = Path(..., description="Module ID"),
-        workflow: str = Path(..., description="Workflow (initialize/maintain/remove/edit)"),
+        workflow: str = Path(..., description="Workflow"),
         session_id: Optional[str] = Query("00000000-0000-0000-0000-000000000000", description="Optional session ID")
     ) -> HistoryResponse:
         """Get workflow history"""
@@ -138,7 +137,7 @@ class ChatRouter:
             
             return HistoryResponse(
                 history=history,
-                section=workflow,
+                workflow=workflow,
                 module_id=module_id
             )
             
@@ -153,12 +152,11 @@ class ChatRouter:
     ) -> StatusResponse:
         """Get module status"""
         try:
-            stage, state = self.services.stage_state_service.get_status(module_id)
-            last_updated = self.services.stage_state_service.get_last_updated(module_id)
+            stage, state = self.services.state_service.get_status(module_id)
+            last_updated = self.services.state_service.get_last_updated(module_id)
             
             return StatusResponse(
                 module_id=module_id,
-                stage=stage.value,
                 state=state.value,
                 last_updated=last_updated
             )
@@ -170,12 +168,6 @@ class ChatRouter:
 
     def _setup_routes(self):
         """Setup API routes"""
-        # Update parameter description to clarify session_id usage
-        descriptions = {
-            "module_id": "Module ID",
-            "section": "Workflow section (initialize/maintain/remove/edit)",
-            "session_id": "Optional session ID. Defaults to base session if not provided."
-        }
         
         # Use full paths with /chat prefix since it's not in router prefix
         self.router.add_api_route(

@@ -138,6 +138,13 @@ class WorkspaceConfig:
     files: List[WorkspaceFile] = field(default_factory=list)
     ignore: List[str] = field(default_factory=list)
 
+
+@dataclass
+class Port:
+    """Container Port"""
+    port: int
+    name: Optional[str]
+
 @dataclass
 class KitConfig:
     """Complete kit configuration"""
@@ -147,13 +154,14 @@ class KitConfig:
     name: str
     owner: str
     environment: List[EnvironmentVariable]
-    image: str = None
     agents: List[Agent]
     instructions: Instructions
     workflows: Dict[str, Workflow]
     shared_actions: List[WorkflowAction]
     dependencies: List[str]
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
+    image: str = None
+    ports: List[Port] = []
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'KitConfig':
@@ -188,7 +196,8 @@ class KitConfig:
             workspace=WorkspaceConfig(
                 files=[WorkspaceFile(**f) for f in data.get('workspace', {}).get('files', [])],
                 ignore=data.get('workspace', {}).get('ignore', [])
-            )
+            ),
+            ports=[Port(**p) for p in data.get('ports', [])]
         )
 
 

@@ -1,4 +1,5 @@
 from datetime import datetime, UTC
+import enum
 from typing import Any, Dict, List, Optional
 import uuid
 
@@ -92,7 +93,37 @@ class Module(Base):
         back_populates="module",
         cascade="all, delete-orphan"
     )
+    vector_store_configs: Mapped[List["VectorStoreConfig"]] = relationship(
+        back_populates="module",
+        cascade="all, delete-orphan"
+    )
 
+
+
+
+class StoreType(enum.Enum):
+    CHROMA = "chroma"
+    PINECONE = "pinecone"
+    QDRANT = "qdrant"
+    WEAVIATE = "weaviate"
+    PGVECTOR = "pgvector"
+    ELASTICSEARCH = "elasticsearch"
+    OPENSEARCH = "opensearch"
+
+class VectorStoreConfig(Base):
+    """Stores vector store configuration for modules"""
+    __tablename__ = "vector_store_configs"
+    
+    module_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id', ondelete='CASCADE'), primary_key=True)
+    store_name: Mapped[str] = mapped_column(String, primary_key=True)
+    store_type: Mapped[StoreType] = mapped_column(Enum(StoreType), nullable=False)
+    embedding_dim: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    config: Mapped[Dict] = mapped_column(JSON, nullable=True)  # For any additional configuration
+    
+    # Relationship
+    module: Mapped["Module"] = relationship(back_populates="vector_store_configs")
 
 
 class WorkflowStore(Base):

@@ -42,7 +42,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          section: currentWorkflow,
+          workflow: currentWorkflow,
           input: text,
           session_id: currentSession
         })
@@ -80,7 +80,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          section: currentWorkflow,
+          workflow: currentWorkflow,
           input: response,
           session_id: currentSession
         })

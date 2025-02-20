@@ -1,160 +1,18 @@
 import ast
 import hashlib
 import json
-import os
-import subprocess
-import sys
-import venv
-import inspect
 from pathlib import Path
-from typing import Any, Dict, List, Set, Callable, Optional, Type, Union, get_args, get_origin, Literal
-from types import UnionType
-
+from typing import Any, Dict, List, Set, Callable, Optional
 import cloudpickle
-from pydantic import BaseModel, create_model
 
+from engine.services.core.kit import Port
+from engine.services.execution.function_parser import FunctionMetadata, FunctionParser
 from engine.services.storage.repository import RepoService
 from loguru import logger
 import docker
 import tempfile
 from docker.errors import DockerException
 
-class FunctionMetadata(BaseModel):
-    """Function metadata in OpenAI function calling format"""
-    name: str
-    description: str
-    parameters: Dict[str, Any]
-    is_async: bool
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert metadata to dictionary format"""
-        return {
-            "name": self.name,
-            "description": self.description, 
-            "parameters": self.parameters,
-            "is_async": self.is_async
-        }
-
-class FunctionParser(ast.NodeVisitor):
-    """AST parser to extract function information in OpenAI schema format"""
-    def __init__(self, function_name: str):
-        self.function_name = function_name
-        self.description = ""
-        self.parameters: Dict[str, Any] = {
-            "type": "object",
-            "properties": {},
-            "required": [],
-            "additionalProperties": False
-        }
-        self.found = False
-        self.is_async = False
-
-    def _get_type_schema(self, annotation) -> Dict[str, Any]:
-        """Convert Python type annotation to JSON schema"""
-        if annotation is None:
-            return {"type": "object"}
-
-        if isinstance(annotation, ast.Name):
-            type_map = {
-                "str": {"type": "string"},
-                "int": {"type": "integer"},
-                "float": {"type": "number"},
-                "bool": {"type": "boolean"},
-                "list": {"type": "array"},
-                "Dict": {"type": "object"},  # Handle Dict as a name directly
-                "dict": {"type": "object"},
-                "Any": {"type": "object"}
-            }
-            return type_map.get(annotation.id, {"type": "object"})
-
-        elif isinstance(annotation, ast.Subscript):
-            if isinstance(annotation.value, ast.Name):
-                if annotation.value.id == "Dict":
-                    # For Dict type, we specify it's an object that can have additional properties
-                    return {
-                        "type": "object",
-                        "additionalProperties": True
-                    }
-                elif annotation.value.id == "List":
-                    return {
-                        "type": "array",
-                        "items": self._get_type_schema(annotation.slice)
-                    }
-                elif annotation.value.id == "Tuple":
-                    # For tuples, represent as array with fixed items
-                    if isinstance(annotation.slice, ast.Tuple):
-                        return {
-                            "type": "array",
-                            "items": [self._get_type_schema(item) for item in annotation.slice.elts],
-                            "minItems": len(annotation.slice.elts),
-                            "maxItems": len(annotation.slice.elts)
-                        }
-                    else:
-                        return {"type": "array"}
-                elif annotation.value.id == "Optional":
-                    type_schema = self._get_type_schema(annotation.slice)
-                    if isinstance(type_schema["type"], list):
-                        if "null" not in type_schema["type"]:
-                            type_schema["type"].append("null")
-                    else:
-                        type_schema["type"] = [type_schema["type"], "null"]
-                    return type_schema
-                elif annotation.value.id == "Union":
-                    if isinstance(annotation.slice, ast.Tuple):
-                        types = []
-                        for elt in annotation.slice.elts:
-                            type_schema = self._get_type_schema(elt)
-                            if "type" in type_schema:
-                                if isinstance(type_schema["type"], list):
-                                    types.extend(type_schema["type"])
-                                else:
-                                    types.append(type_schema["type"])
-                        return {"type": list(set(types))} if types else {"type": "object"}
-        
-        # Default fallback
-        return {"type": "object"}
-        
-    def visit_FunctionDef(self, node: ast.FunctionDef):
-        """Visit a function definition"""
-        if node.name == self.function_name:
-            self.found = True
-            
-            # Get docstring
-            docstring = ast.get_docstring(node)
-            self.description = docstring or ""
-            
-            # Process parameters
-            for arg in node.args.args:
-                if arg.arg == 'self':  # Skip self parameter
-                    continue
-                    
-                # Get type annotation if available
-                annotation = arg.annotation
-                param_schema = self._get_type_schema(annotation)
-                
-                # Add description from docstring
-                if docstring:
-                    param_docs = [
-                        line.strip()
-                        for line in docstring.split("\n")
-                        if f":param {arg.arg}:" in line
-                    ]
-                    if param_docs:
-                        param_desc = param_docs[0].split(":", 2)[-1].strip()
-                        param_schema["description"] = param_desc
-
-                self.parameters["properties"][arg.arg] = param_schema
-                
-                # If no default value, parameter is required
-                defaults_offset = len(node.args.defaults)
-                args_offset = len(node.args.args) - defaults_offset
-                if node.args.args.index(arg) < args_offset:
-                    self.parameters["required"].append(arg.arg)
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        """Visit an async function definition"""
-        self.is_async = True
-        self.visit_FunctionDef(node)
 
 class ActionError(Exception):
     """Base exception for action errors"""
@@ -166,6 +24,47 @@ class ActionService:
         self.repo_service = repo_service
         self.docker_client = docker.from_env()
         self.cached_images = {}  # Cache for storing prepared images
+
+
+
+
+    def get_function_metadata(
+        self,
+        folder_path: str,
+        file_path: str,
+        function_name: str
+    ) -> FunctionMetadata:
+        """Get function metadata in OpenAI function calling format"""
+        logger.info(f"Getting metadata for function {function_name} in {file_path}")
+        
+        try:
+            full_path = Path(folder_path) / file_path
+            logger.debug(f"Full path: {full_path}")
+
+            # Read the source code
+            with open(full_path, 'r') as f:
+                source = f.read()
+
+            # Parse using AST
+            tree = ast.parse(source)
+            parser = FunctionParser(function_name)
+            parser.visit(tree)
+
+            if not parser.found:
+                raise ActionError(f"Function {function_name} not found in {file_path}")
+
+            return FunctionMetadata(
+                name=function_name,
+                description=parser.description,
+                parameters=parser.parameters,
+                is_async=parser.is_async
+            )
+
+        except Exception as e:
+            logger.error(f"Error analyzing function: {str(e)}")
+            raise ActionError(f"Error analyzing function: {str(e)}")
+
+
 
     def _get_cache_tag(self, base_image: str, requirements: List[str]) -> str:
         """Generate a unique tag for caching based on base image and requirements"""
@@ -217,48 +116,28 @@ class ActionService:
                     logger.error(f"Failed to create cached image: {e}")
                     raise
 
-    def execute_function(
-            self,
-            folder_path: str,
-            file_path: str,
-            function_name: str,
-            parameters: Dict[str, Any],
-            requirements: List[str],
-            env_vars: Dict[str, str],
-            repo_name: str,
-            base_image: str
-        ) -> Any:
-        """Execute a function in a Docker container using cached images"""
-        try:
-            # Get or create cached image
-            image_tag = self._prepare_image(base_image, requirements)
+
+    def _create_execution_script(
+        self,
+        env_vars: Dict[str, str],
+        is_file_based: bool = False,
+        file_path: str = None,
+        function_name: str = None
+    ) -> str:
+        """
+        Create the Python execution script for the Docker container.
+        
+        Args:
+            env_vars: Environment variables to set in the container
+            is_file_based: Whether the execution is for a file-based function
+            file_path: Path to the module file (only needed if is_file_based is True)
+            function_name: Name of the function to execute (only needed if is_file_based is True)
             
-            # Convert to absolute paths
-            repo_path = Path(self.repo_service.get_repo_path(repo_name)).resolve()
-            actions_path = Path(folder_path).resolve()
-            
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
-                
-                # Create execution script (no need for setup script anymore)
-                exec_script = f"""
-import sys
-import json
-import cloudpickle
-import os
-from pathlib import Path
-import logging
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-try:
-    # Set environment variables
-    env_vars = {env_vars}
-    for key, value in env_vars.items():
-        os.environ[key] = str(value)
-
+        Returns:
+            str: The Python script content
+        """
+        if is_file_based:
+            function_loading_code = f"""
     # Add paths to sys.path
     repo_path = Path('/repo')
     action_path = Path('/actions')
@@ -290,18 +169,45 @@ try:
         
     spec.loader.exec_module(module)
     
-    # Get and execute the function
+    # Get the function
     if not hasattr(module, '{function_name}'):
         raise AttributeError(f"Function {function_name} not found in {{module_file}}")
         
-    func = getattr(module, '{function_name}')
+    function = getattr(module, '{function_name}')
+"""
+        else:
+            function_loading_code = """
+    # Load the function from pickle
+    with open('/data/function.pkl', 'rb') as f:
+        function = cloudpickle.load(f)
+"""
+
+        return f"""
+import sys
+import json
+import cloudpickle
+import os
+from pathlib import Path
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+try:
+    # Set environment variables
+    env_vars = {env_vars}
+    for key, value in env_vars.items():
+        os.environ[key] = str(value)
+    
+{function_loading_code}
     
     # Load parameters
     with open('/data/params.json', 'r') as f:
         parameters = json.load(f)
     
-    # Execute
-    result = func(**parameters)
+    # Execute the function
+    result = function(**parameters)
     
     # Save result
     with open('/data/result.json', 'wb') as f:
@@ -313,195 +219,377 @@ except Exception as e:
         f.write(traceback.format_exc())
     raise
 """
-                # Write execution script and parameters
-                (temp_path / 'exec.py').write_text(exec_script)
-                with open(temp_path / 'params.json', 'w') as f:
-                    json.dump(parameters, f)
 
-                # Run in container using cached image
-                try:
-                    container = self.docker_client.containers.run(
-                        image_tag,  # Use cached image
-                        command=['python', '/data/exec.py'],  # No setup needed
-                        volumes={
-                            str(repo_path): {'bind': '/repo', 'mode': 'rw'},
-                            str(actions_path): {'bind': '/actions', 'mode': 'ro'},
-                            str(temp_path): {'bind': '/data', 'mode': 'rw'}
-                        },
-                        environment={
-                            **env_vars,
-                            'PYTHONUNBUFFERED': '1',
-                        },
-                        user=0,
-                        detach=True
-                    )
+    def _find_available_port(self, start_port: int) -> int:
+        """
+        Find an available port starting from the given port number.
+        
+        Args:
+            start_port: Initial port number to check
+            
+        Returns:
+            int: First available port number
+        """
+        import socket
+        
+        current_port = start_port
+        max_port = 65535
+        
+        while current_port <= max_port:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.bind(('', current_port))
+                sock.listen(1)
+                sock.close()
+                return current_port
+            except OSError:
+                current_port += 1
+            finally:
+                sock.close()
+        
+        raise ActionError(f"No available ports found starting from {start_port}")
 
-                    # Wait for container to finish and get logs
-                    result = container.wait()
-                    logs = container.logs().decode()
+    def _execute_in_container(
+        self,
+        image_tag: str,
+        temp_path: Path,
+        volumes: Dict[str, Dict[str, str]],
+        env_vars: Dict[str, str],
+        ports: Optional[List[Port]] = None
+    ) -> Any:
+        """
+        Execute the function in a Docker container and return the result.
+        
+        Args:
+            image_tag: Docker image tag to use
+            temp_path: Path to temporary directory containing execution files
+            volumes: Volume mappings for Docker container
+            env_vars: Environment variables for the container
+            ports: Optional list of Port objects defining ports to expose
+            
+        Returns:
+            Any: Result of the function execution
+            
+        Raises:
+            ActionError: If there's an error during execution
+        """
+        try:
+            # Convert ports to Docker port mapping format and find available ports
+            port_bindings = {}
+            port_env_vars = {}
+            
+            if ports:
+                for port in ports:
+                    # Find an available host port starting from the requested port
+                    host_port = self._find_available_port(port.port)
                     
-                    if result['StatusCode'] != 0:
-                        if (temp_path / 'error.txt').exists():
-                            error_msg = (temp_path / 'error.txt').read_text()
-                            raise ActionError(f"Function execution failed: {error_msg}")
-                        raise ActionError(f"Container execution failed: {logs}")
+                    # Map container port to available host port
+                    # Format: {container_port/protocol: (host_ip, host_port)}
+                    port_bindings[f"{port.port}/tcp"] = host_port
+                    
+                    # Add port mapping to environment variables so the function knows
+                    # which host ports were actually assigned
+                    port_env_vars[f"PORT_{port.name.upper()}"] = str(host_port)
+                    
+                    logger.info(f"Mapping container port {port.port} ({port.name}) to host port {host_port}")
 
-                    # Load result
-                    with open(temp_path / 'result.json', 'rb') as f:
-                        return cloudpickle.load(f)
+            container = self.docker_client.containers.run(
+                image_tag,
+                command=['python', '/data/exec.py'],
+                volumes=volumes,
+                environment={
+                    **env_vars,
+                    **port_env_vars,  # Add port mapping info to environment
+                    'PYTHONUNBUFFERED': '1'
+                },
+                user=0,
+                detach=True,
+                ports=port_bindings,  # Add port mappings
+                # Use bridge network mode with explicit port mappings
+                network_mode="bridge"
+            )
 
-                finally:
-                    # Cleanup container
-                    try:
-                        container.remove(force=True)
-                    except:
-                        pass
+            try:
+                # Wait for container to finish and get logs
+                result = container.wait()
+                logs = container.logs().decode()
+                
+                if result['StatusCode'] != 0:
+                    if (temp_path / 'error.txt').exists():
+                        error_msg = (temp_path / 'error.txt').read_text()
+                        raise ActionError(f"Function execution failed: {error_msg}")
+                    raise ActionError(f"Container execution failed: {logs}")
+
+                # Load result
+                with open(temp_path / 'result.json', 'rb') as f:
+                    return cloudpickle.load(f)
+
+            finally:
+                # Cleanup container
+                try:
+                    container.remove(force=True)
+                except:
+                    pass
 
         except DockerException as e:
             raise ActionError(f"Docker error: {str(e)}")
         except Exception as e:
             raise ActionError(f"Error executing function: {str(e)}")
 
-    def cleanup_cache(self):
-        """Remove all cached images"""
+    def execute_function(
+            self,
+            folder_path: str,
+            file_path: str,
+            function_name: str,
+            parameters: Dict[str, Any],
+            requirements: List[str],
+            env_vars: Dict[str, str],
+            repo_name: str,
+            base_image: str = "python:3.9-slim",
+            ports: Optional[List[Port]] = None
+        ) -> Any:
+        """Execute a function from a file in a Docker container using cached images"""
         try:
-            images = self.docker_client.images.list(filters={'reference': 'function-runner-*'})
-            for image in images:
-                self.docker_client.images.remove(image.id, force=True)
-            logger.info("Cleaned up all cached images")
+            # Get or create cached image
+            image_tag = self._prepare_image(base_image, requirements)
+            
+            # Convert to absolute paths
+            repo_path = Path(self.repo_service.get_repo_path(repo_name)).resolve()
+            actions_path = Path(folder_path).resolve()
+            
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # Create execution script
+                exec_script = self._create_execution_script(
+                    env_vars=env_vars,
+                    is_file_based=True,
+                    file_path=file_path,
+                    function_name=function_name
+                )
+                
+                # Write execution script and parameters
+                (temp_path / 'exec.py').write_text(exec_script)
+                with open(temp_path / 'params.json', 'w') as f:
+                    json.dump(parameters, f)
+
+                # Setup volumes
+                volumes = {
+                    str(repo_path): {'bind': '/repo', 'mode': 'rw'},
+                    str(actions_path): {'bind': '/actions', 'mode': 'ro'},
+                    str(temp_path): {'bind': '/data', 'mode': 'rw'}
+                }
+
+                return self._execute_in_container(
+                    image_tag=image_tag,
+                    temp_path=temp_path,
+                    volumes=volumes,
+                    env_vars=env_vars,
+                    ports=ports
+                )
+
         except Exception as e:
-            logger.error(f"Failed to cleanup cached images: {e}")
+            raise ActionError(f"Error executing function: {str(e)}")
 
+    def execute_direct_function(
+        self,
+        function: Callable,
+        parameters: Dict[str, Any],
+        requirements: List[str],
+        env_vars: Dict[str, str],
+        base_image: str = "python:3.9-slim"
+    ) -> Any:
+        """Execute a directly provided function in a Docker container using cached images"""
+        try:
+            # Get or create cached image
+            image_tag = self._prepare_image(base_image, requirements)
+            
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # Serialize the function using cloudpickle
+                with open(temp_path / 'function.pkl', 'wb') as f:
+                    cloudpickle.dump(function, f)
+                
+                # Create execution script
+                exec_script = self._create_execution_script(
+                    env_vars=env_vars,
+                    is_file_based=False
+                )
 
+                # Write execution script and parameters
+                (temp_path / 'exec.py').write_text(exec_script)
+                with open(temp_path / 'params.json', 'w') as f:
+                    json.dump(parameters, f)
 
+                # Setup volumes
+                volumes = {
+                    str(temp_path): {'bind': '/data', 'mode': 'rw'}
+                }
 
+                return self._execute_in_container(
+                    image_tag=image_tag,
+                    temp_path=temp_path,
+                    volumes=volumes,
+                    env_vars=env_vars
+                )
 
+        except Exception as e:
+            raise ActionError(f"Error executing function: {str(e)}")
 
-# if __name__ == "__main__":
-#     import tempfile
-#     import shutil
-#     from pathlib import Path
+#     def execute_function(
+#             self,
+#             folder_path: str,
+#             file_path: str,
+#             function_name: str,
+#             parameters: Dict[str, Any],
+#             requirements: List[str],
+#             env_vars: Dict[str, str],
+#             repo_name: str,
+#             base_image: str
+#         ) -> Any:
+#         """Execute a function in a Docker container using cached images"""
+#         try:
+#             # Get or create cached image
+#             image_tag = self._prepare_image(base_image, requirements)
+            
+#             # Convert to absolute paths
+#             repo_path = Path(self.repo_service.get_repo_path(repo_name)).resolve()
+#             actions_path = Path(folder_path).resolve()
+            
+#             with tempfile.TemporaryDirectory() as temp_dir:
+#                 temp_path = Path(temp_dir)
+                
+#                 # Create execution script (no need for setup script anymore)
+#                 exec_script = f"""
+# import sys
+# import json
+# import cloudpickle
+# import os
+# from pathlib import Path
+# import logging
 
-#     # Test function to write in a temporary file
-#     test_function_content = """
-# def test_function(message: str, number: int):
-#     '''Test function that creates a file and returns data
+# # Setup logging
+# logging.basicConfig(level=logging.INFO)
+# logger = logging.getLogger(__name__)
+
+# try:
+#     # Set environment variables
+#     env_vars = {env_vars}
+#     for key, value in env_vars.items():
+#         os.environ[key] = str(value)
+
+#     # Add paths to sys.path
+#     repo_path = Path('/repo')
+#     action_path = Path('/actions')
     
-#     Args:
-#         message: Message to write
-#         number: Number to include
-#     '''
-#     # Write to a file in the repository
-#     with open('test_output.txt', 'w') as f:
-#         f.write(f"{message} - {number}")
+#     if str(repo_path) not in sys.path:
+#         sys.path.insert(0, str(repo_path))
+#     if str(action_path) not in sys.path:
+#         sys.path.insert(0, str(action_path))
     
-#     # Return some data
-#     return {
-#         "message": message,
-#         "number": number,
-#         "doubled": number * 2
-#     }
+#     # Set current working directory to repo path
+#     os.chdir(repo_path)
+    
+#     # Get path to the module file
+#     module_file = action_path / '{file_path}'
+#     logger.info(f"Loading module from: {{module_file}}")
+    
+#     if not module_file.exists():
+#         raise FileNotFoundError(f"Module file not found: {{module_file}}")
+    
+#     # Import the module
+#     import importlib.util
+#     spec = importlib.util.spec_from_file_location('dynamic_module', str(module_file))
+#     if spec is None:
+#         raise ImportError(f"Could not find module: {{module_file}}")
+        
+#     module = importlib.util.module_from_spec(spec)
+#     if spec.loader is None:
+#         raise ImportError(f"Could not load module: {{module_file}}")
+        
+#     spec.loader.exec_module(module)
+    
+#     # Get and execute the function
+#     if not hasattr(module, '{function_name}'):
+#         raise AttributeError(f"Function {function_name} not found in {{module_file}}")
+        
+#     func = getattr(module, '{function_name}')
+    
+#     # Load parameters
+#     with open('/data/params.json', 'r') as f:
+#         parameters = json.load(f)
+    
+#     # Execute
+#     result = func(**parameters)
+    
+#     # Save result
+#     with open('/data/result.json', 'wb') as f:
+#         cloudpickle.dump(result, f)
+        
+# except Exception as e:
+#     import traceback
+#     with open('/data/error.txt', 'w') as f:
+#         f.write(traceback.format_exc())
+#     raise
 # """
+#                 # Write execution script and parameters
+#                 (temp_path / 'exec.py').write_text(exec_script)
+#                 with open(temp_path / 'params.json', 'w') as f:
+#                     json.dump(parameters, f)
 
-#     try:
-#         # Create temporary directories for testing
-#         with tempfile.TemporaryDirectory() as repo_dir, \
-#              tempfile.TemporaryDirectory() as actions_dir:
-            
-#             # Setup test repository
-#             repo_path = Path(repo_dir)
-#             actions_path = Path(actions_dir)
+#                 # Run in container using cached image
+#                 try:
+#                     container = self.docker_client.containers.run(
+#                         image_tag,  # Use cached image
+#                         command=['python', '/data/exec.py'],  # No setup needed
+#                         volumes={
+#                             str(repo_path): {'bind': '/repo', 'mode': 'rw'},
+#                             str(actions_path): {'bind': '/actions', 'mode': 'ro'},
+#                             str(temp_path): {'bind': '/data', 'mode': 'rw'}
+#                         },
+#                         environment={
+#                             **env_vars,
+#                             'PYTHONUNBUFFERED': '1',
+#                         },
+#                         user=0,
+#                         detach=True
+#                     )
 
-#             # Create test function file
-#             with open(actions_path / "test_function.py", "w") as f:
-#                 f.write(test_function_content)
+#                     # Wait for container to finish and get logs
+#                     result = container.wait()
+#                     logs = container.logs().decode()
+                    
+#                     if result['StatusCode'] != 0:
+#                         if (temp_path / 'error.txt').exists():
+#                             error_msg = (temp_path / 'error.txt').read_text()
+#                             raise ActionError(f"Function execution failed: {error_msg}")
+#                         raise ActionError(f"Container execution failed: {logs}")
 
-#             # Create a mock RepoService
-#             class MockRepoService:
-#                 def get_repo_path(self, repo_name: str) -> str:
-#                     return str(repo_path)
+#                     # Load result
+#                     with open(temp_path / 'result.json', 'rb') as f:
+#                         return cloudpickle.load(f)
 
-#             # Initialize services
-#             repo_service = MockRepoService()
-#             action_service = ActionService(repo_service)
+#                 finally:
+#                     # Cleanup container
+#                     try:
+#                         container.remove(force=True)
+#                     except:
+#                         pass
 
-#             print("Testing function execution...")
-            
-#             # First execution - will create cached image
-#             print("\nFirst execution (creating cached image)...")
-#             result1 = action_service.execute_function(
-#                 folder_path=str(actions_path),
-#                 file_path="test_function.py",
-#                 function_name="test_function",
-#                 parameters={
-#                     "message": "Hello from Docker",
-#                     "number": 42
-#                 },
-#                 requirements=["requests"],
-#                 env_vars={"TEST_VAR": "test_value"},
-#                 repo_name="test-repo",
-#                 base_image="python:3.9-slim"  # Specify base image
-#             )
+#         except DockerException as e:
+#             raise ActionError(f"Docker error: {str(e)}")
+#         except Exception as e:
+#             raise ActionError(f"Error executing function: {str(e)}")
 
-#             print("\nFirst execution completed!")
-#             print("Results:")
-#             print(f"Returned data: {result1}")
-            
-#             # Check if file was created in repository
-#             output_file = repo_path / "test_output.txt"
-#             if output_file.exists():
-#                 print(f"\nContent of created file:")
-#                 print(output_file.read_text())
-#             else:
-#                 print("\nWarning: Output file was not created")
+#     def cleanup_cache(self):
+#         """Remove all cached images"""
+#         try:
+#             images = self.docker_client.images.list(filters={'reference': 'function-runner-*'})
+#             for image in images:
+#                 self.docker_client.images.remove(image.id, force=True)
+#             logger.info("Cleaned up all cached images")
+#         except Exception as e:
+#             logger.error(f"Failed to cleanup cached images: {e}")
 
-#             # Second execution - should use cached image
-#             print("\nSecond execution (using cached image)...")
-#             result2 = action_service.execute_function(
-#                 folder_path=str(actions_path),
-#                 file_path="test_function.py",
-#                 function_name="test_function",
-#                 parameters={
-#                     "message": "Hello again from Docker",
-#                     "number": 84
-#                 },
-#                 requirements=["requests"],  # Same requirements to use cached image
-#                 env_vars={"TEST_VAR": "test_value"},
-#                 repo_name="test-repo",
-#                 base_image="python:3.9-slim"
-#             )
 
-#             print("\nSecond execution completed!")
-#             print("Results:")
-#             print(f"Returned data: {result2}")
-
-#             # Test with different requirements (should create new cached image)
-#             print("\nThird execution (with different requirements)...")
-#             result3 = action_service.execute_function(
-#                 folder_path=str(actions_path),
-#                 file_path="test_function.py",
-#                 function_name="test_function",
-#                 parameters={
-#                     "message": "Hello with new requirements",
-#                     "number": 100
-#                 },
-#                 requirements=["requests", "pandas"],  # Different requirements
-#                 env_vars={"TEST_VAR": "test_value"},
-#                 repo_name="test-repo",
-#                 base_image="python:3.9-slim"
-#             )
-
-#             print("\nThird execution completed!")
-#             print("Results:")
-#             print(f"Returned data: {result3}")
-
-#             # Cleanup cached images
-#             print("\nCleaning up cached images...")
-#             action_service.cleanup_cache()
-
-#     except Exception as e:
-#         print(f"\nError during testing: {str(e)}")
-#         # Print full traceback for debugging
-#         import traceback
-#         print("\nFull traceback:")
-#         print(traceback.format_exc())

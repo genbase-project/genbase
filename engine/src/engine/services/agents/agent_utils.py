@@ -1,3 +1,5 @@
+import subprocess
+from typing import Tuple
 from pathlib import Path
 from typing import Dict, Optional, List
 from engine.services.core.module import ModuleService
@@ -76,7 +78,33 @@ class AgentUtils:
             logger.error(f"Error writing file {relative_path}: {str(e)}")
             raise
 
-            
+
+
+    def list_files(self, relative_path: str = "") -> List[Path]:
+        """
+        List all files in a directory relative to the repository root
+        
+        Args:
+            relative_path: Path relative to repository root. If empty, lists from root
+                
+        Returns:
+            List[Path]: List of Path objects for all files in the directory
+                
+        Raises:
+            Exception: On directory access errors
+        """
+        try:
+            dir_path = Path(self.repo_path) / relative_path
+            if not dir_path.exists():
+                logger.error(f"Directory does not exist: {dir_path}")
+                return []
+                
+            return [p for p in dir_path.rglob("*") if p.is_file()]
+        except Exception as e:
+            logger.error(f"Error listing files in {relative_path}: {str(e)}")
+            raise
+
+
     def apply_code_changes(self, file_path: str, edits: List[Dict[str,str]]) -> CodeEditResult:
         """
         Apply multiple code edits to a file and return the result
@@ -131,3 +159,55 @@ class AgentUtils:
         return DisplayTree(
          dir_path=self.repo_path,
         )
+
+
+
+
+
+
+
+
+
+
+
+
+    def execute_cmd(self, command: str, cwd: Optional[str] = None) -> Tuple[bool, str, str]:
+        """
+        Execute a CLI command
+        
+        Args:
+            command: Command to execute
+            cwd: Working directory for command execution. Defaults to repo root
+            
+        Returns:
+            Tuple[bool, str, str]: (success, output, error)
+            - success: Whether command executed successfully
+            - output: stdout from command
+            - error: stderr from command
+                
+        Raises:
+            Exception: On command execution errors
+        """
+        try:
+            # Default to repo root if no working directory specified
+            working_dir = cwd if cwd else self.repo_path
+
+            # Execute command
+            logger.debug(f"Executing command: {command} in {working_dir}")
+            process = subprocess.run(
+                command,
+                cwd=working_dir,
+                capture_output=True,
+                text=True,
+                shell=True  # Allows command to be passed as a string
+            )
+
+            return (
+                process.returncode == 0,
+                process.stdout,
+                process.stderr
+            )
+
+        except Exception as e:
+            logger.error(f"Error executing command {command}: {str(e)}")
+            return False, "", str(e)

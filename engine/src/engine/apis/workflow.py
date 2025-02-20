@@ -103,8 +103,11 @@ class WorkflowRouter:
             
             # Process each workflow
             workflow_configs = []
+
+            workflow_list = list(kit.get('workflows', {}).keys())
+
             
-            for workflow_type in self.config_service.default_configs:
+            for workflow_type in workflow_list:
                 try:
                     # Get kit workflow config first and ensure actions list
                     kit_workflow = kit.get('workflows', {}).get(workflow_type, {})

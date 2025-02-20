@@ -23,6 +23,8 @@ from engine.services.core.kit import KitService, KitConfig
 from engine.utils.file import extract_zip
 from loguru import logger
 
+from engine.utils.uid import generate_readable_uid
+
 
 class RelationType(Enum):
     CONNECTION = "connection"
@@ -117,7 +119,7 @@ class ModuleService:
         if not self._validate_path(path):
             raise ModuleError("Invalid path format. Path must be alphanumeric segments separated by dots")
 
-        module_id = str(uuid.uuid4())
+        module_id = generate_readable_uid()
         repo_name = f"{module_id}"
         created_at = datetime.now(UTC).isoformat()
 

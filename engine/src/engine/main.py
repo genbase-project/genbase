@@ -27,7 +27,7 @@ from engine.apis.model import ModelRouter
 from engine.apis.module import ModuleRouter
 from engine.apis.project import ProjectRouter
 from engine.apis.repository import RepositoryRouter
-from engine.apis.resource import ResourceRouter  # New import
+from engine.apis.resource import ResourceRouter
 from engine.apis.workflow import WorkflowRouter
 from engine.services.agents.base_agent import AgentServices
 from engine.services.execution.action import ActionService
@@ -38,9 +38,14 @@ from engine.services.execution.model import ModelService
 from engine.services.core.module import ModuleService
 from engine.services.core.project import ProjectService
 from engine.services.storage.repository import RepoService
-from engine.services.storage.resource import ResourceService  # New import
-from engine.services.execution.state import StateService  # Add this import
+from engine.services.storage.resource import ResourceService
+from engine.services.execution.state import StateService
 from engine.services.execution.workflow import WorkflowService
+from engine.services.storage.vector_store import VectorStoreService
+from engine.services.storage.embedder import EmbeddingService
+from engine.apis.models.embedding import EmbeddingRouter
+
+
 
 load_dotenv()
 
@@ -146,6 +151,7 @@ module_service = ModuleService(
 )
 
 model_service = ModelService()
+embedding_service = EmbeddingService()
 
 resource_service = ResourceService(
     workspace_base=str(KIT_BASE_DIR),
@@ -210,6 +216,12 @@ workflow_router = WorkflowRouter(
     prefix="/workflow"
 )
 
+# 3. Add to router initializations after other routers
+embedding_router = EmbeddingRouter(
+    embedding_service=embedding_service,
+    prefix="/embedding"
+)
+
 # Include routers
 app.include_router(kit_router.router)
 app.include_router(module_router.router)
@@ -219,6 +231,8 @@ app.include_router(resource_router.router)  # Add resource router
 app.include_router(model_router.router)
 app.include_router(operation_router.router)
 app.include_router(workflow_router.router)
+app.include_router(embedding_router.router)
+
 
 agent_services = AgentServices(
     model_service=model_service,

@@ -24,80 +24,30 @@ class WorkflowConfig:
 class WorkflowConfigurations:
     """Central configuration for all core workflows"""
     
-    @staticmethod
-    def get_default_configs() -> Dict[str, WorkflowConfig]:
-        """Get default configurations for all workflows"""
-        return {
-            "initialize": WorkflowConfig(
-                workflow_type="initialize",
-                agent_type="", # Will be overridden by kit.yaml
-                base_instructions="""Initialize the module and verify all requirements are met.
-                Follow these steps:
-                1. Verify environment setup
-                2. Install dependencies
-                3. Validate initial configuration""",
-                allow_multiple=False
-            ),
-            
-            "maintain": WorkflowConfig(
-                workflow_type="maintain",
-                agent_type="", # Will be overridden by kit.yaml
-                base_instructions="""Monitor and maintain the module's operation.
-                Keep the module healthy and running smoothly.""",
-                allow_multiple=True
-            ),
-            
-            "remove": WorkflowConfig(
-                workflow_type="remove",
-                agent_type="", # Will be overridden by kit.yaml
-                base_instructions="""Safely remove the module and clean up resources.
-                Ensure all dependencies and resources are properly handled.""",
-                allow_multiple=False
-            ),
-            
-            "edit": WorkflowConfig(
-                workflow_type="edit",
-                agent_type="", # Will be overridden by kit.yaml
-                base_instructions="""Make code edits with minimal impact.
-                Always explain changes and ensure stability.""",
-                allow_multiple=True
-            )
-        }
-    @staticmethod
-    def get_default_actions(stage_state_service: StateService) -> Dict[str, List[WorkflowAction]]:
-        return {
-            "initialize": [],
-            "remove": []
-    }
 
     
 class WorkflowConfigService:
     """Service for managing workflow configurations"""
     
     def __init__(self):
-        self.default_configs = WorkflowConfigurations.get_default_configs()
-        stage_state_service = StateService()
-        self.default_actions: Dict[str, List[WorkflowAction]] = WorkflowConfigurations.get_default_actions(stage_state_service)
-    
+        pass
+        
     def get_workflow_config(
         self, 
         workflow_type: str,
         kit_config: Optional[Dict] = None
     ) -> WorkflowConfig:
         """Get workflow configuration from defaults and kit.yaml"""
-        if workflow_type not in self.default_configs:
-            raise ValueError(f"Unknown workflow type: {workflow_type}")
+
             
-        base_config = self.default_configs[workflow_type]
-        default_actions = self.default_actions.get(workflow_type, [])
 
         # Start with base config
         config = WorkflowConfig(
             workflow_type=workflow_type,
-            agent_type=base_config.agent_type,
-            base_instructions=base_config.base_instructions,
-            default_actions=default_actions,
-            allow_multiple=base_config.allow_multiple
+            agent_type='',
+            base_instructions='',
+            default_actions=[],
+            allow_multiple=True
         )
         
         if kit_config:

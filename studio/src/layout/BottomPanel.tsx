@@ -1,309 +1,508 @@
 import { useState, useEffect, useRef } from 'react';
+
 import { useChatPromptStore } from '../stores/chatPromptStore';
+
 import { Button } from "@/components/ui/button";
+
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Bot, FileText, WorkflowIcon, PackageCheck, GitBranchPlus, Settings, Boxes, Bot as AgentIcon, Expand, Minimize, Check } from 'lucide-react';
+
+import { Send, Bot, FileText, WorkflowIcon, PackageCheck, GitBranchPlus, Settings, Boxes, Bot as AgentIcon, Expand, Minimize, Check, MessageSquare } from 'lucide-react';
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { ChatContainer } from '../components/Chat';
+
 import type { Message } from '../components/Chat';
+
 import type { Module } from '../components/TreeView';
+
 import { Card, CardContent } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+
 import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
+
 import { useChatStore } from '@/stores/chatStore';
 
 interface Workflow {
-  workflow_type: string;
-  agent_type: string;
-  base_instructions: string;
-  metadata: {
-    instructions: string;
-    actions: any[];
-    requirements: string[];
-  };
-  default_actions: any[];
-  is_completed: boolean;
-  allow_multiple?: boolean;
-}
 
-interface HistoryResponse {
-  history: Message[];
-  section: string;
-  module_id: string;
+workflow_type: string;
+
+agent_type: string;
+
+base_instructions: string;
+
+metadata: {
+
+instructions: string;
+
+actions: any[];
+
+requirements: string[];
+
+};
+
+default_actions: any[];
+
+is_completed: boolean;
+
+allow_multiple?: boolean;
+
 }
 
 interface BottomPanelProps {
-  selectedModule: Module | null;
+
+selectedModule: Module | null;
+
 }
 
 interface Session {
-  session_id: string;
-  last_message: string;
-  last_updated: string;
-  is_default: boolean;
+
+session_id: string;
+
+last_message: string;
+
+last_updated: string;
+
+is_default: boolean;
+
 }
 
 const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  // const [messages, setMessages] = useState<Message[]>([]);
-  const [localInputValue, setLocalInputValue] = useState('');
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [currentSection, setCurrentSection] = useState<string>('maintain');
-  const [currentSession, setCurrentSession] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  // const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [elapsedTime, setElapsedTime] = useState<number>(0);
-  const [completionTime, setCompletionTime] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+const [isFullscreen, setIsFullscreen] = useState(false);
 
+const [localInputValue, setLocalInputValue] = useState('');
 
-  const { 
-    messages, 
-    isLoading, 
-    setCurrentContext, 
-    refreshChat ,
-    sendMessage
-  } = useChatStore();
+const [workflows, setWorkflows] = useState<Workflow[]>([]);
 
-  useEffect(() => {
-    if (selectedModule?.module_id && currentSection && currentSession) {
-      setCurrentContext(
-        selectedModule.module_id,
-        currentSection,
-        currentSession
-      );
-      refreshChat();
-    }
-  }, [selectedModule?.module_id, currentSection, currentSession]);
+const [currentWorkflow, setCurrentWorkflow] = useState<string>('maintain');
 
-  
-  const adjustTextareaHeight = () => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-    }
-  };
+const [currentSession, setCurrentSession] = useState<string | null>(null);
 
-  useEffect(() => {
-    adjustTextareaHeight();
-  }, [localInputValue]);
+const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
 
-  // Update elapsed time while loading
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (isLoading) {
-      interval = setInterval(() => {
-        setElapsedTime(prev => prev + 0.1);
-      }, 100);
-    } else if (!completionTime) {
-      const finalTime = elapsedTime;
-      setCompletionTime(`Completed in ${finalTime.toFixed(1)}s`);
-      setElapsedTime(0);
-    }
+const [sessions, setSessions] = useState<Session[]>([]);
 
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [isLoading]);
+const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    
-    if (completionTime) {
-      timeout = setTimeout(() => {
-        setCompletionTime(null);
-        setElapsedTime(0);
-      }, 3000); // Hide after 3 seconds
-    }
+const [elapsedTime, setElapsedTime] = useState<number>(0);
 
-    return () => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-    };
-  }, [completionTime]);
+const [completionTime, setCompletionTime] = useState<string | null>(null);
 
-  const fetchSessions = async () => {
-    if (!selectedModule?.module_id || !currentSection) return;
+const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    try {
-      const response = await fetchWithAuth(
-        `${ENGINE_BASE_URL}/workflow/sessions?module_id=${selectedModule.module_id}&workflow=${currentSection}`
-      );
-      if (response.ok) {
-        const data: Session[] = await response.json();
-        setSessions(data);
-        // If no current session or current session not found, use first available
-        if (!currentSession || !data.find(s => s.session_id === currentSession)) {
-          setCurrentSession(data[0]?.session_id || null);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching sessions:', error);
-    }
-  };
+const {
 
-  const fetchWorkflows = async () => {
-    if (!selectedModule?.module_id) return;
+messages,
 
-    try {
-      const response = await fetchWithAuth(
-        `${ENGINE_BASE_URL}/workflow/workflows?module_id=${selectedModule.module_id}`
-      );
-      const data: Workflow[] = await response.json();
-      setWorkflows(data);
-      
-      // Set first workflow as default if none selected
-      if (data.length > 0 && !currentSection) {
-        setCurrentSection(data[0].workflow_type);
-      }
-    } catch (error) {
-      console.error('Error fetching workflows:', error);
-    }
-  };
+isLoading,
 
-  // const fetchHistory = async () => {
-  //   if (!selectedModule?.module_id || !currentSession) return;
+setCurrentContext,
 
-  //   try {
-  //     const url = new URL(`${ENGINE_BASE_URL}/chat/${selectedModule.module_id}/workflow/${currentSection}/history`);
-  //     if (currentSession) {
-  //       url.searchParams.append('session_id', currentSession);
-  //     }
-  //     const response = await fetchWithAuth(url.toString());
-  //     const data: HistoryResponse = await response.json();
-  //     setMessages(data.history || []);
-  //   } catch (error) {
-  //     console.error('Error fetching history:', error);
-  //   }
-  // };
+refreshChat,
 
+sendMessage
 
-  useEffect(() => {
-    fetchWorkflows();
-  }, [selectedModule?.module_id]);
+} = useChatStore();
 
-  useEffect(() => {
-    if (currentSection) {
-      fetchSessions();
-    }
-  }, [currentSection, selectedModule?.module_id]);
+useEffect(() => {
 
-  // useEffect(() => {
-  //   if (currentSection) {
-  //     fetchHistory();
-  //   }
-  // }, [currentSection, selectedModule?.module_id, currentSession]);
+if (selectedModule?.module_id && currentWorkflow && currentSession && !pendingSessionId) {
 
-  const { inputValue: storeInputValue, setInputValue: setStoreInputValue } = useChatPromptStore();
-  
+setCurrentContext(
 
-  const handleSend = async (text: string) => {
-    if (!text.trim()) return;
-    await sendMessage(text);
-  };
+selectedModule.module_id,
 
+currentWorkflow,
 
+currentSession
 
+);
 
+refreshChat();
 
+}
 
+}, [selectedModule?.module_id, currentWorkflow, currentSession, pendingSessionId]);
 
+const adjustTextareaHeight = () => {
 
+const textarea = textareaRef.current;
 
+if (textarea) {
 
-  
-  // Show a message when no module is selected
-  if (!selectedModule) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center space-y-4 text-gray-500">
-        <Bot className="w-12 h-12 text-gray-400 mb-2" strokeWidth={1.5} />
-        <div className="text-center">
-          <h3 className="text-lg font-medium text-gray-700 mb-1">No Module Selected</h3>
-          <p className="text-sm text-gray-500">Select a module from the sidebar to begin</p>
-        </div>
-      </div>
-    );
-  }
+textarea.style.height = 'auto';
 
-  return (
-    <div className={`${isFullscreen ? 'fixed inset-4 bg-white shadow-2xl rounded-lg z-50' : 'h-full'} flex overflow-hidden`}>
-      <div className={`flex-1 flex flex-col ${isFullscreen ? 'border rounded-l-lg' : 'border-t'} min-w-0`}>
-        <ChatContainer 
-          messages={messages}
-        />
-        
-        <div className="p-4 border-t shrink-0">
-          <div className="max-w-3xl mx-auto flex gap-2">
-            <div className="flex-1">
+textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
 
+}
 
+};
 
+useEffect(() => {
 
-                <Textarea
-                  ref={textareaRef}
-                  value={storeInputValue}
-                  onChange={(e) => {
-                    setStoreInputValue(e.target.value);
-                    // Not needed here since useEffect will handle it, but adding for immediate response
-                    adjustTextareaHeight();
-                  }}
-                onKeyDown={(e: React.KeyboardEvent) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if (!isLoading) {
-                      handleSend(storeInputValue);
-                      setStoreInputValue('');
-                    }
-                  }
+adjustTextareaHeight();
 
-                }}
-                placeholder="Send a message... (Shift+Enter for new line)"
-                disabled={isLoading}
-                className={`w-full resize-none min-h-[40px] max-h-[200px] ${error ? 'border-red-500' : ''}`}
-                rows={1}
-                style={{
-                  height: 'auto',
-                  overflow: 'hidden'
-                }}
-              />
-              {error ? (
-                <div className="mt-1 text-sm text-red-600">{error}</div>
-              ) : completionTime && (
-                <div className="mt-1 text-xs text-gray-600">{completionTime}</div>
-              )}
-            </div>
-            <Button 
-              onClick={() => {
-                handleSend(storeInputValue);
-                setStoreInputValue('');
+}, [localInputValue]);
 
-              }}
-              disabled={isLoading}
-              variant="secondary"
-            >
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
-                  <span className="text-xs text-gray-600 w-10">{elapsedTime.toFixed(1)}s</span>
-                </div>
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
+// Update elapsed time while loading
 
+useEffect(() => {
+
+let interval: NodeJS.Timeout;
+
+if (isLoading) {
+
+interval = setInterval(() => {
+
+setElapsedTime(prev => prev + 0.1);
+
+}, 100);
+
+} else if (!completionTime) {
+
+const finalTime = elapsedTime;
+
+setCompletionTime(`Completed in ${finalTime.toFixed(1)}s`);
+
+setElapsedTime(0);
+
+}
+
+return () => {
+
+if (interval) {
+
+clearInterval(interval);
+
+}
+
+};
+
+}, [isLoading]);
+
+useEffect(() => {
+
+let timeout: NodeJS.Timeout;
+
+if (completionTime) {
+
+timeout = setTimeout(() => {
+
+setCompletionTime(null);
+
+setElapsedTime(0);
+
+}, 3000);
+
+}
+
+return () => {
+
+if (timeout) {
+
+clearTimeout(timeout);
+
+}
+
+};
+
+}, [completionTime]);
+
+const fetchSessions = async () => {
+
+if (!selectedModule?.module_id || !currentWorkflow) return;
+
+try {
+
+const response = await fetchWithAuth(
+
+`${ENGINE_BASE_URL}/workflow/sessions?module_id=${selectedModule.module_id}&workflow=${currentWorkflow}`
+
+);
+
+if (response.ok) {
+
+const data: Session[] = await response.json();
+
+setSessions(data);
+
+if (!currentSession || !data.find(s => s.session_id === currentSession)) {
+
+const defaultSession = data.find(s => s.is_default);
+
+setCurrentSession(defaultSession?.session_id || data[0]?.session_id || null);
+
+}
+
+}
+
+} catch (error) {
+
+console.error('Error fetching sessions:', error);
+
+}
+
+};
+
+const fetchWorkflows = async () => {
+
+if (!selectedModule?.module_id) return;
+
+try {
+
+const response = await fetchWithAuth(
+
+`${ENGINE_BASE_URL}/workflow/workflows?module_id=${selectedModule.module_id}`
+
+);
+
+const data: Workflow[] = await response.json();
+
+setWorkflows(data);
+
+if (data.length > 0 && !currentWorkflow) {
+
+setCurrentWorkflow(data[0].workflow_type);
+
+}
+
+} catch (error) {
+
+console.error('Error fetching workflows:', error);
+
+}
+
+};
+
+useEffect(() => {
+
+fetchWorkflows();
+
+}, [selectedModule?.module_id]);
+
+useEffect(() => {
+
+if (currentWorkflow) {
+
+fetchSessions();
+
+}
+
+}, [currentWorkflow, selectedModule?.module_id]);
+
+const { inputValue: storeInputValue, setInputValue: setStoreInputValue } = useChatPromptStore();
+
+const handleSend = async (text: string) => {
+
+if (!text.trim()) return;
+
+// If we have a pending session, create it first
+
+if (pendingSessionId) {
+
+try {
+
+const response = await fetchWithAuth(
+
+`${ENGINE_BASE_URL}/workflow/session/create?module_id=${selectedModule?.module_id}&workflow=${currentWorkflow}`,
+
+{ method: 'POST' }
+
+);
+
+if (response.ok) {
+
+const data = await response.json();
+
+setCurrentSession(data.session_id);
+
+setPendingSessionId(null);
+
+await fetchSessions();
+
+}
+
+} catch (error) {
+
+console.error('Error creating session:', error);
+
+return;
+
+}
+
+}
+
+await sendMessage(text);
+
+};
+
+// Show a message when no module is selected
+
+if (!selectedModule) {
+
+return (
+
+<div className="h-full flex flex-col items-center justify-center space-y-4 text-gray-500">
+
+<Bot className="w-12 h-12 text-gray-400 mb-2" strokeWidth={1.5} />
+
+<div className="text-center">
+
+<h3 className="text-lg font-medium text-gray-700 mb-1">No Module Selected</h3>
+
+<p className="text-sm text-gray-500">Select a module from the sidebar to begin</p>
+
+</div>
+
+</div>
+
+);
+
+}
+
+return (
+
+<div className={`${isFullscreen ? 'fixed inset-4 bg-white shadow-2xl rounded-lg z-50' : 'h-full'} flex overflow-hidden`}>
+
+<div className={`flex-1 flex flex-col ${isFullscreen ? 'border rounded-l-lg' : 'border-t'} min-w-0`}>
+
+{pendingSessionId ? (
+
+<div className="flex-1 flex flex-col items-center justify-center space-y-4 text-gray-500">
+
+<MessageSquare className="w-12 h-12 text-gray-400 mb-2" strokeWidth={1.5} />
+
+<div className="text-center">
+
+<h3 className="text-lg font-medium text-gray-700 mb-1">New Conversation</h3>
+
+<p className="text-sm text-gray-500">Type a message to start the conversation</p>
+
+</div>
+
+</div>
+
+) : (
+
+<ChatContainer messages={messages} />
+
+)}
+
+<div className="p-4 border-t shrink-0">
+
+<div className="max-w-3xl mx-auto flex gap-2">
+
+<div className="flex-1">
+
+<Textarea
+
+ref={textareaRef}
+
+value={storeInputValue}
+
+onChange={(e) => {
+
+setStoreInputValue(e.target.value);
+
+adjustTextareaHeight();
+
+}}
+
+onKeyDown={(e: React.KeyboardEvent) => {
+
+if (e.key === 'Enter' && !e.shiftKey) {
+
+e.preventDefault();
+
+if (!isLoading) {
+
+handleSend(storeInputValue);
+
+setStoreInputValue('');
+
+}
+
+}
+
+}}
+
+placeholder="Send a message... (Shift+Enter for new line)"
+
+disabled={isLoading}
+
+className={`w-full resize-none min-h-[40px] max-h-[200px] ${error ? 'border-red-500' : ''}`}
+
+rows={1}
+
+style={{
+
+height: 'auto',
+
+overflow: 'hidden'
+
+}}
+
+/>
+
+{error ? (
+
+<div className="mt-1 text-sm text-red-600">{error}</div>
+
+) : completionTime && (
+
+<div className="mt-1 text-xs text-gray-600">{completionTime}</div>
+
+)}
+
+</div>
+
+<Button
+
+onClick={() => {
+
+handleSend(storeInputValue);
+
+setStoreInputValue('');
+
+}}
+
+disabled={isLoading}
+
+variant="secondary"
+
+>
+
+{isLoading ? (
+
+<div className="flex items-center gap-2">
+
+<div className="w-4 h-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+
+<span className="text-xs text-gray-600 w-10">{elapsedTime.toFixed(1)}s</span>
+
+</div>
+
+) : (
+
+<Send className="w-4 h-4" />
+
+)}
+
+</Button>
+
+</div>
+
+</div>
+
+</div>
       <div className={`${isFullscreen ? 'w-96' : 'w-80'} border-l ${isFullscreen ? 'rounded-r-lg' : ''} overflow-auto bg-white`}>
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">
@@ -322,7 +521,7 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
             </Button>
           </div>
           <div className="space-y-4">
-            <Select defaultValue={currentSection} value={currentSection} onValueChange={setCurrentSection}>
+            <Select defaultValue={currentWorkflow} value={currentWorkflow} onValueChange={setCurrentWorkflow}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select workflow" />
               </SelectTrigger>
@@ -336,13 +535,13 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
             </Select>
 
             {/* Keep existing workflow cards but only show selected one */}
-            {workflows.filter(workflow => workflow.workflow_type === currentSection).map((workflow) => (
+            {workflows.filter(workflow => workflow.workflow_type === currentWorkflow).map((workflow) => (
               <Card 
                 key={workflow.workflow_type}
                 className={`cursor-pointer transition-colors hover:bg-gray-50 ${
-                  currentSection === workflow.workflow_type ? 'bg-gray-50 ring-1 ring-gray-200' : ''
+                  currentWorkflow === workflow.workflow_type ? 'bg-gray-50 ring-1 ring-gray-200' : ''
                 }`}
-                onClick={() => setCurrentSection(workflow.workflow_type)}
+                onClick={() => setCurrentWorkflow(workflow.workflow_type)}
               >
                 <CardContent className="p-2">
                   <div className="space-y-1.5">
@@ -537,67 +736,106 @@ const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
         
             </div>
 
-            {sessions.length > 0 && (
-              <div className="mt-6">
-                <p className="text-xs font-medium text-gray-600 mb-1">SESSIONS</p>
-                    {/* New Session button below workflow card */}
-            {workflows.find(w => w.workflow_type === currentSection)?.allow_multiple && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full my-2 text-xs"
-                onClick={async () => {
-                  try {
-                    const response = await fetchWithAuth(
-                      `${ENGINE_BASE_URL}/workflow/session/create?module_id=${selectedModule?.module_id}&workflow=${currentSection}`,
-                      { method: 'POST' }
-                    );
-                    if (response.ok) {
-                      const data = await response.json();
-                      setCurrentSession(data.session_id);
-                      await fetchSessions(); // Refresh sessions list
-                    }
-                  } catch (error) {
-                    console.error('Error creating session:', error);
-                  }
-                }}
-              >
-                New Session +
-              </Button>
-            )}
-                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                  {sessions.map((session) => (
-                    <Card
-                      key={session.session_id}
-                      className={`cursor-pointer transition-colors hover:bg-gray-50 ${
-                        currentSession === session.session_id ? 'bg-gray-50 ring-1 ring-gray-200' : ''
-                      }`}
-                      onClick={() => setCurrentSession(session.session_id)}
-                    >
-                      <CardContent className="p-2">
-                <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <Badge
-                              variant={session.is_default ? "secondary" : "outline"}
-                              className="text-[10px]"
-                            >
-                              {session.is_default ? "Default Session" : new Date(session.last_updated).toLocaleString()}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-gray-600 truncate">{session.last_message}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-  );
+           
+            <div className="mt-6">
 
+<p className="text-xs font-medium text-gray-600 mb-1">SESSIONS</p>
+
+{workflows.find(w => w.workflow_type === currentWorkflow)?.allow_multiple && (
+
+<Button
+
+variant="outline"
+
+size="sm"
+
+className="w-full my-2 text-xs"
+
+onClick={() => {
+
+// Instead of creating a session immediately, set a pending session ID
+
+setPendingSessionId('pending');
+
+setCurrentSession(null);
+
+}}
+
+>
+
+New Session +
+
+</Button>
+
+)}
+
+<div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+
+{sessions.map((session) => (
+
+<Card
+
+key={session.session_id}
+
+className={`cursor-pointer transition-colors hover:bg-gray-50 ${
+
+currentSession === session.session_id ? 'bg-gray-50 ring-1 ring-gray-200' : ''
+
+}`}
+
+onClick={() => {
+
+setPendingSessionId(null);
+
+setCurrentSession(session.session_id);
+
+}}
+
+>
+
+<CardContent className="p-2">
+
+<div className="space-y-1.5">
+
+<div className="flex items-center justify-between">
+
+<Badge
+
+variant={session.is_default ? "secondary" : "outline"}
+
+className="text-[10px]"
+
+>
+
+{session.is_default ? "Default Session" : new Date(session.last_updated).toLocaleString()}
+
+</Badge>
+
+</div>
+
+<p className="text-xs text-gray-600 truncate">{session.last_message}</p>
+
+</div>
+
+</CardContent>
+
+</Card>
+
+))}
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+);
 
 };
 
 export default BottomPanel;
+

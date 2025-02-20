@@ -1,38 +1,97 @@
+import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { FileCode, MessageCircle } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import React, { ReactElement } from 'react';
 import { useChatStore } from "@/stores/chatStore";
 
-// Define types for GIML elements
-
-// First, add these interfaces after the existing ones
-interface GimlElement extends ReactElement {
-  type: string;
+// Types for GIML elements
+interface GimlCodeDiff extends React.ReactElement {
+  type: 'code_diff';
   props: {
-    id?: string;
-    file?: string;
-    description?: string;
-    value?: string;  // Added value property
-    children?: React.ReactNode;
+    file: string;
+    children: React.ReactNode;
   };
 }
 
-
-interface CodeDiffProps {
-  children: GimlElement[];
-  file: string;
+interface GimlSelectItem extends React.ReactElement {
+  type: 'item';
+  props: {
+    description?: string;
+    children: React.ReactNode;
+  };
 }
 
-const CodeDiff = ({ children, file }: CodeDiffProps) => {
-  const original = children.find(child => 
-    child.type === 'original'
-  )?.props?.children?.toString() || '';
+interface GimlSelect extends React.ReactElement {
+  type: 'select';
+  props: {
+    id: string;
+    children: GimlSelectItem[];
+  };
+}
 
-  const updated = children.find(child => 
-    child.type === 'updated'
-  )?.props?.children?.toString() || '';
+interface GimlLabel extends React.ReactElement {
+  type: 'label';
+  props: {
+    children: React.ReactNode;
+  };
+}
+
+interface GimlResponse extends React.ReactElement {
+  type: 'response';
+  props: {
+    id: string;
+    value: string;
+  };
+}
+
+interface GimlResponses extends React.ReactElement {
+  type: 'responses';
+  props: {
+    children: GimlResponse[];
+  };
+}
+
+// Helper function to safely get text content
+const getTextContent = (children: React.ReactNode): string => {
+  if (typeof children === 'string') return children;
+  if (Array.isArray(children)) {
+    return children.map(child => getTextContent(child)).join('');
+  }
+  if (React.isValidElement(children)) {
+    return getTextContent(children.props.children || '');
+  }
+  return '';
+};
+
+// Type guards
+const isSelectElement = (child: React.ReactNode): child is GimlSelect => {
+  return React.isValidElement(child) && child.type === 'select';
+};
+
+const isLabelElement = (child: React.ReactNode): child is GimlLabel => {
+  return React.isValidElement(child) && child.type === 'label';
+};
+
+const isCodeDiffElement = (child: React.ReactNode): child is GimlCodeDiff => {
+  return React.isValidElement(child) && 
+         typeof child.props.file === 'string' && 
+         child.props.file.length > 0;
+};
+
+const isResponsesElement = (child: React.ReactNode): child is GimlResponses => {
+  return React.isValidElement(child) && child.type === 'responses';
+};
+
+// Code diff component
+const CodeDiff = ({ children, file }: { children: React.ReactNode; file: string }) => {
+  const childArray = React.Children.toArray(children);
+  
+  const originalText = childArray.find(child =>
+    React.isValidElement(child) && child.type === 'original'
+  );
+  
+  const updatedText = childArray.find(child =>
+    React.isValidElement(child) && child.type === 'updated'
+  );
 
   return (
     <Card className="my-1.5">
@@ -41,17 +100,17 @@ const CodeDiff = ({ children, file }: CodeDiffProps) => {
           <FileCode className="w-4 h-4 mt-1 text-blue-500" />
           <div className="flex-1">
             <p className="text-[12px] font-medium text-gray-700">{file}</p>
-            <div className="mt-2 space-y-3 flex-1">
+            <div className="mt-2 space-y-3">
               <div>
                 <p className="text-[11px] font-medium text-red-600 mb-1">Original:</p>
                 <pre className="bg-gray-50 p-2 rounded text-[11px] text-gray-950 overflow-x-auto">
-                  <div>{original}</div>
+                  {getTextContent(originalText)}
                 </pre>
               </div>
               <div>
                 <p className="text-[11px] font-medium text-green-600 mb-1">Updated:</p>
                 <pre className="bg-gray-50 p-2 rounded text-[11px] text-gray-950 overflow-x-auto">
-                  {updated}
+                  {getTextContent(updatedText)}
                 </pre>
               </div>
             </div>
@@ -62,78 +121,43 @@ const CodeDiff = ({ children, file }: CodeDiffProps) => {
   );
 };
 
+// Select component
 interface SelectProps {
-  children: GimlElement[];
-  isLastMessage?: boolean;
-  onSelect?: (id: string, value: string) => void;
+  selectId: string;
+  items: Array<{
+    text: string;
+    description?: string;
+  }>;
+  isLastMessage: boolean;
 }
 
-interface SelectItem {
-  description?: string;
-  text: string;
-}
-
-const Select = ({ children, isLastMessage = false, onSelect }: SelectProps) => {
+const Select = ({ selectId, items, isLastMessage }: SelectProps) => {
   const sendResponse = useChatStore(state => state.sendResponse);
 
-
-  const labelElement = children.find(child => 
-    child.type === 'label'
-  ) as GimlElement;
-
-  const selectElement = children.find(child => 
-    child.type === 'select'
-  ) as GimlElement;
-
-  if (!labelElement || !selectElement) return null;
-
-  const labelText = labelElement.props.children?.toString() || '';
-  const selectId = selectElement.props.id || '';
-  const items = (selectElement.props.children as GimlElement[]).map((item): SelectItem => ({
-    description: item.props.description,
-    text: item.props.children?.toString() || ''
-  }));
+  if (items.length === 0) {
+    console.log('No items found in select');
+    return null;
+  }
 
   return (
-    <Card className={"my-1.5" + (isLastMessage ? " bg-gray-50" : "")} data-active={isLastMessage}>
+    <Card className={"my-1.5" + (isLastMessage ? " bg-gray-50" : "")}>
       <CardContent className="p-2">
         <div className="flex items-start gap-2">
           <MessageCircle className="w-4 h-4 mt-1 text-blue-500" />
           <div className="flex-1">
-            <p className="text-[12px] font-medium text-gray-700">{labelText}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {items.map((item, index) => {
-                const button = (
-                  <Button
+              {items.map((item, index) => (
+                <button
                   key={index}
-                  variant="outline"
-                  className={"px-3 h-7 min-w-[60px] text-[11px] " + 
-                    (!isLastMessage ? "opacity-50 cursor-not-allowed" : "cursor-pointer")}
+                  className={"px-3 h-7 min-w-[60px] text-[11px] border rounded " + 
+                    (!isLastMessage ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-gray-50")}
                   onClick={() => isLastMessage && sendResponse(selectId, item.text)}
                   disabled={!isLastMessage}
+                  title={item.description}
                 >
                   <div className="font-medium">{item.text}</div>
-                </Button>
-        
-                );
-
-                if (item.description) {
-                  return (
-                    <TooltipProvider key={index}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          {button}
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-sm">{item.description}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  );
-                }
-
-                return button;
-              })}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -142,57 +166,29 @@ const Select = ({ children, isLastMessage = false, onSelect }: SelectProps) => {
   );
 };
 
-// The rest of your code remains the same
-interface ResponseProps {
-  children: GimlElement[];
+// Responses component
+interface ResponsesProps {
+  responses: Array<{
+    id: string;
+    value: string;
+  }>;
 }
 
-interface ResponseItem {
-  id: string;
-  value: string;
-}
-
-const Response = ({ children }: ResponseProps) => {
-  const responses = children.find(child => 
-    child.type === 'responses'
-  ) as GimlElement;
-
-  if (!responses) return null;
-
-  const responseItems = (responses.props.children as GimlElement[]).map((item): ResponseItem => ({
-    id: item.props.id || '',
-    value: item.props.value || ''
-  }));
+const Responses = ({ responses }: ResponsesProps) => {
+  if (!responses.length) return null;
 
   return (
     <Card className="my-1.5">
       <CardContent className="p-2">
         <div className="flex items-start gap-2">
-          <MessageCircle className="w-4 h-4 mt-1 text-green-500" />
+          <MessageCircle className="w-4 h-4 mt-1 text-blue-500" />
           <div className="flex-1">
-            <p className="text-[12px] font-medium text-gray-700 mb-2">Response</p>
-            <div className="space-y-2">
-              {responseItems.map((item, index) => {
-                let displayValue = item.value;
-                try {
-                  // Try to parse JSON if it's a JSON string
-                  const parsedValue = JSON.parse(item.value);
-                  displayValue = JSON.stringify(parsedValue, null, 2);
-                } catch {
-                  // If not JSON, use as is
-                  displayValue = item.value;
-                }
-
-                return (
-                  <div key={index} className="bg-gray-50 rounded p-1">
-                    <div className="text-[11px] text-gray-500 mb-1">ID: {item.id}</div>
-                    <pre className="text-[11px] text-gray-950 bg-gray-50 overflow-x-auto p-0">
-                      {displayValue}
-                    </pre>
-                  </div>
-                );
-              })}
-            </div>
+            {responses.map((response, index) => (
+              <div key={index} className="flex items-center gap-2 text-[11px] text-gray-600">
+                <span className="font-medium">{response.id}:</span>
+                <span>{response.value}</span>
+              </div>
+            ))}
           </div>
         </div>
       </CardContent>
@@ -200,42 +196,79 @@ const Response = ({ children }: ResponseProps) => {
   );
 };
 
-// Then modify parseGiml to include response handling
-export const parseGiml = (content: React.ReactNode[], onSelect?: (id: string, value: string) => void, isLastMessage?: boolean) => {
-  if (!Array.isArray(content)) return content;
+// Parse GIML content
+export const parseGiml = (
+  content: React.ReactNode[],
+  isLastMessage: boolean = false
+): React.ReactNode[] => {
+  const children = React.Children.toArray(content);
+  const elements: React.ReactNode[] = [];
 
-  const firstElement = content[0] as GimlElement;
-  if (!firstElement || typeof firstElement !== 'object') return content;
+  // Process each child element in sequence
+  children.forEach((child, index) => {
+    if (isCodeDiffElement(child)) {
+      elements.push(
+        <CodeDiff
+          key={`code-diff-${index}`}
+          file={child.props.file}
+          children={child.props.children}
+        />
+      );
+    }
+    else if (isLabelElement(child)) {
+      elements.push(
+        <div key={`label-${index}`} className="text-gray-700 mb-2">
+          {getTextContent(child)}
+        </div>
+      );
+    }
+    else if (isSelectElement(child)) {
+      const items = React.Children.toArray(child.props.children)
+        .filter(React.isValidElement)
+        .map((item: any) => ({
+          description: item.props.description as string | undefined,
+          text: getTextContent(item.props.children)
+        }));
 
-  // Check for responses element
-  if (content.some(child => (child as GimlElement).type === 'responses')) {
-    return (
-      <Response
-        children={content as GimlElement[]}
-      />
+      elements.push(
+        <Select
+          key={`select-${index}`}
+          selectId={child.props.id}
+          items={items}
+          isLastMessage={isLastMessage}
+        />
+      );
+    }
+    else if (isResponsesElement(child)) {
+      const responses = React.Children.toArray(child.props.children)
+        .filter(React.isValidElement)
+        .map((response: any) => ({
+          id: response.props.id,
+          value: response.props.value
+        }));
+
+      elements.push(
+        <Responses
+          key={`responses-${index}`}
+          responses={responses}
+        />
+      );
+    }
+  });
+
+  // If no elements were processed, show raw content for debugging
+  if (elements.length === 0) {
+    elements.push(
+      <pre key="debug" className="bg-red-50 p-2 rounded text-xs">
+        {children.map((child, i) => {
+          if (React.isValidElement(child)) {
+            return `Element ${i}: <${typeof child.type === 'string' ? child.type : 'Component'} />`;
+          }
+          return `Node ${i}: ${String(child)}`;
+        }).join('\n')}
+      </pre>
     );
   }
 
-  // Check for select element
-  if (content.some(child => (child as GimlElement).type === 'select')) {
-    return (
-      <Select
-        children={content as GimlElement[]}
-        onSelect={onSelect}
-        isLastMessage={isLastMessage}
-      />
-    );
-  }
-
-  // Check for code element
-  if (firstElement.props?.file) {
-    return (
-      <CodeDiff
-        children={firstElement.props.children as GimlElement[]}
-        file={firstElement.props.file}
-      />
-    );
-  }
-
-  return content;
+  return elements;
 };

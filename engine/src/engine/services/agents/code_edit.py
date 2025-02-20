@@ -36,9 +36,25 @@ class CodeBlockEditUtil:
         return patches
 
     def apply_single_edit(self, content: str, edit: CodeEdit) -> Tuple[str, bool, Optional[str]]:
-        """Apply a single edit and return the result, success status, and error"""
+        """
+        Apply a single edit and return the result, success status, and error
+        
+        Special cases:
+        - If original is empty/blank and content is empty/blank: return updated content
+        - If original is empty/blank and content is not: append updated content
+        - Otherwise try to match and replace as normal
+        """
         try:
-            # Find the location of the original text
+            # Handle empty/blank original code case
+            if not edit.original or edit.original.isspace():
+                if not content or content.isspace():
+                    # Empty content and empty original - return full updated content
+                    return edit.updated, True, None
+                else:
+                    # Content exists but empty original - append updated
+                    return f"{content}\n{edit.updated}", True, None
+            
+            # Regular matching logic for non-empty original
             location = content.find(edit.original)
             
             if location == -1:

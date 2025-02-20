@@ -87,20 +87,15 @@ class BaseAgent(ABC):
             "select": {
                 "format": """
     <giml>
-        <label  id="<unique id>">Your question here</label>
         <select id="<unique id>">
                 <item description="Description of what this option means">Option text1</item>
                 <item description="Description of what this second option means">Option text2</item>
-                ....
+                ...
         </select>
     </giml>""",
                 "use": "Prompt the user with a question and multiple choice options",
                 "schema": {
                     "children": {
-                        "label": {
-                            "attributes": ["id"],
-                            "type": "text"
-                        },
                         "select": {
                             "attributes": ["id"],
                             "children": {

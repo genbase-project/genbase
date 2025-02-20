@@ -314,7 +314,8 @@ class WorkflowService:
                 requirements=kit_config.dependencies,
                 env_vars=module_metadata.env_vars,
                 repo_name=module_metadata.repo_name,
-                base_image=kit_config.image
+                base_image=kit_config.image,
+                ports=kit_config.ports
             )
 
             return result

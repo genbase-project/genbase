@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import json
 import uuid
 import xml.etree.ElementTree as ET
@@ -10,6 +10,7 @@ import xmltodict
 from litellm import ChatCompletionMessageToolCall, Choices
 from engine.services.core.kit import KitConfig
 from engine.services.execution.action import FunctionMetadata
+from engine.services.execution.custom_actions import CustomActionManager
 from engine.services.execution.model import ModelService
 from engine.services.execution.state import StateService
 from engine.services.execution.workflow import (
@@ -67,6 +68,24 @@ class BaseAgent(ABC):
         self.system_prompt: Optional[str] = None
         self._utils: Optional[AgentUtils] = None
 
+
+        # Initialize the custom action manager
+        self.action_manager = CustomActionManager()
+
+
+
+    def register_custom_action(self, name: str, func: Callable, description: str = None) -> None:
+        """
+        Register a class method as a custom action that can be called by the LLM.
+        
+        Args:
+            name: Name of the action (must be unique)
+            func: Method reference to call when action is invoked
+            description: Optional description of what the action does
+        """
+        self.action_manager.register_action(name, func, description)
+
+
     @property
     def utils(self) -> AgentUtils:
         """Get agent utils instance for current module and workflow context"""
@@ -93,7 +112,7 @@ class BaseAgent(ABC):
                 ...
         </select>
     </giml>""",
-                "use": "Prompt the user with a question and multiple choice options",
+                "use": "Prompt the user with options",
                 "schema": {
                     "children": {
                         "select": {

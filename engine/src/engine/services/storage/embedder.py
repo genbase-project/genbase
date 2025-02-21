@@ -155,7 +155,7 @@ class EmbeddingService:
     async def get_embedding(
         self,
         input: Union[str, List[str]],
-        dimensions: Optional[int] = None,
+        dimensions: Optional[int] = None,   
         user: Optional[str] = None,
         encoding_format: Optional[str] = None,
         **kwargs

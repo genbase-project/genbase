@@ -1,9 +1,13 @@
 import ast
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
+import threading
+import time
 from typing import Any, Dict, List, Set, Callable, Optional
 import cloudpickle
+import docker.errors
 
 from engine.services.core.kit import Port
 from engine.services.execution.function_parser import FunctionMetadata, FunctionParser
@@ -13,20 +17,54 @@ import docker
 import tempfile
 from docker.errors import DockerException
 
+from docker.models.containers import Container
 
 class ActionError(Exception):
     """Base exception for action errors"""
     pass
 
+class WarmContainer:
+    def __init__(self, container: Container, image_tag: str, last_used: datetime):
+        self.container = container
+        self.image_tag = image_tag
+        self.last_used = last_used
+
+
 
 class ActionService:
-    def __init__(self, repo_service: RepoService):
+    def __init__(self, repo_service: RepoService, warm_container_timeout: int = 300):
         self.repo_service = repo_service
         self.docker_client = docker.from_env()
         self.cached_images = {}  # Cache for storing prepared images
+        self.warm_containers = {}  # Dict to store warm containers by repo name
+        self.warm_container_timeout = warm_container_timeout  # Timeout in seconds (default 5 minutes)
+        self.cleanup_thread = threading.Thread(target=self._cleanup_warm_containers, daemon=True)
+        self.cleanup_thread.start()
 
+    def _cleanup_warm_containers(self):
+        """Background thread to cleanup expired warm containers"""
+        while True:
+            try:
+                current_time = datetime.now()
+                repos_to_remove = []
 
+                for repo_name, warm_container in self.warm_containers.items():
+                    if (current_time - warm_container.last_used).total_seconds() > self.warm_container_timeout:
+                        try:
+                            warm_container.container.remove(force=True)
+                            logger.info(f"Removed expired warm container for repo: {repo_name}")
+                            repos_to_remove.append(repo_name)
+                        except Exception as e:
+                            logger.error(f"Error removing warm container for repo {repo_name}: {e}")
+                            repos_to_remove.append(repo_name)
 
+                for repo_name in repos_to_remove:
+                    self.warm_containers.pop(repo_name, None)
+
+            except Exception as e:
+                logger.error(f"Error in cleanup thread: {e}")
+
+            time.sleep(60)  # Check every minute
 
     def get_function_metadata(
         self,
@@ -255,81 +293,97 @@ except Exception as e:
         temp_path: Path,
         volumes: Dict[str, Dict[str, str]],
         env_vars: Dict[str, str],
-        ports: Optional[List[Port]] = None
+        ports: Optional[List[Port]] = None,
+        repo_name: Optional[str] = None
     ) -> Any:
         """
         Execute the function in a Docker container and return the result.
-        
-        Args:
-            image_tag: Docker image tag to use
-            temp_path: Path to temporary directory containing execution files
-            volumes: Volume mappings for Docker container
-            env_vars: Environment variables for the container
-            ports: Optional list of Port objects defining ports to expose
-            
-        Returns:
-            Any: Result of the function execution
-            
-        Raises:
-            ActionError: If there's an error during execution
         """
         try:
-            # Convert ports to Docker port mapping format and find available ports
-            port_bindings = {}
-            port_env_vars = {}
-            
-            if ports:
-                for port in ports:
-                    # Find an available host port starting from the requested port
-                    host_port = self._find_available_port(port.port)
-                    
-                    # Map container port to available host port
-                    # Format: {container_port/protocol: (host_ip, host_port)}
-                    port_bindings[f"{port.port}/tcp"] = host_port
-                    
-                    # Add port mapping to environment variables so the function knows
-                    # which host ports were actually assigned
-                    port_env_vars[f"PORT_{port.name.upper()}"] = str(host_port)
-                    
-                    logger.info(f"Mapping container port {port.port} ({port.name}) to host port {host_port}")
+            # Check for existing warm container
+            warm_container = None
+            if repo_name:
+                warm_container = self.warm_containers.get(repo_name)
+                if warm_container and warm_container.image_tag == image_tag:
+                    logger.info(f"Removing old warm container for repo: {repo_name}")
+                    try:
+                        warm_container.container.remove(force=True)
+                    except Exception as e:
+                        logger.error(f"Error removing old container: {e}")
+                    warm_container = None
 
-            container = self.docker_client.containers.run(
-                image_tag,
-                command=['python', '/data/exec.py'],
-                volumes=volumes,
-                environment={
-                    **env_vars,
-                    **port_env_vars,  # Add port mapping info to environment
-                    'PYTHONUNBUFFERED': '1'
-                },
-                user=0,
-                detach=True,
-                ports=port_bindings,  # Add port mappings
-                # Use bridge network mode with explicit port mappings
-                network_mode="bridge"
-            )
+            # Create new container if needed
+            if not warm_container:
+                port_bindings = {}
+                port_env_vars = {}
+                
+                if ports:
+                    for port in ports:
+                        host_port = self._find_available_port(port.port)
+                        port_bindings[f"{port.port}/tcp"] = host_port
+                        port_env_vars[f"PORT_{port.name.upper()}"] = str(host_port)
+                        logger.info(f"Mapping container port {port.port} ({port.name}) to host port {host_port}")
+
+                # Ensure volume paths exist in warm container
+                container = self.docker_client.containers.run(
+                    image_tag,
+                    command=['tail', '-f', '/dev/null'],  # Keep container running
+                    volumes=volumes,
+                    environment={
+                        **env_vars,
+                        **port_env_vars,
+                        'PYTHONUNBUFFERED': '1'
+                    },
+                    user=0,
+                    detach=True,
+                    ports=port_bindings,
+                    network_mode="bridge"
+                )
+                
+                # Ensure container is running before proceeding
+                container.reload()
 
             try:
-                # Wait for container to finish and get logs
-                result = container.wait()
-                logs = container.logs().decode()
-                
-                if result['StatusCode'] != 0:
+                # Execute function in container
+                exec_result = container.exec_run(
+                    cmd=['python', '/data/exec.py'],
+                    environment={
+                        **env_vars,
+                        'PYTHONUNBUFFERED': '1'
+                    }
+                )
+
+                if exec_result.exit_code != 0:
                     if (temp_path / 'error.txt').exists():
                         error_msg = (temp_path / 'error.txt').read_text()
                         raise ActionError(f"Function execution failed: {error_msg}")
-                    raise ActionError(f"Container execution failed: {logs}")
+                    raise ActionError(f"Container execution failed: {exec_result.output.decode()}")
 
                 # Load result
                 with open(temp_path / 'result.json', 'rb') as f:
-                    return cloudpickle.load(f)
+                    result = cloudpickle.load(f)
 
-            finally:
-                # Cleanup container
-                try:
+                # Update or store warm container
+                if repo_name:
+                    self.warm_containers[repo_name] = WarmContainer(
+                        container=container,
+                        image_tag=image_tag,
+                        last_used=datetime.now()
+                    )
+                else:
+                    # If no repo_name, remove container immediately
                     container.remove(force=True)
-                except:
-                    pass
+
+                return result
+
+            except Exception as e:
+                # Clean up container on error if not keeping warm
+                if not repo_name:
+                    try:
+                        container.remove(force=True)
+                    except:
+                        pass
+                raise e
 
         except DockerException as e:
             raise ActionError(f"Docker error: {str(e)}")
@@ -385,7 +439,8 @@ except Exception as e:
                     temp_path=temp_path,
                     volumes=volumes,
                     env_vars=env_vars,
-                    ports=ports
+                    ports=ports,
+                    repo_name=repo_name
                 )
 
         except Exception as e:
@@ -431,165 +486,11 @@ except Exception as e:
                     image_tag=image_tag,
                     temp_path=temp_path,
                     volumes=volumes,
-                    env_vars=env_vars
+                    env_vars=env_vars,
+                    # No repo_name for direct functions
+                    repo_name=None
                 )
 
         except Exception as e:
             raise ActionError(f"Error executing function: {str(e)}")
-
-#     def execute_function(
-#             self,
-#             folder_path: str,
-#             file_path: str,
-#             function_name: str,
-#             parameters: Dict[str, Any],
-#             requirements: List[str],
-#             env_vars: Dict[str, str],
-#             repo_name: str,
-#             base_image: str
-#         ) -> Any:
-#         """Execute a function in a Docker container using cached images"""
-#         try:
-#             # Get or create cached image
-#             image_tag = self._prepare_image(base_image, requirements)
-            
-#             # Convert to absolute paths
-#             repo_path = Path(self.repo_service.get_repo_path(repo_name)).resolve()
-#             actions_path = Path(folder_path).resolve()
-            
-#             with tempfile.TemporaryDirectory() as temp_dir:
-#                 temp_path = Path(temp_dir)
-                
-#                 # Create execution script (no need for setup script anymore)
-#                 exec_script = f"""
-# import sys
-# import json
-# import cloudpickle
-# import os
-# from pathlib import Path
-# import logging
-
-# # Setup logging
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-
-# try:
-#     # Set environment variables
-#     env_vars = {env_vars}
-#     for key, value in env_vars.items():
-#         os.environ[key] = str(value)
-
-#     # Add paths to sys.path
-#     repo_path = Path('/repo')
-#     action_path = Path('/actions')
-    
-#     if str(repo_path) not in sys.path:
-#         sys.path.insert(0, str(repo_path))
-#     if str(action_path) not in sys.path:
-#         sys.path.insert(0, str(action_path))
-    
-#     # Set current working directory to repo path
-#     os.chdir(repo_path)
-    
-#     # Get path to the module file
-#     module_file = action_path / '{file_path}'
-#     logger.info(f"Loading module from: {{module_file}}")
-    
-#     if not module_file.exists():
-#         raise FileNotFoundError(f"Module file not found: {{module_file}}")
-    
-#     # Import the module
-#     import importlib.util
-#     spec = importlib.util.spec_from_file_location('dynamic_module', str(module_file))
-#     if spec is None:
-#         raise ImportError(f"Could not find module: {{module_file}}")
-        
-#     module = importlib.util.module_from_spec(spec)
-#     if spec.loader is None:
-#         raise ImportError(f"Could not load module: {{module_file}}")
-        
-#     spec.loader.exec_module(module)
-    
-#     # Get and execute the function
-#     if not hasattr(module, '{function_name}'):
-#         raise AttributeError(f"Function {function_name} not found in {{module_file}}")
-        
-#     func = getattr(module, '{function_name}')
-    
-#     # Load parameters
-#     with open('/data/params.json', 'r') as f:
-#         parameters = json.load(f)
-    
-#     # Execute
-#     result = func(**parameters)
-    
-#     # Save result
-#     with open('/data/result.json', 'wb') as f:
-#         cloudpickle.dump(result, f)
-        
-# except Exception as e:
-#     import traceback
-#     with open('/data/error.txt', 'w') as f:
-#         f.write(traceback.format_exc())
-#     raise
-# """
-#                 # Write execution script and parameters
-#                 (temp_path / 'exec.py').write_text(exec_script)
-#                 with open(temp_path / 'params.json', 'w') as f:
-#                     json.dump(parameters, f)
-
-#                 # Run in container using cached image
-#                 try:
-#                     container = self.docker_client.containers.run(
-#                         image_tag,  # Use cached image
-#                         command=['python', '/data/exec.py'],  # No setup needed
-#                         volumes={
-#                             str(repo_path): {'bind': '/repo', 'mode': 'rw'},
-#                             str(actions_path): {'bind': '/actions', 'mode': 'ro'},
-#                             str(temp_path): {'bind': '/data', 'mode': 'rw'}
-#                         },
-#                         environment={
-#                             **env_vars,
-#                             'PYTHONUNBUFFERED': '1',
-#                         },
-#                         user=0,
-#                         detach=True
-#                     )
-
-#                     # Wait for container to finish and get logs
-#                     result = container.wait()
-#                     logs = container.logs().decode()
-                    
-#                     if result['StatusCode'] != 0:
-#                         if (temp_path / 'error.txt').exists():
-#                             error_msg = (temp_path / 'error.txt').read_text()
-#                             raise ActionError(f"Function execution failed: {error_msg}")
-#                         raise ActionError(f"Container execution failed: {logs}")
-
-#                     # Load result
-#                     with open(temp_path / 'result.json', 'rb') as f:
-#                         return cloudpickle.load(f)
-
-#                 finally:
-#                     # Cleanup container
-#                     try:
-#                         container.remove(force=True)
-#                     except:
-#                         pass
-
-#         except DockerException as e:
-#             raise ActionError(f"Docker error: {str(e)}")
-#         except Exception as e:
-#             raise ActionError(f"Error executing function: {str(e)}")
-
-#     def cleanup_cache(self):
-#         """Remove all cached images"""
-#         try:
-#             images = self.docker_client.images.list(filters={'reference': 'function-runner-*'})
-#             for image in images:
-#                 self.docker_client.images.remove(image.id, force=True)
-#             logger.info("Cleaned up all cached images")
-#         except Exception as e:
-#             logger.error(f"Failed to cleanup cached images: {e}")
-
 

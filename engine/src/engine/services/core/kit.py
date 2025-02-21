@@ -161,7 +161,7 @@ class KitConfig:
     dependencies: List[str]
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
     image: str = None
-    ports: List[Port] = []
+    ports: List[Port] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'KitConfig':

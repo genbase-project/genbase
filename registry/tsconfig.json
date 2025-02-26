@@ -37,7 +37,7 @@
     "**/*.jsx",
     "**/*.js",
     ".next/types/**/*.ts"
-, "pages/auth-ssr.tsz", "pages/auth.tsz"  ],
+, "pages/auth-ssr.tsx", "pages/auth.tsx"  ],
   "exclude": [
     "node_modules"
   ]

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useUser, withUser } from 'next-firebase-auth';
 import { Search, Menu } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -29,8 +30,9 @@ const CommonHeader = () => {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 items-center px-4 container mx-auto">
         <div className="flex items-center flex-1 gap-6">
-          <Link href="/" className="font-bold text-2xl">
-            Hivon Kits
+          <Image src="/logo.png" alt="Genbase Logo" width={40} height={40} />
+          <Link href="/" className="font-semibold text-xl">
+            Genbase Registry
           </Link>
           
           <div className="flex-1 flex items-center">
@@ -69,12 +71,12 @@ const CommonHeader = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
+                  {/* <DropdownMenuItem asChild>
                     <Link href="/dashboard">Dashboard</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/settings">Settings</Link>
-                  </DropdownMenuItem>
+                  </DropdownMenuItem> */}
                   <DropdownMenuItem onClick={() => user.signOut()}>
                     Sign Out
                   </DropdownMenuItem>

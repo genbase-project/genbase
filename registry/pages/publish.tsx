@@ -1,9 +1,8 @@
-// pages/publish.tsx
 'use client'
 
 import { useState } from 'react'
 import { useUser, withUser, AuthAction } from 'next-firebase-auth'
-import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage'
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
@@ -17,12 +16,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Progress } from '@/components/ui/progress'
 
-
-const  storage= getStorage();
-
-
-
-
 function PublishPage() {
   const user = useUser()
   const [file, setFile] = useState<File | null>(null)
@@ -30,6 +23,9 @@ function PublishPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Initialize storage inside the component to ensure it has access to the latest auth context
+  const storage = getStorage()
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null)
@@ -44,48 +40,82 @@ function PublishPage() {
   }
 
   const handleUpload = async () => {
-    if (!file || !user.id) return
+    if (!file || !user.id) {
+      setError('You must be logged in and select a file')
+      return
+    }
 
     try {
       setUploading(true)
       setError(null)
-
-      const token = await user.getIdToken()
+      
+      // Get fresh token
+      const token = await user.getIdToken(true) // Force refresh
       if (!token) {
         throw new Error('Authentication token not available')
       }
 
-      // Upload to Firebase Storage
+      console.log('User authenticated:', !!user.id)
+      console.log('User ID:', user.id)
+      
+      // Add progress tracking
       const storageRef = ref(storage, `registry/${user.id}/${file.name}`)
-      await uploadBytes(storageRef, file)
-      const downloadURL = await getDownloadURL(storageRef)
-
-      // Send to API for processing
-      const response = await fetch('/api/registry/publish', {
-        method: 'POST',
-        headers: {
-          'Authorization': token,
-          'Content-Type': 'application/json',
+      
+      // Use uploadBytesResumable to track progress
+      const uploadTask = uploadBytesResumable(storageRef, file)
+      
+      uploadTask.on('state_changed', 
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+          setUploadProgress(progress)
+          console.log(`Upload progress: ${progress}%`)
         },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileSize: file.size,
-          downloadURL,
-        }),
-      })
+        (error) => {
+          console.error('Upload error:', error)
+          setError(`Upload failed: ${error.message}`)
+          setUploading(false)
+        },
+        async () => {
+          // Upload completed successfully
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref)
+          console.log('File uploaded successfully')
+          
+          // Continue with API call
+          try {
+            const response = await fetch('/api/registry/publish', {
+              method: 'POST',
+              headers: {
+                'Authorization': token,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                fileName: file.name,
+                fileSize: file.size,
+                downloadURL,
+              }),
+            })
 
-      const data = await response.json()
+            const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to process package')
-      }
+            if (!response.ok) {
+              throw new Error(data.error || 'Failed to process package')
+            }
 
-      setShowSuccessDialog(true)
-      setFile(null)
+            console.log('API processing successful:', data)
+            setShowSuccessDialog(true)
+            setFile(null)
+          } catch (apiError) {
+            console.error('API Error:', apiError)
+            setError(apiError instanceof Error ? apiError.message : 'Error processing file')
+          } finally {
+            setUploading(false)
+            setUploadProgress(0)
+          }
+        }
+      )
     } catch (error) {
       console.error('Error:', error)
       setError(error instanceof Error ? error.message : 'Error uploading file')
-    } finally {
       setUploading(false)
       setUploadProgress(0)
     }
@@ -129,7 +159,10 @@ function PublishPage() {
           )}
 
           {uploading && (
-            <Progress value={uploadProgress} className="w-full max-w-sm" />
+            <div className="space-y-2 w-full max-w-sm">
+              <Progress value={uploadProgress} className="w-full" />
+              <p className="text-sm text-gray-500 text-center">{uploadProgress.toFixed(1)}%</p>
+            </div>
           )}
 
           <Button

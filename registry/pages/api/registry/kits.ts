@@ -2,9 +2,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { getFirestore, Query, DocumentData } from 'firebase-admin/firestore'
 
-// import { initAdmin } from '@/utils/initAdmin';
+import { initAdmin } from '@/utils/initAdmin';
 
-// initAdmin()
+initAdmin()
+
 
 interface KitSummary {
   fileName: string;

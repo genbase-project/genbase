@@ -7,6 +7,8 @@ export function initAdmin() {
     try {
       // More robust private key handling
       let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+      console.log('Firebase private key:', privateKey);
       
       // Handle different formats that could be provided
       if (privateKey) {

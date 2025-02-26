@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:ca49df05917aa18a98458ba9520c473976c6a81700abaed2b8e7d13a19fdd076"
+content_hash = "sha256:6d093c080e1d797eca082a127818bb39cdc49acbda33f73dc2d42093eafa7314"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -743,6 +743,17 @@ files = [
 ]
 
 [[package]]
+name = "docstring-parser"
+version = "0.16"
+requires_python = ">=3.6,<4.0"
+summary = "Parse Python docstrings in reST, Google and Numpydoc format"
+groups = ["default"]
+files = [
+    {file = "docstring_parser-0.16-py3-none-any.whl", hash = "sha256:bf0a1387354d3691d102edef7ec124f219ef639982d096e26e3b60aeffa90637"},
+    {file = "docstring_parser-0.16.tar.gz", hash = "sha256:538beabd0af1e2db0146b6bd3caa526c35a34d61af9fd2887f3a8a27a739aa6e"},
+]
+
+[[package]]
 name = "durationpy"
 version = "0.9"
 summary = "Module for converting between datetime.timedelta and Go's Duration strings."
@@ -1460,6 +1471,45 @@ groups = ["dev"]
 files = [
     {file = "installer-0.7.0-py3-none-any.whl", hash = "sha256:05d1933f0a5ba7d8d6296bb6d5018e7c94fa473ceb10cf198a92ccea19c27b53"},
     {file = "installer-0.7.0.tar.gz", hash = "sha256:a26d3e3116289bb08216e0d0f7d925fcef0b0194eedfa0c944bcaaa106c4b631"},
+]
+
+[[package]]
+name = "instructor"
+version = "1.7.2"
+requires_python = "<4.0,>=3.9"
+summary = "structured outputs for llm"
+groups = ["default"]
+dependencies = [
+    "aiohttp<4.0.0,>=3.9.1",
+    "docstring-parser<1.0,>=0.16",
+    "jinja2<4.0.0,>=3.1.4",
+    "jiter<0.9,>=0.6.1",
+    "openai<2.0.0,>=1.52.0",
+    "pydantic-core<3.0.0,>=2.18.0",
+    "pydantic<3.0.0,>=2.8.0",
+    "requests<3.0.0,>=2.32.3",
+    "rich<14.0.0,>=13.7.0",
+    "tenacity<10.0.0,>=9.0.0",
+    "typer<1.0.0,>=0.9.0",
+]
+files = [
+    {file = "instructor-1.7.2-py3-none-any.whl", hash = "sha256:cb43d27f6d7631c31762b936b2fcb44d2a3f9d8a020430a0f4d3484604ffb95b"},
+    {file = "instructor-1.7.2.tar.gz", hash = "sha256:6c01b2b159766df24865dc81f7bf8457cbda88a3c0bbc810da3467d19b185ed2"},
+]
+
+[[package]]
+name = "instructor"
+version = "1.7.2"
+extras = ["litellm"]
+requires_python = "<4.0,>=3.9"
+summary = "structured outputs for llm"
+groups = ["default"]
+dependencies = [
+    "instructor==1.7.2",
+]
+files = [
+    {file = "instructor-1.7.2-py3-none-any.whl", hash = "sha256:cb43d27f6d7631c31762b936b2fcb44d2a3f9d8a020430a0f4d3484604ffb95b"},
+    {file = "instructor-1.7.2.tar.gz", hash = "sha256:6c01b2b159766df24865dc81f7bf8457cbda88a3c0bbc810da3467d19b185ed2"},
 ]
 
 [[package]]

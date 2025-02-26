@@ -1,17 +1,20 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import Enum, auto
 import re
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, TypedDict, Union, final
 import json
 import uuid
 import xml.etree.ElementTree as ET
+from pydantic import BaseModel, field_validator, validator
 import xmltodict
 from litellm import ChatCompletionMessageToolCall, Choices
+from engine.services.agents.giml_definitions import GIML_DEFINITIONS
 from engine.services.core.kit import KitConfig
 from engine.services.execution.action import FunctionMetadata
 from engine.services.execution.custom_actions import CustomActionManager
-from engine.services.execution.model import ModelService
+from engine.services.execution.model import ModelService, ResponseType
 from engine.services.execution.state import StateService
 from engine.services.execution.workflow import (
     EnhancedWorkflowAction,
@@ -28,6 +31,11 @@ from engine.services.agents.agent_utils import AgentUtils
 from loguru import logger
 from dataclasses import dataclass
 from typing import Optional, List, Dict
+
+from litellm import ModelResponse
+
+from dataclasses import dataclass
+from typing import Optional, List, Union, Literal
 
 @dataclass
 class GimlResponse:
@@ -47,6 +55,39 @@ class AgentServices:
     state_service: StateService     # For agent state management
     repo_service: RepoService       # For repository operations
 
+
+
+IncludeType = Union[Literal["all", "none"], List[str]]
+TModel = TypeVar('TModel', bound=BaseModel)
+
+class IncludeOptions(BaseModel):
+    shared_actions: bool = False
+    giml_elements: IncludeType = "all"
+    actions: IncludeType = "all"
+    
+    @field_validator('giml_elements', 'actions')
+    @classmethod
+    def validate_include_type(cls, value, info):
+        field_name = info.field_name
+        if isinstance(value, str) and value not in ("all", "none"):
+            raise ValueError(
+                f"Invalid value for '{field_name}': '{value}'. "
+                f"Must be 'all', 'none', or a list of strings."
+            )
+        elif not isinstance(value, str) and not isinstance(value, list):
+            raise TypeError(
+                f"Invalid type for '{field_name}': {type(value)}. "
+                f"Must be 'str' ('all' or 'none') or 'list'."
+            )
+        elif isinstance(value, list) and not all(isinstance(item, str) for item in value):
+            raise TypeError(
+                f"Invalid type within '{field_name}' list. "
+                f"All items in the list must be strings."
+            )
+        return value
+
+
+
 @dataclass
 class AgentContext:
     """Context for an agent operation"""
@@ -63,8 +104,7 @@ class BaseAgent(ABC):
         self.services = services
         self.history_manager = ChatHistoryManager()
         self.context: Optional[AgentContext] = None
-        self.tag_elements = self.get_giml()
-        self.tools: List[Dict[str, Any]] = []
+        self.actions: List[Dict[str, Any]] = []
         self.system_prompt: Optional[str] = None
         self._utils: Optional[AgentUtils] = None
 
@@ -73,17 +113,6 @@ class BaseAgent(ABC):
         self.action_manager = CustomActionManager()
 
 
-
-    def register_custom_action(self, name: str, func: Callable, description: str = None) -> None:
-        """
-        Register a class method as a custom action that can be called by the LLM.
-        
-        Args:
-            name: Name of the action (must be unique)
-            func: Method reference to call when action is invoked
-            description: Optional description of what the action does
-        """
-        self.action_manager.register_action(name, func, description)
 
 
     @property
@@ -100,74 +129,28 @@ class BaseAgent(ABC):
             )
         return self._utils
 
-    def get_giml(self) -> Dict[str, Dict[str, Any]]:
-        """Get GIML (Generative Interface Markup Language) element schemas and descriptions"""
-        return {
-            "select": {
-                "format": """
-    <giml>
-        <select id="<unique id>">
-                <item description="Description of what this option means">Option text1</item>
-                <item description="Description of what this second option means">Option text2</item>
-                ...
-        </select>
-    </giml>""",
-                "use": "Prompt the user with options",
-                "schema": {
-                    "children": {
-                        "select": {
-                            "attributes": ["id"],
-                            "children": {
-                                "item": {
-                                    "attributes": ["description"],
-                                    "type": "text",
-                                    "multiple": True
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "code_diff": {
-                "format": """
-    <giml>
-        <code file="path/to/file" id="<unique id>">
-            <original>Original code block</original>
-            <updated>Updated code block</updated>
-        </code>
-    </giml>""",
-                "use": "Show code changes with original and updated versions",
-                "schema": {
-                    "children": {
-                        "code": {
-                            "attributes": ["file", "id"],
-                            "children": {
-                                "original": {"type": "text"},
-                                "updated": {"type": "text"}
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
-    async def build_context(
+
+    async def set_context(
         self,
         agent_instructions: str = None,
-        action_names: Optional[List[str]] = None,
-        include_shared_actions: bool = False,
-        required_xml_elements: List[str] = None,
-        custom_instructions: Optional[str] = None
+        internal_actions: Optional[Dict[str, Callable]] = None,
+        include: IncludeOptions = IncludeOptions(
+            shared_actions=True,
+            giml_elements="all",
+            actions="all",
+        )
+
     ) -> tuple[str, List[Dict[str, Any]]]:
         """
         Build system prompt with selected actions as tools
         
         Args:
-            workflow_instructions: Optional workflow-specific instructions
-            action_names: List of action names to include, or None for all actions
+            agent_instructions: Optional agent-specific instructions
+            actions: List of action names to include, or None for all actions
             include_shared_actions: Whether to include shared actions as tools
-            required_xml_elements: List of XML element templates to include
-            custom_instructions: Additional instructions to append
+            giml_elements: List of XML element templates to include
+            internal_actions: Dictionary of functions to register as custom actions (replaces existing ones)
             
         Returns:
             Tuple of (system prompt, list of tools)
@@ -184,8 +167,20 @@ class BaseAgent(ABC):
             self.context.workflow
         )
 
-        if action_names is None:
-            tools: List[EnhancedWorkflowAction] = [
+        # Clear existing custom actions if we're passed new ones
+        if internal_actions is not None:
+            self.action_manager.register_actions(internal_actions)
+
+        # Get workflow actions
+        workflow_actions = []
+
+
+        if include.actions == "none":
+            workflow_actions = []        
+
+        elif include.actions == "all":
+            # Include all workflow actions
+            workflow_actions = [
                 {
                     "type": "function",
                     "function": {
@@ -196,8 +191,9 @@ class BaseAgent(ABC):
                 }
                 for action in workflow_data.actions
             ]
-        else:  # Include only specified actions
-            tools = [
+        else:
+            # Filter workflow actions by name
+            workflow_actions = [
                 {
                     "type": "function",
                     "function": {
@@ -207,8 +203,15 @@ class BaseAgent(ABC):
                     }
                 }
                 for action in workflow_data.actions
-                if action.action.name in action_names
+                if action.action.name in include.actions
             ]
+        
+        # Add workflow actions to tools
+        tools.extend(workflow_actions)
+        
+        # Add custom actions from the action manager
+        custom_action_tools = self.action_manager.get_tool_definitions(include.actions)
+        tools.extend(custom_action_tools)
 
         # Add tool descriptions to prompt
         workflow_tool_descriptions = []
@@ -221,28 +224,62 @@ class BaseAgent(ABC):
             parts["Available tools"]= "\n".join(workflow_tool_descriptions)
 
         # Add XML element documentation
-        if required_xml_elements:
+        if include.giml_elements != "none":
+            giml_elements = []
+            if include.giml_elements == "all":
+                giml_elements = list(GIML_DEFINITIONS.keys())
+            else:
+                giml_elements = include.giml_elements
             xml_docs = []
-            for element in required_xml_elements:
-                if element in self.tag_elements:
-                    xml_docs.append(f"Element f{element}\n format: {self.tag_elements[element]['format']}\n use: {self.tag_elements[element]['use']}")
+            for element in giml_elements:
+                if element in GIML_DEFINITIONS.keys():
+                    xml_docs.append(f"Element {element}\n format: {GIML_DEFINITIONS[element].get("format","")}\n use: {GIML_DEFINITIONS[element].get("use","")}")
             if xml_docs:
-                parts["Tag Elements"]= "\n\n".join(xml_docs)
-
-        # Add custom instructions at the end if provided
-        if custom_instructions:
-            parts["Additional Instructions"]=custom_instructions
+                parts["GIML Elements"]= "\n\n".join(xml_docs)
 
         final_instruction = ""
         for key, value in parts.items():
             if value:
                 final_instruction += f"\n\n##{key}:\n{value}"
             
-        self.tools = tools
+        self.actions = tools
         self.system_prompt = final_instruction
         return final_instruction, tools
+        
+    async def run_action(
+        self,
+        action_name: str,
+        parameters: Dict[str, Any]
+    ) -> Any:
+        """Execute a workflow action or custom internal action"""
+        try:
+            if not self.context:
+                raise ValueError("No active context")
 
-    def add_to_history(
+            # Check if this is a custom internal action first
+            if self.action_manager.has_action(action_name):
+                # Execute internal action
+                return await self.action_manager.execute_action(action_name, parameters)
+            
+            # Otherwise, execute as a normal workflow action
+            action_info = ActionInfo(
+                module_id=self.context.module_id,
+                workflow=self.context.workflow,
+                name=action_name
+            )
+
+            result = self.services.workflow_service.execute_workflow_action(
+                action_info=action_info,
+                parameters=parameters
+            )
+
+            return result
+        except Exception as e:
+            logger.error(f"Error executing action: {str(e)}")
+            raise
+
+
+    def add_message(
         self, 
         role: str,
         content: str,
@@ -278,7 +315,7 @@ class BaseAgent(ABC):
             session_id=self.context.session_id
         )
 
-    def get_chat_history(self) -> List[Dict[str, Any]]:
+    def get_messages(self) -> List[Dict[str, Any]]:
         """Get complete chat history"""
         if not self.context:
             raise ValueError("No active context")
@@ -295,7 +332,8 @@ class BaseAgent(ABC):
             formatted_history.append(formatted_msg)
         return formatted_history
 
-    def get_last_assistant_message(self, return_json: bool = False) -> Optional[Dict[str, Any]]:
+
+    def _get_last_assistant_message(self, return_json: bool = False) -> Optional[Dict[str, Any]]:
         """
         Get the last message from the assistant in chat history
         
@@ -311,47 +349,22 @@ class BaseAgent(ABC):
         if not self.context:
             raise ValueError("No active context")
             
-        return self.history_manager.get_last_assistant_message(
+        return self.history_manager.get_last_message(
             module_id=self.context.module_id,
             workflow=self.context.workflow,
             session_id=self.context.session_id,
             return_json=return_json
         )
 
-    async def execute_workflow_action(
-        self,
-        action_name: str,
-        parameters: Dict[str, Any]
-    ) -> Any:
-        """Execute a workflow action"""
-        try:
-            if not self.context:
-                raise ValueError("No active context")
 
-            action_info = ActionInfo(
-                module_id=self.context.module_id,
-                workflow=self.context.workflow,
-                name=action_name
-            )
-
-            result = self.services.workflow_service.execute_workflow_action(
-                action_info=action_info,
-                parameters=parameters
-            )
-
-            return result
-        except Exception as e:
-            logger.error(f"Error executing workflow action: {str(e)}")
-            raise
-
-    async def chat_completion(
+    async def create(
         self,
         messages: List[Dict[str, str]],
         stream: bool = False,
-        tool_choice: Optional[str] = "auto",
+        action_choice: Optional[str] = "auto",
         save_messages: bool = True,
-        process_response: bool = True,
-        include_history: bool = True,
+        run_actions: bool = True,
+        use_history: bool = True,
         **kwargs
     ):
         """Wrapper for model service chat completion that handles tools and history"""
@@ -361,8 +374,8 @@ class BaseAgent(ABC):
 
             # Get current chat history
             history = []
-            if include_history:
-                history = self.get_chat_history()
+            if use_history:
+                history = self.get_messages()
 
             # Always include system message first if we have one
             all_messages = []
@@ -372,32 +385,32 @@ class BaseAgent(ABC):
             if save_messages:
                 for message in messages:
                     # Add user message to history
-                    self.add_to_history(message["role"], message["content"])
+                    self.add_message(message["role"], message["content"])
             
             # Add history and new messages
             all_messages.extend(history + messages)
 
             logger.debug(f"Chat completion messages: {all_messages}")
-            logger.debug(f"Chat completion tools: {self.tools}")
+            logger.debug(f"Chat completion tools: {self.actions}")
             
             # Execute chat completion with current tools
             response = await self.services.model_service.chat_completion(
                 messages=all_messages,
                 stream=stream,
-                tools=self.tools if self.tools else None,
-                tool_choice=tool_choice if self.tools else None,
+                tools=self.actions if self.actions else None,
+                tool_choice=action_choice if self.actions else None,
                 **kwargs
             )
             logger.debug(f"Chat completion response: {response}")
 
-            if process_response:
+            if run_actions:
                 # Add response to history
                 # check if response has tool calls
                 assistant_message = response.choices[0].message
                 
                 if hasattr(assistant_message, "tool_calls") and assistant_message.tool_calls:
                     # Add assistant message with tool calls info
-                    self.add_to_history(
+                    self.add_message(
                         "assistant",
                         None,
                         message_type="tool_calls",
@@ -410,13 +423,13 @@ class BaseAgent(ABC):
                             parameters = json.loads(tool_call.function.arguments)
 
                             # Execute the workflow action
-                            result = await self.execute_workflow_action(
+                            result = await self.run_action(
                                 tool_call.function.name,
                                 parameters
                             )
 
                             # Add to history with tool call ID
-                            self.add_to_history(
+                            self.add_message(
                                 role="tool",
                                 content=json.dumps(result),
                                 message_type="tool_result",
@@ -439,12 +452,9 @@ class BaseAgent(ABC):
 
                 elif assistant_message.content:
                     # Add regular assistant message to history
-                   self.add_to_history("assistant", assistant_message.content)
+                   self.add_message("assistant", assistant_message.content)
 
             
-
-
-
 
 
 
@@ -456,7 +466,67 @@ class BaseAgent(ABC):
             logger.error(f"Chat completion failed: {str(e)}")
             raise
 
-    async def process_request(self, context: AgentContext) -> Dict[str, Any]:
+
+
+    async def create_structured(
+        self,
+        messages: List[Dict[str, str]],
+        response_model: Type[ResponseType],
+        save_messages: bool = True,
+        use_history: bool = True,
+        **kwargs
+    ) -> Tuple[ResponseType, ModelResponse]:
+        """Wrapper for model service structured output that handles tools and history"""
+        try:
+            if not self.context:
+                raise ValueError("No active context")
+
+            # Get current chat history
+            history = []
+            if use_history:
+                history = self.get_messages()
+
+            # Always include system message first if we have one
+            all_messages = []
+            if self.system_prompt:
+                all_messages.append({"role": "system", "content": self.system_prompt})
+
+            if save_messages:
+                for message in messages:
+                    # Add user message to history
+                    self.add_message(message["role"], message["content"])
+            
+            # Add history and new messages
+            all_messages.extend(history + messages)
+
+            logger.debug(f"Structured chat completion messages: {all_messages}")
+            logger.debug(f"Structured chat completion tools: {self.actions}")
+            
+            # Execute structured chat completion with current tools
+            structured_response, raw_response =  self.services.model_service.structured_output(
+                messages=all_messages,
+                response_model=response_model,
+                **kwargs
+            )
+
+            logger.debug(f"Structured chat completion response: {raw_response}")
+
+            if save_messages:
+                # Add assistant message to history
+                assistant_message = raw_response.choices[0].message
+                if assistant_message.content:
+                    self.add_message("assistant", assistant_message.content)
+
+            return structured_response, raw_response
+
+        except Exception as e:
+            logger.error(f"Structured chat completion failed: {str(e)}")
+            raise
+
+
+
+
+    async def handle_request(self, context: AgentContext) -> Dict[str, Any]:
         """Process an agent request"""
         try:
             self.context = context
@@ -467,12 +537,12 @@ class BaseAgent(ABC):
             )
 
             # Get responses
-            responses = self.get_response_values(context.user_input)
+            responses = self.get_responses(context.user_input)
 
             logger.debug(f"Responses: {responses}")
             
             # Process workflow
-            result = await self.process_workflow(context, workflow_data, responses)
+            result = await self.process_request(context, workflow_data, responses)
 
             return result
         except Exception as e:
@@ -482,7 +552,7 @@ class BaseAgent(ABC):
             self.context = None  # Clear context
 
 
-    def get_response_values(self, response_text: str) -> Optional[List[GimlResponse]]:
+    def get_responses(self, response_text: str) -> Optional[List[GimlResponse]]:
         """
         Extract GIML elements from last assistant message and match with responses
         
@@ -536,7 +606,7 @@ class BaseAgent(ABC):
                     responses[resp_id] = resp_value
 
             # Get assistant message
-            message = self.get_last_assistant_message()
+            message = self._get_last_assistant_message()
             if not message or 'content' not in message:
                 return None
 
@@ -553,7 +623,7 @@ class BaseAgent(ABC):
                     giml_dict = xmltodict.parse(giml_block)
 
                     # Check each GIML type we support
-                    for giml_type in self.get_giml().keys():
+                    for giml_type in GIML_DEFINITIONS.keys():
                         for elem in giml_root.findall(f".//{giml_type}"):
                             elem_id = elem.get("id")
                             if elem_id:
@@ -596,7 +666,7 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    async def   process_workflow(
+    async def   process_request(
         self,
         context: AgentContext,
         workflow_data: WorkflowMetadataResult,

@@ -1,66 +1,86 @@
 import { useState, useEffect, useRef } from 'react';
-
 import { useChatPromptStore } from '../stores/chatPromptStore';
-
 import { Button } from "@/components/ui/button";
-
 import { Textarea } from "@/components/ui/textarea";
-
-import { Send, Bot, FileText, WorkflowIcon, PackageCheck, GitBranchPlus, Settings, Boxes, Bot as AgentIcon, Expand, Minimize, Check, MessageSquare } from 'lucide-react';
-
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
+import { 
+  Send, 
+  Bot, 
+  FileText, 
+  WorkflowIcon, 
+  PackageCheck, 
+  Settings, 
+  Boxes, 
+  Bot as AgentIcon, 
+  Expand, 
+  Minimize, 
+  Check, 
+  MessageSquare,
+  ChevronDown,
+  Plus,
+  ChevronRight,
+  ChevronLeft,
+  X,
+  BadgeInfo
+} from 'lucide-react';
 import { ChatContainer } from '../components/Chat';
-
-import type { Message } from '../components/Chat';
-
 import type { Module } from '../components/TreeView';
-
-import { Card, CardContent } from "@/components/ui/card";
-
 import { Badge } from "@/components/ui/badge";
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipTrigger, 
+  TooltipProvider 
+} from '@/components/ui/tooltip';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
-
 import { useChatStore } from '@/stores/chatStore';
-
-interface Workflow {
-
-workflow_type: string;
-
-agent_type: string;
-
-base_instructions: string;
-
-metadata: {
-
-instructions: string;
-
-actions: any[];
-
-requirements: string[];
-
+// Add before the BottomPanel component function
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleString();
 };
 
-default_actions: any[];
-
-is_completed: boolean;
-
-allow_multiple?: boolean;
-
+const truncateText = (text: string, maxLength: number = 30) => {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + '...';
+};
+interface Workflow {
+  workflow_type: string;
+  agent_type: string;
+  base_instructions: string;
+  metadata: {
+    instructions: string;
+    actions: Array<{
+      action?: {
+        path: string;
+        name: string;
+        description: string;
+        full_file_path?: string;
+        function_name?: string;
+      };
+    }>;
+    requirements: string[];
+  };
+  default_actions: any[];
+  kit_config?: {
+    agent: string;
+    instruction: string;
+    actions: Array<{
+      path: string;
+      name: string;
+      description: string;
+    }>;
+    allow_multiple: boolean;
+  };
+  allow_multiple?: boolean;
 }
 
-interface BottomPanelProps {
-
-selectedModule: Module | null;
-
-}
 
 interface Session {
 
@@ -73,10 +93,16 @@ last_updated: string;
 is_default: boolean;
 
 }
+interface BottomPanelProps {
+  selectedModule: Module | null;
+  onMaximize: (isMaximized: boolean) => void;
+  isMaximized: boolean;
+}
 
-const BottomPanel = ({ selectedModule }: BottomPanelProps) => {
+// Then in your component:
+const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelProps) => {
 
-const [isFullscreen, setIsFullscreen] = useState(false);
+  const [expansionState, setExpansionState] = useState<'default' | 'maximized' | 'fullscreen'>('default');
 
 const [localInputValue, setLocalInputValue] = useState('');
 
@@ -95,6 +121,25 @@ const [error, setError] = useState<string | null>(null);
 const [elapsedTime, setElapsedTime] = useState<number>(0);
 
 const [completionTime, setCompletionTime] = useState<string | null>(null);
+const [isWorkflowDetailsOpen, setIsWorkflowDetailsOpen] = useState(false);
+const [isFullscreen, setIsFullscreen] = useState(false);
+
+
+// Replace any references to tabsContainerRef with:
+const tabsRef = useRef<HTMLDivElement>(null);
+
+// Replace the scrollLeft and scrollRight functions with these:
+const scrollLeft = () => {
+  if (tabsRef.current) {
+    tabsRef.current.scrollBy({ left: -100, behavior: 'smooth' });
+  }
+};
+
+const scrollRight = () => {
+  if (tabsRef.current) {
+    tabsRef.current.scrollBy({ left: 100, behavior: 'smooth' });
+  }
+};
 
 const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -252,41 +297,38 @@ console.error('Error fetching sessions:', error);
 
 };
 
+// Update the fetchWorkflows function and its useEffect
+
 const fetchWorkflows = async () => {
-
-if (!selectedModule?.module_id) return;
-
-try {
-
-const response = await fetchWithAuth(
-
-`${ENGINE_BASE_URL}/workflow/workflows?module_id=${selectedModule.module_id}`
-
-);
-
-const data: Workflow[] = await response.json();
-
-setWorkflows(data);
-
-if (data.length > 0 && !currentWorkflow) {
-
-setCurrentWorkflow(data[0].workflow_type);
-
-}
-
-} catch (error) {
-
-console.error('Error fetching workflows:', error);
-
-}
-
+  if (!selectedModule?.module_id) return;
+  
+  try {
+    const response = await fetchWithAuth(
+      `${ENGINE_BASE_URL}/workflow/workflows?module_id=${selectedModule.module_id}`
+    );
+    
+    const data: Workflow[] = await response.json();
+    setWorkflows(data);
+    
+    // Automatically select the first workflow if none is selected
+    if (data.length > 0) {
+      // Only set if currentWorkflow is empty or not in the list of available workflows
+      const workflowExists = data.some(w => w.workflow_type === currentWorkflow);
+      if (!currentWorkflow || !workflowExists) {
+        setCurrentWorkflow(data[0].workflow_type);
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching workflows:', error);
+  }
 };
 
 useEffect(() => {
-
-fetchWorkflows();
-
+  // Reset workflow when module changes to ensure proper selection
+  setCurrentWorkflow('');
+  fetchWorkflows();
 }, [selectedModule?.module_id]);
+
 
 useEffect(() => {
 
@@ -304,7 +346,6 @@ const handleSend = async (text: string) => {
 
 if (!text.trim()) return;
 
-// If we have a pending session, create it first
 
 if (pendingSessionId) {
 
@@ -344,498 +385,487 @@ await sendMessage(text);
 
 };
 
-// Show a message when no module is selected
-
-if (!selectedModule) {
-
-return (
-
-<div className="h-full flex flex-col items-center justify-center space-y-4 text-gray-500">
-
-<Bot className="w-12 h-12 text-gray-400 mb-2" strokeWidth={1.5} />
-
-<div className="text-center">
-
-<h3 className="text-lg font-medium text-gray-700 mb-1">No Module Selected</h3>
-
-<p className="text-sm text-gray-500">Select a module from the sidebar to begin</p>
-
-</div>
-
-</div>
-
-);
-
-}
-
-return (
-
-<div className={`${isFullscreen ? 'fixed inset-4 bg-white shadow-2xl rounded-lg z-50' : 'h-full'} flex overflow-hidden`}>
-
-<div className={`flex-1 flex flex-col ${isFullscreen ? 'border rounded-l-lg' : 'border-t'} min-w-0`}>
-
-{pendingSessionId ? (
-
-<div className="flex-1 flex flex-col items-center justify-center space-y-4 text-gray-500">
-
-<MessageSquare className="w-12 h-12 text-gray-400 mb-2" strokeWidth={1.5} />
-
-<div className="text-center">
-
-<h3 className="text-lg font-medium text-gray-700 mb-1">New Conversation</h3>
-
-<p className="text-sm text-gray-500">Type a message to start the conversation</p>
-
-</div>
-
-</div>
-
-) : (
-
-<ChatContainer messages={messages} />
-
-)}
-
-<div className="p-4 border-t shrink-0">
-
-<div className="max-w-3xl mx-auto flex gap-2">
-
-<div className="flex-1">
-
-<Textarea
-
-ref={textareaRef}
-
-value={storeInputValue}
-
-onChange={(e) => {
-
-setStoreInputValue(e.target.value);
-
-adjustTextareaHeight();
-
-}}
-
-onKeyDown={(e: React.KeyboardEvent) => {
-
-if (e.key === 'Enter' && !e.shiftKey) {
-
-e.preventDefault();
-
-if (!isLoading) {
-
-handleSend(storeInputValue);
-
-setStoreInputValue('');
-
-}
-
-}
-
-}}
-
-placeholder="Send a message... (Shift+Enter for new line)"
-
-disabled={isLoading}
-
-className={`w-full resize-none min-h-[40px] max-h-[200px] ${error ? 'border-red-500' : ''}`}
-
-rows={1}
-
-style={{
-
-height: 'auto',
-
-overflow: 'hidden'
-
-}}
-
-/>
-
-{error ? (
-
-<div className="mt-1 text-sm text-red-600">{error}</div>
-
-) : completionTime && (
-
-<div className="mt-1 text-xs text-gray-600">{completionTime}</div>
-
-)}
-
-</div>
-
-<Button
-
-onClick={() => {
-
-handleSend(storeInputValue);
-
-setStoreInputValue('');
-
-}}
-
-disabled={isLoading}
-
-variant="secondary"
-
->
-
-{isLoading ? (
-
-<div className="flex items-center gap-2">
-
-<div className="w-4 h-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
-
-<span className="text-xs text-gray-600 w-10">{elapsedTime.toFixed(1)}s</span>
-
-</div>
-
-) : (
-
-<Send className="w-4 h-4" />
-
-)}
-
-</Button>
-
-</div>
-
-</div>
-
-</div>
-      <div className={`${isFullscreen ? 'w-96' : 'w-80'} border-l ${isFullscreen ? 'rounded-r-lg' : ''} overflow-auto bg-white`}>
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-xs font-medium text-gray-600">WORKFLOWS</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0"
-              onClick={() => setIsFullscreen(!isFullscreen)}
-            >
-              {isFullscreen ? (
-                <Minimize className="h-3 w-3" />
-              ) : (
-                <Expand className="h-3 w-3" />
-              )}
-            </Button>
+  // Get current workflow details
+  const currentWorkflowData = workflows.find(w => w.workflow_type === currentWorkflow);
+  
+  // Get current session details
+  const currentSessionData = sessions.find(s => s.session_id === currentSession);
+
+
+  const toggleExpansion = () => {
+    if (expansionState === 'default') {
+      setExpansionState('maximized');
+      onMaximize?.(true); // Tell parent to maximize the panel
+    } 
+    else if (expansionState === 'maximized') {
+      setExpansionState('fullscreen');
+      onMaximize?.(false); // Tell parent to restore original size
+    }
+    else {
+      setExpansionState('default');
+      onMaximize?.(false); // Tell parent to restore original size
+    }
+  };
+
+
+  if (!selectedModule) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center space-y-4 text-gray-500">
+        <Bot className="w-12 h-12 text-gray-400 mb-2" strokeWidth={1.5} />
+        <div className="text-center">
+          <h3 className="text-lg font-medium text-gray-700 mb-1">No Module Selected</h3>
+          <p className="text-sm text-gray-500">Select a module from the sidebar to begin</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+<div className={`${isFullscreen ? 'fixed inset-4 bg-white shadow-2xl rounded-lg z-50' : 'h-full'} flex flex-col overflow-hidden`}>
+
+      {/* Improved Top Bar with Workflow Selector and Session Tabs */}
+      <div className={`border-b bg-gray-50 ${isFullscreen ? 'rounded-t-lg' : ''} flex flex-col`}>
+
+        {/* Workflow Selector Row */}
+        <div className="px-4 py-2 flex items-center gap-2 border-b">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Dialog open={isWorkflowDetailsOpen} onOpenChange={setIsWorkflowDetailsOpen}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex items-center gap-2 h-8 bg-white shadow-sm hover:bg-gray-50"
+                      >
+                        <AgentIcon className="h-3.5 w-3.5 text-blue-500" />
+                        <span className="capitalize font-medium truncate">
+                          {currentWorkflow}
+                        </span>
+                        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-[180px]">
+                      {workflows.map((workflow) => (
+                        <DropdownMenuItem 
+                          key={workflow.workflow_type}
+                          className="flex items-center justify-between gap-2 capitalize"
+                          onClick={() => setCurrentWorkflow(workflow.workflow_type)}
+                        >
+                          <span className="truncate">{workflow.workflow_type}</span>
+                  
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {currentWorkflowData && (
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="ml-1 h-8 w-8 p-0" 
+                        title="View workflow details"
+                      >
+                        <BadgeInfo className="h-3.5 w-3.5 text-gray-500" />
+                      </Button>
+                    </DialogTrigger>
+                  )}
+
+{currentWorkflowData && (
+  <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-3">
+        <span className="capitalize">{currentWorkflowData.workflow_type}</span>
+        {currentWorkflowData.agent_type && (
+          <Badge variant="secondary" className="flex items-center gap-1">
+            <AgentIcon className="h-3 w-3" />
+            {currentWorkflowData.agent_type}
+          </Badge>
+        )}
+        {currentWorkflowData.kit_config?.agent && !currentWorkflowData.agent_type && (
+          <Badge variant="secondary" className="flex items-center gap-1">
+            <AgentIcon className="h-3 w-3" />
+            {currentWorkflowData.kit_config.agent}
+          </Badge>
+        )}
+      </DialogTitle>
+    </DialogHeader>
+    <Tabs defaultValue="instructions" className="flex-1 overflow-hidden">
+      <TabsList className="w-full justify-start mb-4">
+        <TabsTrigger value="instructions" className="flex items-center gap-2">
+          <FileText className="h-3 w-3" />
+          <span>Instructions</span>
+          {(currentWorkflowData.base_instructions || currentWorkflowData.metadata.instructions) && (
+            <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+          )}
+        </TabsTrigger>
+        <TabsTrigger value="actions" className="flex items-center gap-2">
+          <WorkflowIcon className="h-3 w-3" />
+          <span>Actions</span>
+          {(currentWorkflowData.metadata.actions.length > 0 || currentWorkflowData.default_actions.length > 0) && (
+            <Badge variant="secondary" className="ml-1">
+              {currentWorkflowData.metadata.actions.length + currentWorkflowData.default_actions.length}
+            </Badge>
+          )}
+        </TabsTrigger>
+        <TabsTrigger value="requirements" className="flex items-center gap-2">
+          <PackageCheck className="h-3 w-3" />
+          <span>Requirements</span>
+          {currentWorkflowData.metadata.requirements.length > 0 && (
+            <Badge variant="secondary" className="ml-1">
+              {currentWorkflowData.metadata.requirements.length}
+            </Badge>
+          )}
+        </TabsTrigger>
+      </TabsList>
+      <div className="overflow-y-auto pr-6">
+        <TabsContent value="instructions" className="m-0">
+          <div className="space-y-4 pb-4">
+            {currentWorkflowData.base_instructions && (
+              <div className="rounded-lg border bg-card text-card-foreground">
+                <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
+                  <FileText className="h-3 w-3 text-gray-600" />
+                  <h3 className="text-sm font-medium">Base Instructions</h3>
+                </div>
+                <div className="p-4 text-sm text-gray-600 leading-relaxed">
+                  {currentWorkflowData.base_instructions}
+                </div>
+              </div>
+            )}
+            {currentWorkflowData.metadata.instructions && (
+              <div className="rounded-lg border bg-card text-card-foreground">
+                <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
+                  <FileText className="h-3 w-3 text-gray-600" />
+                  <h3 className="text-sm font-medium">Specific Instructions</h3>
+                </div>
+                <div className="p-4 text-sm text-gray-600 leading-relaxed">
+                  {currentWorkflowData.metadata.instructions}
+                </div>
+              </div>
+            )}
+            {!currentWorkflowData.base_instructions && !currentWorkflowData.metadata.instructions && (
+              <div className="p-4 text-sm text-gray-500 text-center">
+                No instructions provided for this workflow.
+              </div>
+            )}
           </div>
-          <div className="space-y-4">
-            <Select defaultValue={currentWorkflow} value={currentWorkflow} onValueChange={setCurrentWorkflow}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select workflow" />
-              </SelectTrigger>
-              <SelectContent>
-                {workflows.map((workflow) => (
-                  <SelectItem key={workflow.workflow_type} value={workflow.workflow_type}>
-                    {workflow.workflow_type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Keep existing workflow cards but only show selected one */}
-            {workflows.filter(workflow => workflow.workflow_type === currentWorkflow).map((workflow) => (
-              <Card 
-                key={workflow.workflow_type}
-                className={`cursor-pointer transition-colors hover:bg-gray-50 ${
-                  currentWorkflow === workflow.workflow_type ? 'bg-gray-50 ring-1 ring-gray-200' : ''
-                }`}
-                onClick={() => setCurrentWorkflow(workflow.workflow_type)}
-              >
-                <CardContent className="p-2">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-xs capitalize">{workflow.workflow_type}</span>
-                        {workflow.is_completed && (
-                          <TooltipProvider>
-                            <Tooltip delayDuration={0}>
-                              <TooltipTrigger>
-                                <Check className="h-3 w-3 text-green-500" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Workflow completed</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+        </TabsContent>
+        <TabsContent value="actions" className="m-0">
+          <div className="space-y-4 pb-4">
+            {currentWorkflowData.metadata.actions.length > 0 && (
+              <div className="rounded-lg border bg-card text-card-foreground">
+                <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <Boxes className="h-3 w-3 text-gray-600" />
+                    <h3 className="text-sm font-medium">Custom Actions</h3>
+                  </div>
+                  <Badge variant="default" className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                    {currentWorkflowData.metadata.actions.length}
+                  </Badge>
+                </div>
+                <div className="divide-y">
+                  {currentWorkflowData.metadata.actions.map((actionItem, idx) => {
+                    const action = actionItem.action! || {};
+                    return (
+                      <div key={`metadata-${idx}`} className="p-4">
+                        <p className="text-sm font-medium text-blue-600">
+                          {action!.name! || "Unnamed Action"}
+                        </p>
+                        {(action.description) && (
+                          <p className="mt-1 text-sm text-gray-600">
+                            {action.description}
+                          </p>
                         )}
                       </div>
-                      <Badge variant="secondary" className="text-[10px] flex items-center gap-1 py-0 h-4">
-                        <AgentIcon className="h-2.5 w-2.5" />
-                        {workflow.agent_type}
-                      </Badge>
-                    </div>
-                    
-               
-                      <div className="pt-1">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-[10px] text-gray-500 hover:text-gray-700 h-5 px-2 w-full justify-start">
-                          View Details →
-                        </Button>
-                      </DialogTrigger>
-                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-                          <DialogHeader>
-                          <DialogTitle className="flex items-center gap-3">
-                            <span className="capitalize">{workflow.workflow_type}</span>
-                            {workflow.is_completed && (
-                              <Badge variant="default" className="bg-green-100 text-green-700 hover:bg-green-100">
-                                Completed
-                              </Badge>
-                            )}
-                            <Badge variant="secondary" className="flex items-center gap-1">
-                              <AgentIcon className="h-3 w-3" />
-                              {workflow.agent_type}
-                            </Badge>
-                          </DialogTitle>
-                        </DialogHeader>
-                        <Tabs defaultValue="instructions" className="flex-1 overflow-hidden">
-                          <TabsList className="w-full justify-start mb-4">
-                            <TabsTrigger value="instructions" className="flex items-center gap-2">
-                              <FileText className="h-3 w-3" />
-                              <span>Instructions</span>
-                              {(workflow.base_instructions || workflow.metadata.instructions) && (
-                                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                              )}
-                            </TabsTrigger>
-                            <TabsTrigger value="actions" className="flex items-center gap-2">
-                              <WorkflowIcon className="h-3 w-3" />
-                              <span>Actions</span>
-                              {(workflow.metadata.actions.length > 0 || workflow.default_actions.length > 0) && (
-                                <Badge variant="secondary" className="ml-1">
-                                  {workflow.metadata.actions.length + workflow.default_actions.length}
-                                </Badge>
-                              )}
-                            </TabsTrigger>
-                            <TabsTrigger value="requirements" className="flex items-center gap-2">
-                              <PackageCheck className="h-3 w-3" />
-                              <span>Requirements</span>
-                              {workflow.metadata.requirements.length > 0 && (
-                                <Badge variant="secondary" className="ml-1">
-                                  {workflow.metadata.requirements.length}
-                                </Badge>
-                              )}
-                            </TabsTrigger>
-                          </TabsList>
-                          <div className="overflow-y-auto pr-6">
-                            <TabsContent value="instructions" className="m-0">
-                              <div className="space-y-4 pb-4">
-                                {workflow.base_instructions && (
-                                  <div className="rounded-lg border bg-card text-card-foreground">
-                                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
-                                    <FileText className="h-3 w-3 text-gray-600" />
-                                    <h3 className="text-sm font-medium">Base Instructions</h3>
-                                    </div>
-                                    <div className="p-4 text-sm text-gray-600 leading-relaxed">
-                                      {workflow.base_instructions}
-                                    </div>
-                                  </div>
-                                )}
-                                {workflow.metadata.instructions && (
-                                  <div className="rounded-lg border bg-card text-card-foreground">
-                                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
-                                    <FileText className="h-3 w-3 text-gray-600" />
-                                    <h3 className="text-sm font-medium">Specific Instructions</h3>
-                                    </div>
-                                    <div className="p-4 text-sm text-gray-600 leading-relaxed">
-                                      {workflow.metadata.instructions}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </TabsContent>
-                            <TabsContent value="actions" className="m-0">
-                              <div className="space-y-4 pb-4">
-                                {workflow.metadata.actions.length > 0 && (
-                                  <div className="rounded-lg border bg-card text-card-foreground">
-                                    <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
-                                      <div className="flex items-center gap-2">
-                                        <Boxes className="h-3 w-3 text-gray-600" />
-                                        <h3 className="text-sm font-medium">Custom Actions</h3>
-                                      </div>
-                                      <Badge variant="default" className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-                                        {workflow.metadata.actions.length}
-                                      </Badge>
-                                    </div>
-                                    <div className="divide-y">
-                                      {workflow.metadata.actions.map((action, idx) => (
-                                        <div key={`metadata-${idx}`} className="p-4">
-                                          <p className="text-sm font-medium text-blue-600">{action.name}</p>
-                                          {action.description && (
-                                            <p className="mt-1 text-sm text-gray-600">{action.description}</p>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {workflow.default_actions.length > 0 && (
-                                  <div className="rounded-lg border bg-card text-card-foreground">
-                                    <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
-                                      <div className="flex items-center gap-2">
-                                        <Settings className="h-3 w-3 text-gray-600" />
-                                        <h3 className="text-sm font-medium">System Actions</h3>
-                                      </div>
-                                      <Badge variant="default" className="bg-purple-100 text-purple-700 hover:bg-purple-100">
-                                        {workflow.default_actions.length}
-                                      </Badge>
-                                    </div>
-                                    <div className="divide-y">
-                                      {workflow.default_actions.map((action, idx) => (
-                                        <div key={`default-${idx}`} className="p-4">
-                                          <p className="text-sm font-medium text-purple-600">{action.name}</p>
-                                          {action.description && (
-                                            <p className="mt-1 text-sm text-gray-600">{action.description}</p>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </TabsContent>
-                            <TabsContent value="requirements" className="m-0">
-                              <div className="space-y-4 pb-4">
-                                <div className="rounded-lg border bg-card text-card-foreground">
-                                  <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
-                                    <div className="flex items-center gap-2">
-                                      <PackageCheck className="h-3 w-3 text-gray-600" />
-                                      <h3 className="text-sm font-medium">Requirements</h3>
-                                    </div>
-                                    <Badge variant="default" className="bg-gray-100 text-gray-700 hover:bg-gray-100">
-                                      {workflow.metadata.requirements.length}
-                                    </Badge>
-                                  </div>
-                                  <div className="p-4">
-                                    {workflow.metadata.requirements.length > 0 ? (
-                                      <div className="flex flex-wrap gap-2">
-                                        {workflow.metadata.requirements.map((req, idx) => (
-                                          <Badge key={idx} variant="outline" className="flex items-center gap-1.5 px-3 py-1">
-                                            <PackageCheck className="h-3 w-3" />
-                                            {req}
-                                          </Badge>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <p className="text-sm text-gray-500">No requirements specified</p>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </TabsContent>
-                          </div>
-                        </Tabs>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {currentWorkflowData.default_actions.length > 0 && (
+              <div className="rounded-lg border bg-card text-card-foreground">
+                <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <Settings className="h-3 w-3 text-gray-600" />
+                    <h3 className="text-sm font-medium">System Actions</h3>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-        
+                  <Badge variant="default" className="bg-purple-100 text-purple-700 hover:bg-purple-100">
+                    {currentWorkflowData.default_actions.length}
+                  </Badge>
+                </div>
+                <div className="divide-y">
+                  {currentWorkflowData.default_actions.map((action, idx) => (
+                    <div key={`default-${idx}`} className="p-4">
+                      <p className="text-sm font-medium text-purple-600">{action.name || "Unnamed Action"}</p>
+                      {action.description && (
+                        <p className="mt-1 text-sm text-gray-600">{action.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {currentWorkflowData.metadata.actions.length === 0 && currentWorkflowData.default_actions.length === 0 && (
+              <div className="p-4 text-sm text-gray-500 text-center">
+                No actions available for this workflow.
+              </div>
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="requirements" className="m-0">
+          <div className="space-y-4 pb-4">
+            <div className="rounded-lg border bg-card text-card-foreground">
+              <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <PackageCheck className="h-3 w-3 text-gray-600" />
+                  <h3 className="text-sm font-medium">Requirements</h3>
+                </div>
+                <Badge variant="default" className="bg-gray-100 text-gray-700 hover:bg-gray-100">
+                  {currentWorkflowData.metadata.requirements.length}
+                </Badge>
+              </div>
+              <div className="p-4">
+                {currentWorkflowData.metadata.requirements.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {currentWorkflowData.metadata.requirements.map((req, idx) => (
+                      <Badge key={idx} variant="outline" className="flex items-center gap-1.5 px-3 py-1">
+                        <PackageCheck className="h-3 w-3" />
+                        {req}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No requirements specified</p>
+                )}
+              </div>
             </div>
-
-           
-            <div className="mt-6">
-
-<p className="text-xs font-medium text-gray-600 mb-1">SESSIONS</p>
-
-{workflows.find(w => w.workflow_type === currentWorkflow)?.allow_multiple && (
-
-<Button
-
-variant="outline"
-
-size="sm"
-
-className="w-full my-2 text-xs"
-
-onClick={() => {
-
-// Instead of creating a session immediately, set a pending session ID
-
-setPendingSessionId('pending');
-
-setCurrentSession(null);
-
-}}
-
->
-
-New Session +
-
-</Button>
-
+          </div>
+        </TabsContent>
+      </div>
+    </Tabs>
+  </DialogContent>
 )}
 
-<div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                </Dialog>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Select workflow</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <div className="flex-1"></div>
+          
 
-{sessions.map((session) => (
+  <Button
+    variant="ghost"
+    size="sm"
+    className="h-8 w-8 p-0"
+    onClick={() => {
+      if (!isMaximized && !isFullscreen) {
+        // If in normal mode, maximize
+        onMaximize(true);
+        console.log('Maximize');
+      } else if (isMaximized && !isFullscreen) {
+        // If maximized but not fullscreen, go fullscreen
+        setIsFullscreen(true);
+        onMaximize(false); // Restore panel size when going fullscreen
+        console.log('Fullscreen');
+      } else {
+        // If fullscreen, go back to normal
+        setIsFullscreen(false);
+        onMaximize(false);
+        console.log('Normal');
+      }
+    }}
+    title={
+      !isMaximized && !isFullscreen 
+        ? "Maximize height" 
+        : isMaximized && !isFullscreen 
+          ? "Enter fullscreen" 
+          : "Exit fullscreen"
+    }
+  >
+    {isFullscreen ? (
+      <Minimize className="h-4 w-4" />
+    ) : (
+      <Expand className="h-4 w-4" />
+    )}
+  </Button>
 
-<Card
 
-key={session.session_id}
+        </div>
+        
+        {/* Chrome-like Session Tabs */}
+        <div className="relative flex items-center">
+          {/* Left scroll button */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-8 w-8 p-0 flex-shrink-0 rounded-none border-r"
+            onClick={scrollLeft}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          {/* Scrollable tabs container */}
+          <div 
+            ref={tabsRef}
+            className="flex-1 overflow-x-auto scrollbar-hide flex items-center"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {/* New Session Tab */}
+            {currentWorkflowData?.allow_multiple && (
+              <Button
+                variant={pendingSessionId ? "secondary" : "ghost"}
+                size="sm"
+                className={`h-9 rounded-none border-r px-3 flex items-center gap-1.5 ${
+                  pendingSessionId ? 'bg-blue-50 text-blue-700 border-b-2 border-b-blue-500' : 'hover:bg-gray-100'
+                }`}
+                onClick={() => {
+                  setPendingSessionId('pending');
+                  setCurrentSession(null);
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">New Session</span>
+              </Button>
+            )}
+            
+            {/* Session tabs */}
+            {sessions.map((session) => {
+              const isActive = currentSession === session.session_id;
+              return (
+                <div 
+                  key={session.session_id}
+                  className={`flex items-center h-9 px-3 border-r cursor-pointer group ${
+                    isActive 
+                      ? 'bg-white border-b-2 border-b-blue-500' 
+                      : 'hover:bg-gray-100'
+                  }`}
+                  onClick={() => {
+                    setPendingSessionId(null);
+                    setCurrentSession(session.session_id);
+                  }}
+                >
+                  <div className="flex items-center gap-2 max-w-xs">
+                    <MessageSquare className="h-3 w-3 text-gray-500 flex-shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-medium truncate">
+                        {session.is_default ? "Default Session" : formatDate(session.last_updated)}
+                      </span>
+                      <span className="text-xs text-gray-500 truncate">
+                        {truncateText(session.last_message, 20)}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Close button - shows on hover */}
+                  {!session.is_default && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Handle closing session (add this functionality)
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Right scroll button */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-8 w-8 p-0 flex-shrink-0 rounded-none border-l"
+            onClick={scrollRight}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
-className={`cursor-pointer transition-colors hover:bg-gray-50 ${
+      {/* Main Content Area */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {pendingSessionId ? (
+          <div className="flex-1 h-full flex flex-col items-center justify-center space-y-4 text-gray-500">
+            <MessageSquare className="w-12 h-12 text-gray-400 mb-2" strokeWidth={1.5} />
+            <div className="text-center">
+              <h3 className="text-lg font-medium text-gray-700 mb-1">New Conversation</h3>
+              <p className="text-sm text-gray-500">Type a message to start the conversation</p>
+            </div>
+          </div>
+        ) : (
+          <div className="h-full overflow-y-auto" id="chat-scroll-container">
 
-currentSession === session.session_id ? 'bg-gray-50 ring-1 ring-gray-200' : ''
+          <ChatContainer messages={messages} />
+          </div>
+        )}
+      </div>
 
-}`}
-
-onClick={() => {
-
-setPendingSessionId(null);
-
-setCurrentSession(session.session_id);
-
-}}
-
->
-
-<CardContent className="p-2">
-
-<div className="space-y-1.5">
-
-<div className="flex items-center justify-between">
-
-<Badge
-
-variant={session.is_default ? "secondary" : "outline"}
-
-className="text-[10px]"
-
->
-
-{session.is_default ? "Default Session" : new Date(session.last_updated).toLocaleString()}
-
-</Badge>
-
-</div>
-
-<p className="text-xs text-gray-600 truncate">{session.last_message}</p>
-
-</div>
-
-</CardContent>
-
-</Card>
-
-))}
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-);
-
+      {/* Input Area */}
+      <div className="p-4 border-t shrink-0">
+        <div className="max-w-3xl mx-auto flex gap-2">
+          <div className="flex-1">
+            <Textarea
+              ref={textareaRef}
+              value={storeInputValue}
+              onChange={(e) => {
+                setStoreInputValue(e.target.value);
+                adjustTextareaHeight();
+              }}
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!isLoading) {
+                    handleSend(storeInputValue);
+                    setStoreInputValue('');
+                  }
+                }
+              }}
+              placeholder="Send a message... (Shift+Enter for new line)"
+              disabled={isLoading}
+              className={`w-full resize-none min-h-[40px] max-h-[200px] ${error ? 'border-red-500' : ''}`}
+              rows={1}
+              style={{
+                height: 'auto',
+                overflow: 'hidden'
+              }}
+            />
+            {error ? (
+              <div className="mt-1 text-sm text-red-600">{error}</div>
+            ) : completionTime && (
+              <div className="mt-1 text-xs text-gray-600">{completionTime}</div>
+            )}
+          </div>
+          <Button
+            onClick={() => {
+              handleSend(storeInputValue);
+              setStoreInputValue('');
+            }}
+            disabled={isLoading}
+            variant="secondary"
+          >
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+                <span className="text-xs text-gray-600 w-10">{elapsedTime.toFixed(1)}s</span>
+              </div>
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default BottomPanel;
-

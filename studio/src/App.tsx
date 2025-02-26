@@ -3,61 +3,38 @@ import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
-
 } from "@/components/ui/resizable";
 import 'react-complex-tree/lib/style-modern.css';
 import LeftSidebar from './layout/LeftSidebar';
-import MainContent from './layout/MainContent';
-import BottomPanel from './layout/BottomPanel';
-import { useModuleStore } from './store';
-import { GripHorizontal } from 'lucide-react';
+import MainContentContainer from './MainContentContainer';
 import { ThemeProvider } from './components/themeProvider';
 
 const ProjectInterface = () => {
   const [sidebarExpand, setSidebarExpand] = useState(true);
-  const selectedModule = useModuleStore(state => state.selectedModule);
-
+  const [activeTab, setActiveTab] = useState<string>("modules");
   
   const changeLeftSidebarSize = (expand: boolean) => {
-    console.log(expand);
     setSidebarExpand(expand);
   };
 
-
-  
-
-
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-    <div className="h-screen flex flex-col bg-background">
-
-      
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
-      
-         <ResizablePanel   minSize={sidebarExpand? 20:4} maxSize={sidebarExpand? 20:4} >
-          <LeftSidebar onExpand={changeLeftSidebarSize} expanded={sidebarExpand} />
+      <div className="h-screen flex flex-col bg-background">
+        <ResizablePanelGroup direction="horizontal" className="flex-1">
+          <ResizablePanel minSize={sidebarExpand ? 20 : 4} maxSize={sidebarExpand ? 20 : 4} defaultSize={sidebarExpand ? 20 : 4}>
+            <LeftSidebar 
+              onExpand={changeLeftSidebarSize} 
+              expanded={sidebarExpand} 
+              onTabChange={setActiveTab}
+            />
           </ResizablePanel>
-      
-        <ResizableHandle />
-        <ResizablePanel>
-          <ResizablePanelGroup direction="vertical">
-            <ResizablePanel defaultSize={75}>
-              <MainContent selectedModule={selectedModule} />
-            </ResizablePanel>
-            <ResizableHandle withHandle>
-              <div className="flex h-full w-full items-center justify-center">
-                <GripHorizontal className="h-3 w-3 text-gray-400" />
-              </div>
-            </ResizableHandle>
-            <ResizablePanel defaultSize={35} minSize={10} maxSize={95}>
-              <BottomPanel selectedModule={selectedModule} />
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    
-    </div>
-   </ThemeProvider>
+          <ResizableHandle />
+          <ResizablePanel>
+            <MainContentContainer activeTab={activeTab} />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+    </ThemeProvider>
   );
 };
 

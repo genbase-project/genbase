@@ -204,7 +204,7 @@ class WorkflowRouter:
             logger.error(f"Failed to get metadata for workflow {workflow} in module {module_id}: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
-    async def _execute_workflow_step(
+    async def _execute_workflow_action(
         self,
         module_id: str = Query(..., description="Module ID"),
         workflow: str = Query(..., description="Workflow (initialize/maintain/remove/edit)"),
@@ -321,7 +321,7 @@ class WorkflowRouter:
 
         self.router.add_api_route(
             "/execute",
-            self._execute_workflow_step,
+            self._execute_workflow_action,
             methods=["POST"],
             response_model=Dict[str, Any],
             summary="Execute a specific step in a workflow",

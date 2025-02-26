@@ -10,6 +10,7 @@ from engine.services.core.kit import (
     KitMetadata,
     KitNotFoundError,
     KitService,
+    RegistryError,
     VersionExistsError,
     VersionSort,
 )
@@ -46,6 +47,37 @@ class KitListResponse(BaseModel):
 
 class KitVersionsResponse(BaseModel):
     versions: List[str]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class RegistryKitResponse(BaseModel):
+    """Pydantic model for registry kit response"""
+    fileName: str
+    downloadURL: str
+    checksum: str
+    kitConfig: dict
+    uploadedAt: str
+
+
+class RegistryKitsResponse(BaseModel):
+    """Pydantic model for multiple registry kits response"""
+    kits: List[RegistryKitResponse]
+
+
 
 class KitRouter:
     """FastAPI router for kit management endpoints"""
@@ -161,6 +193,23 @@ class KitRouter:
         except KitError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
+
+
+
+
+    # Add this method to the KitRouter class
+    async def _get_registry_kits(self):
+        """Get all kits from registry"""
+        try:
+            kits = self.service.get_registry_kits()
+            return RegistryKitsResponse(kits=[RegistryKitResponse(**kit) for kit in kits])
+        except RegistryError as e:
+            raise HTTPException(status_code=503, detail=f"Registry error: {str(e)}")
+        except KitError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+
     def _setup_routes(self):
         """Setup all routes"""
         self.router.add_api_route(
@@ -212,4 +261,15 @@ class KitRouter:
             self._delete_kit,
             methods=["DELETE"],
             summary="Delete kit"
+        )
+
+
+
+            # Add this route in the _setup_routes method
+        self.router.add_api_route(
+                "/registry",
+                self._get_registry_kits,
+                methods=["GET"],
+                response_model=RegistryKitsResponse,
+                summary="Get all kits from registry"
         )

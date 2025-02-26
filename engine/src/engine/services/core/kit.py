@@ -639,3 +639,33 @@ class KitService:
 
         except Exception as e:
             raise KitError(f"Failed to delete kit: {str(e)}")
+
+
+
+    def get_registry_kits(self) -> List[Dict[str, Any]]:
+        """
+        Get all kits from the registry
+        
+        Returns:
+            List[Dict[str, Any]]: List of kit data from registry
+            
+        Raises:
+            RegistryError: If registry connection fails
+            KitError: Other errors during API call
+        """
+        if not (base_url := os.getenv('REGISTRY_URL')):
+            raise KitError("REGISTRY_URL environment variable not set")
+            
+        # Construct registry URL for kits endpoint
+        registry_url = urljoin(base_url, "api/registry/kits")
+        
+        try:
+            with httpx.Client() as client:
+                response = client.get(registry_url)
+                response.raise_for_status()
+                data = response.json()
+                return data.get("kits", [])
+        except httpx.HTTPError as e:
+            raise RegistryError(f"Failed to get kits from registry: {str(e)}")
+        except Exception as e:
+            raise KitError(f"Failed to process registry response: {str(e)}")

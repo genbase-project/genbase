@@ -49,7 +49,7 @@ class ModelRouter:
     async def _chat_completion(self, request: Dict[str, Any]):
         """Handle chat completion request"""
         try:
-            response = await self.service.chat_completion(**request)
+            response = await self.service.create(**request)
             return response
         except Exception as e:
             raise Exception(str(e))

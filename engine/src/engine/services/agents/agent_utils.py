@@ -32,16 +32,14 @@ class AgentUtils:
 
     def read_file(self, relative_path: str) -> Optional[str]:
         """
-        Read contents of a file relative to the repository root
+        Read contents of a file relative to the repository root.
+        Skips binary files and returns None for them.
         
         Args:
             relative_path: Path relative to repository root
             
         Returns:
-            str: File contents or None if file doesn't exist
-            
-        Raises:
-            Exception: On read errors
+            str: File contents or None if file doesn't exist or is binary
         """
         try:
             file_path = Path(self.repo_path) / relative_path
@@ -50,10 +48,17 @@ class AgentUtils:
             if not file_path.exists():
                 return None
                 
-            return file_path.read_text()
+            # Simply try to read as text and return None if it fails
+            try:
+                return file_path.read_text(encoding='utf-8')
+            except UnicodeDecodeError:
+                logger.info(f"Skipping binary file: {relative_path}")
+                return None
+                
         except Exception as e:
             logger.error(f"Error reading file {relative_path}: {str(e)}")
             raise
+
 
     def write_file(self, relative_path: str, content: str) -> bool:
         """
@@ -79,7 +84,6 @@ class AgentUtils:
             raise
 
 
-
     def list_files(self, relative_path: str = "") -> List[Path]:
         """
         List all files in a directory relative to the repository root
@@ -88,7 +92,7 @@ class AgentUtils:
             relative_path: Path relative to repository root. If empty, lists from root
                 
         Returns:
-            List[Path]: List of Path objects for all files in the directory
+            List[Path]: List of Path objects for all files, with paths relative to repo root
                 
         Raises:
             Exception: On directory access errors
@@ -99,11 +103,15 @@ class AgentUtils:
                 logger.error(f"Directory does not exist: {dir_path}")
                 return []
                 
-            return [p for p in dir_path.rglob("*") if p.is_file()]
+            # Find all files recursively
+            all_files = [p for p in dir_path.rglob("*") if p.is_file()]
+            
+            # Convert absolute paths to paths relative to repo_path
+            return [p.relative_to(self.repo_path) for p in all_files]
         except Exception as e:
             logger.error(f"Error listing files in {relative_path}: {str(e)}")
             raise
-
+        
 
     def apply_code_changes(self, file_path: str, edits: List[Dict[str,str]]) -> CodeEditResult:
         """
@@ -142,7 +150,7 @@ class AgentUtils:
             return CodeEditResult(success=False, error=str(e))
 
 
-    def get_repo_tree(self, path: Optional[Path]) -> str:
+    def get_repo_tree(self, path: Optional[Path]=None) -> str:
         """
         Get the repository tree
 
@@ -151,13 +159,17 @@ class AgentUtils:
             path: Optional path to get tree for
             
         """
+        kit = self.module_service.get_module_kit_config(self.module_id)
         if path:
             return DisplayTree(
-                dir_path=path,
+                dirPath=str(self.repo_path / path),
             )
 
+        ignore_list = [".git"]
+        ignore_list.extend(kit.workspace.ignore)
         return DisplayTree(
-         dir_path=self.repo_path,
+         dirPath=str(self.repo_path),
+         ignoreList=ignore_list
         )
 
 

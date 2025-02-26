@@ -1,6 +1,6 @@
 from typing import Dict, List, Any, Optional, Tuple
 import json
-from engine.services.agents.base_agent import BaseAgent, AgentContext
+from engine.services.agents.base_agent import BaseAgent, AgentContext, IncludeOptions
 from engine.services.execution.workflow import WorkflowMetadataResult
 from loguru import logger
 
@@ -42,7 +42,7 @@ class TaskerAgent(BaseAgent):
     def agent_type(self) -> str:
         return "tasker"
 
-    async def process_workflow(
+    async def process_request(
         self,
         context: AgentContext,
         workflow_data: WorkflowMetadataResult,
@@ -83,14 +83,16 @@ class TaskerAgent(BaseAgent):
                 instructions += f"\n\n##Workflow Instructions:\n{workflow_data.instructions}"
 
             # Build context with combined instructions
-            system_prompt, _ = await self.build_context(
+            system_prompt, _ = await self.set_context(
                 agent_instructions=instructions,
-                required_xml_elements=["user_prompt"]
+               include=IncludeOptions(
+                   giml_elements=["select", "code_diff"]
+               )
             )
             
 
             # Initial response based on user input
-            response = await self.chat_completion(
+            response = await self.create(
                 messages=[{"role": "user", "content": context.user_input}]
             )
 
@@ -105,5 +107,5 @@ class TaskerAgent(BaseAgent):
             }
 
         except Exception as e:
-            logger.error(f"Error in process_workflow: {str(e)}")
+            logger.error(f"Error in process_request: {str(e)}")
             raise

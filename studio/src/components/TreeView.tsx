@@ -286,25 +286,26 @@ export const TreeView: React.FC<TreeViewProps> = ({
             "px-2 pb-1 flex items-center justify-between",
             isDarkMode ? "border-gray-700/80" : "border-gray-200/80"
           )}>
-            <span>
-              <p className={cn(
-                "text-xs font-medium uppercase tracking-wide",
-                isDarkMode ? "text-gray-400" : "text-gray-600"
-              )}>
-                Modules
-              </p>
-            </span>
+           
             <Button 
               variant="ghost" 
               size="icon"
               className={cn(
-                "h-6 w-6 rounded-full transition-colors",
+                "h-8 w-full  transition-colors ",
                 isDarkMode 
-                  ? "hover:bg-neutral-800/70 hover:text-gray-200" 
-                  : "hover:bg-neutral-200/70 hover:text-gray-800"
+                  ? "text-gray-300 bg-neutral-800 hover:bg-neutral-700 hover:text-gray-200" 
+                  : "text-gray-700 hover:bg-neutral-200/70 hover:text-gray-800"
               )}
               onClick={() => onCreateModule(null)}
             >
+              
+              <p className={cn(
+                "text-xs   tracking-wide",
+                isDarkMode ? "text-gray-400" : "text-gray-600"
+              )}>
+                Create Module
+              </p>
+         
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </div>

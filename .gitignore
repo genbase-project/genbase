@@ -54,3 +54,7 @@ yarn-error.log*
 # yalc
 .yalc
 yalc.lock
+
+
+engine/.pdm-python
+engine/*.log

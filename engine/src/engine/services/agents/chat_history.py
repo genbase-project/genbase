@@ -144,12 +144,13 @@ class ChatHistoryManager:
             
         return message
 
-    def get_last_assistant_message(
+    def get_last_message(
         self,
         module_id: str,
         workflow: str,
         session_id: Optional[str] = None,
-        return_json: bool = False
+        return_json: bool = False,
+        role: str = "assistant"
     ) -> Optional[Dict[str, Any]]:
         """
         Get the last message from the assistant in chat history
@@ -171,7 +172,7 @@ class ChatHistoryManager:
                         ChatHistory.module_id == module_id,
                         ChatHistory.workflow == workflow,
                         ChatHistory.session_id == (session_id or str(uuid.UUID(int=0))),
-                        ChatHistory.role == "assistant"
+                        ChatHistory.role == role
                     )
                     .order_by(ChatHistory.timestamp.desc())
                     .limit(1)

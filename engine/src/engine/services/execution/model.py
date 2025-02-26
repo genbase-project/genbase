@@ -1,10 +1,13 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, TypeVar, Type, Tuple
 import os
+from pydantic import BaseModel
 
-from litellm import completion
+from litellm import completion, ModelResponse
+import instructor
 import litellm
 
 from loguru import logger
+
 
 litellm.suppress_debug_info = True
 
@@ -58,6 +61,9 @@ MODEL_CONFIGS = {
     }
 }
 
+ResponseType = TypeVar('ResponseType', bound=BaseModel)
+
+
 class ModelService:
     def get_available_models(self) -> Dict[str, List[str]]:
         """
@@ -78,6 +84,8 @@ class ModelService:
 
     def __init__(self, model_name: str = "claude-3-5-sonnet-20240620"):
         self.model_name = model_name
+        self.instructor_client = instructor.from_litellm(completion)
+
     
     def set_model(self, model_name: str) -> str:
         """
@@ -133,3 +141,33 @@ class ModelService:
             return response
         except Exception as e:
             raise Exception(f"Chat completion failed: {str(e)}")
+
+
+
+    def structured_output(
+        self,
+        messages: List[Dict[str, str]],
+        response_model: Type[ResponseType],
+        **kwargs
+    ) -> Tuple[ResponseType, ModelResponse]:
+        """
+        Get structured output and raw completion response
+        
+        Args:
+            messages: List of chat messages
+            response_model: Pydantic model class for response validation
+            **kwargs: Additional arguments to pass to completion
+            
+        Returns:
+            Tuple of (structured_response, raw_completion)
+        """
+        try:
+            return self.instructor_client.chat.completions.create_with_completion(
+                model=self.model_name,
+                messages=messages,
+                response_model=response_model,
+                **kwargs
+            )
+        except Exception as e:
+            raise Exception(f"Structured output generation failed: {str(e)}")
+

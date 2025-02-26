@@ -92,12 +92,14 @@ class ChatRouter:
     ) -> WorkflowResponse:
         """Handle workflow execution request"""
         try:
-            # Get appropriate agent
-            agent = self._get_agent_for_workflow(request.workflow, module_id)
-            
+
             # Create context - force string session ID
             session_id = request.session_id or "00000000-0000-0000-0000-000000000000"
             
+            # Get appropriate agent
+            agent = self._get_agent_for_workflow(request.workflow, module_id)
+            
+
             context = AgentContext(
                 module_id=module_id,
                 workflow=request.workflow,
@@ -106,7 +108,7 @@ class ChatRouter:
             )
             
             # Execute workflow
-            result = await agent.process_request(context)
+            result = await agent.handle_request(context)
             
             return WorkflowResponse(
                 response=result.get("response", ""),  # Default empty string 

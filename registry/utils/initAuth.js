@@ -2,6 +2,7 @@
 import { initializeApp } from 'firebase/app'
 import { init } from 'next-firebase-auth'
 import absoluteUrl from 'next-absolute-url'
+import { defineAuth, secret } from '@aws-amplify/backend';
 
 const TWELVE_DAYS_IN_MS = 12 * 60 * 60 * 24 * 1000
 
@@ -82,11 +83,11 @@ const initAuth = () => {
     firebaseAdminInitConfig: {
       credential: {
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL   || secret('FIREBASE_CLIENT_EMAIL'),
         // Using JSON to handle newline problems when storing the
         // key as a secret in Vercel. See:
         // https://github.com/vercel/vercel/issues/749#issuecomment-707515089
-        privateKey: process.env.FIREBASE_PRIVATE_KEY,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY    || secret('FIREBASE_PRIVATE_KEY'),
       },
       databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
     },
@@ -94,8 +95,8 @@ const initAuth = () => {
     cookies: {
       name: 'ExampleApp',
       keys: [
-        process.env.COOKIE_SECRET_CURRENT,
-        process.env.COOKIE_SECRET_PREVIOUS,
+        process.env.COOKIE_SECRET_CURRENT   || secret('COOKIE_SECRET_CURRENT'),
+        process.env.COOKIE_SECRET_PREVIOUS   || secret('COOKIE_SECRET_PREVIOUS'),
       ],
       httpOnly: true,
       maxAge: TWELVE_DAYS_IN_MS,

@@ -1,4 +1,5 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { defineAuth, secret } from '@aws-amplify/backend';
 
 export function initAdmin() {
   const apps = getApps()
@@ -6,7 +7,7 @@ export function initAdmin() {
   if (!apps.length) {
     try {
       // More robust private key handling
-      let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+      let privateKey = process.env.FIREBASE_PRIVATE_KEY || secret('FIREBASE_PRIVATE_KEY');
 
       console.log('Firebase private key:', privateKey);
       
@@ -24,7 +25,7 @@ export function initAdmin() {
       // Log the environment variable names for debugging (not values)
       console.log('Firebase environment variables available:', {
         projectId: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        clientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+        clientEmail: !!process.env.FIREBASE_CLIENT_EMAIL || secret('FIREBASE_CLIENT_EMAIL'),
         privateKey: !!privateKey,
         databaseURL: !!process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
       });
@@ -33,7 +34,7 @@ export function initAdmin() {
       initializeApp({
         credential: cert({
           projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL  || secret('FIREBASE_CLIENT_EMAIL'),
           privateKey: privateKey,
         }),
         databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || undefined,

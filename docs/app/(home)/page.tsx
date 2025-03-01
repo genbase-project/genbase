@@ -88,7 +88,7 @@ const LandingPage = () => {
                 </div>
                 <div className="space-y-2 border-l-2 border-orange-500/30 pl-4">
                   <div className="text-orange-400"> Check the service health and optimize configuration</div>
-                  <div className="text-gray-300">Agent: I'll analyze the service and make improvements.</div>
+                  <div className="text-gray-300">{"Agent: I'll analyze the service and make improvements."}</div>
                   <div className="text-gray-400 pl-2">1. Checking current metrics...</div>
                   <div className="text-gray-400 pl-2">2. Analyzing bottlenecks...</div>
                   <div className="text-gray-400 pl-2">3. Implementing optimizations...</div>

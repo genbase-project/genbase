@@ -1,241 +1,220 @@
 ---
-title: Getting Started with Hivon
-description: Your first steps with AI-controlled software architecture
+title: Getting Started
+description: A guide to set up and begin using Genbase
 ---
 
-# Getting Started with Hivon
+# Getting Started with Genbase
 
-This guide will walk you through setting up your first AI-controlled module using Hivon. We'll create a simple module that manages a web service, demonstrating the core concepts and workflows.
+Welcome to Genbase! This guide will help you set up your environment and start building with specialized AI agents. Genbase makes it easy to create, combine, and deploy intelligent agents that collaborate to solve complex problems.
 
-## Prerequisites
+## What You'll Need
 
-Before starting, ensure you have:
+Before we begin, make sure you have:
 
-1. Python 3.9 or higher installed
-2. pip package manager
-3. Git
-4. A basic understanding of Python and web services
+- **Docker** and **Docker Compose** installed (for containerized deployment)
+- At least one LLM API key (Anthropic, OpenAI, Groq, Mistral, or DeepSeek)
+- Git (for cloning the repository)
 
-## Installation
+## Quick Installation
 
-First, let's install Hivon using pip:
-
-```bash
-pip install hivon-framework
-```
-
-Create a new directory for your project:
+The fastest way to get started is using Docker Compose:
 
 ```bash
-mkdir my-hivon-project
-cd my-hivon-project
+# Clone the repository
+git clone https://github.com/yourusername/genbase.git
+cd genbase
+
+# Copy environment templates
+cp docker/.env.template docker/.env
+cp engine/.env.template engine/.env
+cp studio/.env.template studio/.env
+
+# Edit .env files with your API keys and credentials
+nano engine/.env  # Add at least one LLM API key here
+
+# Make scripts executable
+chmod +x scripts/*.sh
+
+# Start Genbase
+./scripts/docker-run.sh up
 ```
 
-Initialize a new Hivon project:
+You can now access:
+- **Studio** (frontend): http://localhost:5173
+- **Engine** (API): http://localhost:8000
+
+## Configuration Walkthrough
+
+### Essential Environment Variables
+
+The most important settings to configure are your LLM API keys. Open `engine/.env` and add at least one of:
 
 ```bash
-hivon init
+# Choose at least one of these providers
+ANTHROPIC_API_KEY=your_anthropic_key
+OPENAI_API_KEY=your_openai_key
+GROQ_API_KEY=your_groq_key
+MISTRAL_API_KEY=your_mistral_key
+DEEPSEEK_API_KEY=your_deepseek_key
 ```
 
-## Your First Module
+### Default Login Credentials
 
-Let's create a module that manages a web service. We'll use the web-service kit from the registry:
+By default, Genbase uses these credentials:
+- **Username**: admin
+- **Password**: password
+
+To change them, update the following in your `docker/.env` file:
 
 ```bash
-hivon module create --kit web-service --name my-service
+ADMIN_USERNAME=your_username
+ADMIN_PASSWORD=your_secure_password
 ```
 
-This will create a new module with the following structure:
+## First Steps with Genbase
 
-```
-my-service/
-├── actions/
-│   ├── health.py
-│   ├── deployment.py
-│   └── monitoring.py
-├── instructions/
-│   ├── setup.md
-│   └── maintenance.md
-├── kit.yaml
-└── workspace/
-    ├── config/
-    └── scripts/
-```
+Once you've started Genbase, follow these steps to begin:
 
-### Configure the Module
+### 1. Log into the Studio
 
-Edit the module's environment variables:
+Open http://localhost:5173 in your browser and log in with your credentials.
 
-```yaml
-# .env
-SERVICE_URL=https://api.example.com
-API_KEY=your-api-key
-ENVIRONMENT=production
-```
+## ![Genbase Studio Login](/signin.png)
 
-## Understanding Module Workflows
+### 2. Create Your First Project
 
-### 1. Initialize Workflow
+Projects in Genbase organize your modules. Create one by:
 
-The initialize workflow sets up your service:
+1. Clicking "New Project" from the dashboard
+2. Entering a name for your project (e.g., "My First Project")
+3. Clicking "Create"
+
+### 3. Add a Module from the Registry
+
+Modules are the building blocks of Genbase. Let's add one:
+
+1. Navigate to the "Registry" tab
+2. Browse available modules
+3. Select a module (e.g., "Next.js Web Developer")
+4. Configure any required settings
+5. Click "Add to Project"
+
+![Adding a Module](/module.png)
+
+### 4. Start Your First Workflow
+
+Each module provides specialized workflows. To begin:
+
+1. Return to your project
+2. Find your newly added module
+3. Click on the "Workflows" tab
+4. Select a workflow (e.g., "Develop" for a development module)
+5. Start chatting with the specialized agent!
+
+## Understanding Genbase Components
+
+To make the most of Genbase, it helps to understand its core components:
+
+### Modules
+
+Modules are self-contained packages with specialized agents, workflows, and actions. Each module focuses on a specific domain (web development, database administration, etc.).
 
 ```mermaid
-sequenceDiagram
-    participant U as User
-    participant A as AI Agent
-    participant S as Service
+flowchart LR
+    Module[Module] --> Agent[Specialized Agent]
+    Module --> Workflows[Purpose-built Workflows]
+    Module --> Actions[Domain-specific Actions]
     
-    U->>A: Start Initialize
-    A->>S: Check Prerequisites
-    A->>S: Configure Service
-    A->>S: Verify Setup
-    A-->>U: Setup Complete
+    classDef module fill:#DDA0DD,stroke:none
+    classDef component fill:#87CEFA,stroke:none
+    
+    class Module module
+    class Agent,Workflows,Actions component
 ```
 
-Start the initialization:
+### Workflows
 
-```bash
-hivon workflow run my-service initialize
+Workflows are structured conversations with specialized agents. They guide you through specific tasks within a domain.
+
+For example, a Next.js module might offer workflows for:
+- Development (building features)
+- Deployment (preparing for production)
+- Learning (understanding Next.js concepts)
+
+### Relationships
+
+Modules become powerful when they work together. In Genbase, modules can form relationships:
+
+```mermaid
+flowchart LR
+    WebDev[Web Dev Module] -->|Action Relation| Database[Database Module]
+    WebDev <-->|Context Relation| DevOps[DevOps Module]
+    
+    classDef module fill:#DDA0DD,stroke:none
+    
+    class WebDev,Database,DevOps module
 ```
 
-The AI agent will:
-1. Check system requirements
-2. Configure the service
-3. Verify the setup
-4. Move to the maintain stage
+- **Action Relations**: Allow one module to call specialized functions from another
+- **Context Relations**: Enable sharing of information between modules
+- **Submodule Relations**: Allow hierarchical nesting of modules
 
-### 2. Maintain Workflow
+## Working with Multiple Modules
 
-In the maintain workflow, the agent monitors and manages your service:
+Let's create a simple web application with database integration:
 
-```bash
-hivon workflow run my-service maintain
-```
+1. Add a "Next.js Web Developer" module
+2. Add a "PostgreSQL Administrator" module
+3. Create an Action Relation between them
+4. Use the Web Developer workflow to create features
+5. When database functionality is needed, the web module can use PostgreSQL actions
 
-Example interaction:
+This modular approach gives you specialized expertise in each domain.
 
-```
-> Check the current status of the service
+## Common Commands
 
-Agent: I'll check the service health and metrics.
+Here are some handy commands for managing your Genbase installation:
 
-Executing health check...
-- Endpoint status: OK
-- Response time: 145ms
-- Error rate: 0.02%
-- CPU usage: 45%
+| Command | Description |
+|---------|-------------|
+| `./scripts/docker-run.sh up` | Start all services |
+| `./scripts/docker-run.sh down` | Stop all services |
+| `./scripts/docker-run.sh logs` | View logs |
+| `./scripts/docker-run.sh restart` | Restart services |
+| `./scripts/docker-run.sh build` | Rebuild images |
 
-The service is running normally. Would you like me to:
-1. Show detailed metrics
-2. Optimize any settings
-3. Set up alerts
-```
+## Developing Your Own Modules
 
-## Adding Module Relationships
+Once you're comfortable using existing modules, you might want to create your own:
 
-Let's connect our service module with a database module:
+1. Study the structure of existing modules
+2. Create a new directory with the required components:
+   - `kit.yaml`: Module configuration
+   - `agents/`: Agent implementations
+   - `actions/`: Module functions
+   - `instructions/`: Prompts and guides
+   - `workspace/`: Default files
 
-1. Create a database module:
-```bash
-hivon module create --kit postgresql --name my-database
-```
+The Registry provides templates to help you get started.
 
-2. Establish the connection:
-```bash
-hivon module connect my-service my-database --type connection
-```
+## Troubleshooting
 
-This enables:
-- Shared context between modules
-- Coordinated operations
-- Automatic configuration updates
+If you encounter issues:
 
-## Using the AI Agent
-
-The AI agent can handle various tasks. Here are some example interactions:
-
-### 1. Performance Optimization
-
-```
-> The service seems slow, can you optimize it?
-
-Agent: I'll analyze the performance and make improvements.
-
-1. Checking current metrics...
-2. Analyzing bottlenecks...
-3. Implementing optimizations...
-
-I've made the following changes:
-- Increased connection pool size
-- Enabled response caching
-- Optimized database queries
-
-Response time has improved by 35%.
-```
-
-### 2. Configuration Management
-
-```
-> Update the service configuration for higher throughput
-
-Agent: I'll adjust the configuration safely.
-
-1. Backing up current config...
-2. Analyzing resource usage...
-3. Calculating optimal values...
-4. Applying changes gradually...
-
-Configuration updated:
-- Worker processes: 8 -> 12
-- Connection timeout: 30s -> 45s
-- Max requests: 1000 -> 1500
-
-Monitoring for any issues...
-```
+1. **Check logs**: `./scripts/docker-run.sh logs`
+2. **Verify environment variables** are set correctly
+3. **Ensure LLM API keys** are valid and have sufficient credits
+4. **Restart services**: `./scripts/docker-run.sh restart`
 
 ## Next Steps
 
-Now that you have a basic module running, you can:
+Congratulations on setting up Genbase! From here, you can:
 
-1. Explore [Advanced Module Configuration](/guides/using-modules/configuration)
-2. Learn about [Custom Actions](/guides/creating-kits/actions)
-3. Understand [Module Relationships](/concepts/modules/relationships)
-4. Join the [Community](/community)
+- Explore more modules in the Registry
+- Create relationships between your modules
+- Learn to develop custom modules
+- Check out the [Core Concepts](/docs/concepts) and [Architecture](/docs/architecture) documentation
 
-## Common Issues and Solutions
+For more advanced usage, see the full documentation on specialized workflows, module development, and agent customization.
 
-### Issue: Module Creation Fails
-
-```bash
-Error: Kit validation failed
-```
-
-Solution:
-1. Verify kit name and version
-2. Check environment variables
-3. Ensure prerequisites are met
-
-### Issue: Agent Communication Problems
-
-```
-Error: Could not execute workflow
-```
-
-Solution:
-1. Check API access
-2. Verify environment configuration
-3. Review service permissions
-
-## Getting Help
-
-1. Documentation
-   - [Concepts Guide](/concepts)
-   - [API Reference](/reference/api)
-   - [Troubleshooting Guide](/guides/troubleshooting)
-
-2. Community
-   - [Discord Server](https://discord.gg/hivon)
-   - [GitHub Discussions](https://github.com/hivon/hivon/discussions)
-   - [Stack Overflow](https://stackoverflow.com/questions/tagged/hivon)
-
-Would you like me to continue with more documentation sections or expand any particular area?
+Happy building with Genbase!

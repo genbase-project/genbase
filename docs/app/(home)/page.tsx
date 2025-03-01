@@ -63,7 +63,7 @@ const LandingPage = () => {
                 Get Started
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
-              <a href="https://github.com/yourusername/hivon" className="inline-flex items-center px-6 py-3 rounded-lg border border-orange-200 hover:border-orange-300 hover:bg-orange-50 transition-all duration-200">
+              <a href="https://github.com/genbase-project/genbase" className="inline-flex items-center px-6 py-3 rounded-lg border border-orange-200 hover:border-orange-300 hover:bg-orange-50 transition-all duration-200">
                 <GitFork className="mr-2 h-4 w-4 text-orange-600" />
                 Star on GitHub
               </a>

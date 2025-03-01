@@ -1,144 +1,51 @@
 ---
-title: Introduction to Hivon
-description: Understanding the fundamentals of AI-first software architecture
+title: Introduction
+description: Introduction to Genbase
 ---
 
-# Introduction to Hivon
 
-Hivon represents a paradigm shift in software architecture, embracing the reality that while Artificial General Intelligence (AGI) remains on the horizon, we already possess AI models capable of human-level performance within well-defined domains. This framework bridges the gap between traditional software engineering and modern AI capabilities, offering a structured approach to building AI-controlled systems.
+# Introduction to Genbase
 
-## The Challenge
+Genbase is an open platform that enables developers to create, share, and combine intelligent agent-powered workflows through specialized modules. The name "Genbase" combines "Gen" (for generation and agents) and "Base" (a foundation to build upon) - reflecting its purpose as a platform where AI agents can collaborate to solve complex problems.
 
-Traditional software architecture faces several limitations when integrating with AI systems:
+## What is Genbase?
 
-1. Context Integration
-   Modern AI models excel with proper context, but there's no standardized way to provide and maintain this context in software systems.
+At its core, Genbase allows domain experts to package their knowledge into modules with specialized agents that can work together on shared repositories. Unlike general-purpose AI assistants that try to know everything but often lack depth, Genbase embraces specialization and collaboration.
 
-2. Bounded Rationality
-   While current AI models aren't generally intelligent, they perform exceptionally well within constrained environments with clear objectives.
+For example, a web development project might leverage:
+- A Next.js developer module that handles frontend code
+- A PostgreSQL administrator module that manages the database
+- A Docker module that handles deployment
 
-3. Tool Integration
-   AI models need well-defined interfaces to interact with software systems, but traditional architectures aren't designed with AI control in mind.
+Each module brings deep expertise to its domain, and modules can share capabilities through well-defined relationships. This means you can have specialized agents working together seamlessly, each operating in their area of strength.
 
-```mermaid
-graph TD
-    A[Traditional Software Architecture] --> B[Limited AI Integration]
-    B --> C[Context Management Issues]
-    B --> D[Tool Interface Problems]
-    B --> E[Unclear Control Boundaries]
-    
-    F[Hivon Framework] --> G[Structured AI Integration]
-    G --> H[Context Management System]
-    G --> I[Standardized Tool Interfaces]
-    G --> J[Clear Control Protocols]
-```
+## How Does It Work?
 
-## The Hivon Solution
+Genbase organizes interactions through workflows - guided conversations with purpose-built agents for specific tasks. When you need to develop a web application, you don't just get a generic coding assistant - you get a specialized Next.js developer with deep knowledge of that framework.
 
-Hivon addresses these challenges through a comprehensive framework that enables:
+Behind the scenes, these agents operate on Git repositories (workspaces) with full control over their environment. They can:
 
-### 1. Modular AI Control
-The framework introduces the concept of AI-controlled modules, where each module:
-- Represents a distinct software system or component
-- Provides clear boundaries and interfaces
-- Maintains its own context and state
-- Operates through well-defined workflows
+- Generate and modify code
+- Run commands and scripts
+- Access and update files
+- Collaborate with other specialized modules
 
-### 2. Contextual Awareness
-Hivon's unique approach to context management ensures that:
+The power of Genbase comes from how these modules can work together. A database module might expose actions that a web development module can call, allowing the web developer agent to work with databases without needing to understand all the database intricacies.
 
-Rather than relying on static prompts or one-size-fits-all solutions, Hivon enables dynamic context building through:
-- Module relationships
-- Shared resources
-- Workflow history
-- Environmental awareness
+## Why Use Genbase?
 
-This context-first approach allows AI models to make informed decisions based on complete and relevant information.
+Genbase solves several key problems:
 
-### 3. Structured Workflows
-The framework implements a stage-based workflow system that guides AI agents through different phases of module management:
+- **Depth vs. Breadth**: Rather than building one agent that knows a little about everything, Genbase lets you combine agents that each have deep expertise in their domains.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Initialize
-    Initialize --> Maintain: Initial setup complete
-    Maintain --> Remove: Decommission required
-    
-    state Initialize {
-        [*] --> Setup
-        Setup --> Validation
-        Validation --> Configuration
-        Configuration --> [*]
-    }
-    
-    state Maintain {
-        [*] --> Monitor
-        Monitor --> Update
-        Update --> Monitor
-    }
-```
+- **Collaboration**: Domain knowledge from different teams can be packaged, shared, and composed into comprehensive solutions.
 
-## Key Benefits
+- **Flexibility**: As needs change, new modules can be added or existing ones updated without rebuilding the entire system.
 
-### For Engineers
-1. Structured Integration
-   - Clear patterns for AI integration
-   - Standardized interfaces
-   - Predictable behavior
+- **Practical Workflows**: Instead of generic chat interfaces, Genbase provides purpose-built workflows for specific tasks that guide users through complex processes.
 
-2. Reduced Complexity
-   Engineers can focus on defining capabilities and constraints while letting AI handle routine operations.
+## Get Started
 
-3. Improved Maintainability
-   The modular nature of Hivon allows for:
-   - Isolated testing
-   - Gradual adoption
-   - Easy updates
+Whether you're looking to use existing modules for your projects or develop new ones to share specialized knowledge, Genbase provides the infrastructure to make intelligent agents more practical and powerful for real-world development.
 
-### For Organizations
-1. Scalable AI Integration
-   Start small with individual modules and scale up as needed.
-
-2. Risk Management
-   - Clear boundaries for AI operations
-   - Audit trails through workflow history
-   - Controlled progression through stages
-
-3. Resource Optimization
-   AI agents can manage routine tasks efficiently, allowing human engineers to focus on strategic development.
-
-## Real-World Applications
-
-Hivon is particularly valuable in scenarios such as:
-
-### DevOps Automation
-AI agents can manage:
-- Deployment workflows
-- Monitoring and alerting
-- Scaling decisions
-- Incident response
-
-### System Integration
-Modules can represent different systems while AI agents handle:
-- Data synchronization
-- Protocol translation
-- Error recovery
-- Performance optimization
-
-### Service Management
-Automated management of:
-- Service health
-- Resource allocation
-- Configuration updates
-- Dependency management
-
-## Next Steps
-
-Begin your journey with Hivon by:
-
-1. Understanding core concepts in the next section
-2. Following the quickstart guide
-3. Exploring the kit registry at registry.hivon.dev
-4. Joining the community discussions
-
-Each section of this documentation will dive deeper into specific aspects of Hivon, providing you with comprehensive knowledge to successfully implement AI-controlled software architectures.
+Check out our [Getting Started](/docs/getting-started) guide to begin working with Genbase, or dive into the [Core Concepts](/docs/concepts) to understand the platform in more depth.

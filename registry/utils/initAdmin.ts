@@ -14,7 +14,7 @@ export function initAdmin() {
       // Handle different formats that could be provided
       if (privateKey) {
         // If it's a JSON string (sometimes happens with cloud providers)
-        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        if (privateKey!.startsWith('"') && privateKey!.endsWith('"')) {
           privateKey = JSON.parse(privateKey);
         }
         

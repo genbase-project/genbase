@@ -1,261 +1,185 @@
 ---
 title: Core Concepts
-description: Understanding the fundamental building blocks of Hivon
+description: Understanding the fundamental components and architecture of Genbase
 ---
 
 # Core Concepts
 
-Hivon's architecture is built around several key concepts that work together to enable AI-controlled software systems. This page explores these concepts in detail, explaining how they interact and why they're essential.
+This document explains the key components that make up the Genbase platform. Understanding these concepts will help you effectively use the platform and develop your own modules.
 
-## Architectural Overview
+## Modules
+
+Modules are the building blocks of Genbase. Each module is a self-contained package that provides specialized functionality through intelligent agents.
+
+Modules solve the balance between specialized knowledge and general capabilities. Instead of building a single agent that tries to know everything (but inevitably has limitations), Genbase lets you combine specialized modules that each excel in their domain.
+
+> **Key Insight**: The power of Genbase comes from specialization and composition rather than trying to build one agent that does everything.
+
+A module can:
+
+- Implement specialized domain knowledge (web development, database management, DevOps)
+- Define custom agents with deep expertise in specific tasks
+- Expose actions that other modules can use
+- Declare dependencies on other modules
+- Provide purpose-built workflows for different user interactions
+
+**Real-world example:** A PostgreSQL module contains deep knowledge of database administration, specialized SQL agents, and actions that allow other modules to execute optimized database queries.
+
+## Agents
+
+Agents are the intelligent assistants that power Genbase modules. Unlike generic AI assistants, Genbase agents have specialized knowledge and capabilities focused on specific domains.
+
+Agents can:
+
+- Generate and modify code with domain-specific expertise
+- Access and manipulate files in a workspace
+- Execute commands and scripts in their environment
+- Communicate with users through purpose-built workflows
+- Call actions from other modules to access specialized capabilities
 
 ```mermaid
-graph TB
-    %% Define the foundational architecture of Hivon
-    %% Show how different layers interact
-    subgraph Registry Layer
-        A[Kit Registry]
-    end
+flowchart TD
+    A(User) -->|Interacts with| B(Workflow)
+    B -->|Routes to| C(Agent)
+    C -->|Operates on| D(Workspace)
+    C -->|Can call| E(Actions from other modules)
+    C -->|Uses| F(Specialized knowledge)
     
-    subgraph Module Layer
-        B[Module Instance]
-        C[Module Instance]
-        D[Module Instance]
-    end
+    linkStyle default stroke-width:2px;
     
-    subgraph Control Layer
-        E[AI Agent]
-        F[AI Agent]
-        G[AI Agent]
-    end
+    classDef user fill:#78b0ef,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    classDef workflow fill:#7dd37d,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    classDef agent fill:#ff9e7a,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    classDef workspace fill:#d291e8,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    classDef actions fill:#7ad3d6,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    classDef knowledge fill:#f7d86c,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
     
-    subgraph Integration Layer
-        H[Software System]
-        I[Software System]
-        J[Software System]
-    end
-    
-    A -->|Templates| B
-    A -->|Templates| C
-    A -->|Templates| D
-    
-    B -->|Controls| H
-    C -->|Controls| I
-    D -->|Controls| J
-    
-    E -->|Manages| B
-    F -->|Manages| C
-    G -->|Manages| D
+    class A user;
+    class B workflow;
+    class C agent;
+    class D workspace;
+    class E actions;
+    class F knowledge;
+```
 
-## Kits: The Foundation
+**Example:** A Next.js agent understands not just React basics but Next.js-specific patterns, file organization, API routes, server components, and framework nuances that a general-purpose assistant might miss.
 
-A kit in Hivon represents a template for AI-controlled software management. It defines how an AI agent should interact with and manage a specific type of software system.
+## Workflows
 
-### Kit Structure
+Workflows are how users interact with Genbase agents. They provide structured, purpose-built experiences for specific tasks instead of generic chat interfaces.
+
+A workflow:
+
+- Connects you to a specific agent with expertise in that workflow's domain
+- Has clear instructions and context for a defined purpose
+- Maintains conversation history and context
+- Exposes specific actions you can trigger (like running tests or deploying code)
+- Guides you through complex processes with domain-specific knowledge
+
+**Practical example:** A Next.js module might offer different workflows for development, administration, and learning tasks, each tailored to the specific needs of that activity.
+
+## Workspaces
+
+Workspaces are Git repositories where agents operate. They provide:
+
+- A complete filesystem that agents can read from and write to
+- Version control tracking all changes
+- A shared environment where multiple specialized agents can collaborate
+- Persistent storage that maintains state between sessions
+
+Unlike chat-based assistants where context is limited, workspaces maintain the full state of your project and allow agents to execute real commands and work with actual files.
+
+## Relations
+
+Relations define how modules can collaborate with each other, allowing specialized agents to work together seamlessly.
+
+There are several types of relations:
+
+- **Action Relations**: Allow one module to expose functions that other modules can call
+- **Submodule Relations**: Allow one module to include another as a Git submodule in its workspace
+- **Custom Relations**: Define other specialized ways modules can interact
 
 ```mermaid
 graph TD
-    subgraph Kit Components
-        A[Kit Definition] --> B[Workflows]
-        A --> C[Actions]
-        A --> D[Instructions]
-        A --> E[Resources]
-        
-        B --> B1[Initialize]
-        B --> B2[Maintain]
-        B --> B3[Remove]
-        
-        C --> C1[Python Functions]
-        C --> C2[Shell Scripts]
-        C --> C3[API Calls]
-        
-        D --> D1[Documentation]
-        D --> D2[Specifications]
-        D --> D3[Guidelines]
-        
-        E --> E1[Templates]
-        E --> E2[Configs]
-        E --> E3[Scripts]
-    end
+    A(Web Developer Module) -->|calls query action| B(PostgreSQL Module)
+    A -->|deploys via| C(Docker Module)
+    C -->|includes as submodule| A
+    D(Testing Module) -->|runs tests on| A
+    A -->|integrates with| E(API Module)
+    E -->|calls query action| B
+    
+    linkStyle default stroke-width:2px;
+    
+    classDef module fill:#78b0ef,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    classDef database fill:#7dd37d,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    classDef deployment fill:#ff9e7a,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    classDef testing fill:#d291e8,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    classDef api fill:#f7d86c,stroke:#333,stroke-width:2px,color:black,rx:5,ry:5;
+    
+    class A module;
+    class B database;
+    class C deployment;
+    class D testing;
+    class E api;
 ```
 
-### Key Aspects of Kits
+**Example:** A web development module uses an action relation with a database module to execute queries without needing to understand database internals.
 
-1. **Version Control**
-   - Semantic versioning for predictable upgrades
-   - Change tracking across versions
-   - Backward compatibility guidelines
+## Registry Kits
 
-2. **Environment Specification**
-   The kit defines all environmental requirements:
-   ```yaml
-   environment:
-     - name: API_KEY
-       description: "Authentication key for the service"
-       required: true
-       secret: true
-     - name: SERVICE_URL
-       description: "Base URL for API endpoints"
-       required: true
-       default: "https://api.service.com"
-   ```
+Registry kits are templates for creating modules available at registry.genbase.io. When you need to add a capability to your environment, you can use a kit that provides pre-configured modules with specialized agents.
 
-3. **Action Definitions**
-   Actions are the primary interface between AI agents and software systems:
-   ```python
-   @action
-   async def check_service_health(self, service_url: str) -> HealthStatus:
-       """
-       Check the health of the service endpoint.
-       
-       Args:
-           service_url: The URL to check
-           
-       Returns:
-           HealthStatus: Current health status with metrics
-       """
-       # Implementation
-   ```
+A kit contains:
 
-## Modules: The Implementation
+- A `kit.yaml` configuration file defining the module's structure
+- Agent definitions with specialized instructions
+- Workflow configurations for different use cases
+- Dependency specifications and workspace configurations
 
-Modules are instances of kits, representing actual software systems under AI control. Each module maintains its own:
+> **Tip**: Use registry kits when you need to add specialized functionality that's outside your core expertise.
 
-### State Management
-Modules implement a sophisticated state machine:
+## Platform Architecture
+
+The Genbase platform consists of two core components:
+
+- **Engine**: The backend service that manages modules, agents, workspaces, and executes actions
+- **Studio**: The user interface for interacting with workflows and managing modules
+
+The Registry (registry.genbase.io) is an external service that hosts module kits.
+
+## A Complete Example
+
+Here's how these concepts work together in a real-world scenario:
 
 ```mermaid
-stateDiagram-v2
-    [*] --> INITIALIZE
-    INITIALIZE --> MAINTAIN: Successful Setup
-    MAINTAIN --> REMOVE: Decommission
+sequenceDiagram
+    participant User
+    participant NextJS as Next.js Module
+    participant Postgres as PostgreSQL Module
+    participant Docker as Docker Module
     
-    state INITIALIZE {
-        [*] --> Setup
-        Setup --> Validation
-        Validation --> Ready
-        Ready --> [*]
-    }
+    User->>NextJS: Start development workflow
+    Note over NextJS: Creates application scaffold
+    NextJS->>User: Return initial code structure
+    User->>NextJS: Add database features
+    NextJS->>Postgres: Call setupDatabase action
+    Note over Postgres: Configures database schema
+    Postgres->>NextJS: Return connection details
+    NextJS->>Postgres: Call createTable action
+    NextJS->>User: Implement frontend with DB integration
     
-    state MAINTAIN {
-        [*] --> Monitoring
-        Monitoring --> ActionRequired: Issue Detected
-        ActionRequired --> Monitoring: Issue Resolved
-    }
+    User->>Docker: Start deployment workflow
+    Docker->>NextJS: Access code via submodule
+    Note over Docker: Builds containers from code
+    Docker->>User: Generate Docker configuration
+    Docker->>User: Build and deploy containers
 ```
 
-### Module Relationships
+In this example:
 
-The relationship system enables modules to share context and operate together:
+1. You interact with specialized modules for web development, database management, and deployment
+2. Each module provides deep expertise in its domain
+3. Modules collaborate through well-defined relations
+4. The result is a complete system where specialized agents work together seamlessly
 
-1. **Connection Relationships**
-   - Bi-directional operational links
-   - Shared workflows
-   - Runtime dependencies
-   ```python
-   # Example of establishing a connection
-   await module.create_relation(
-       target_id="module-123",
-       relation_type=RelationType.CONNECTION,
-       description="Primary database connection"
-   )
-   ```
-
-2. **Context Relationships**
-   - Knowledge sharing
-   - Configuration inheritance
-   - Environmental awareness
-   ```python
-   # Example of context sharing
-   shared_context = await module.get_context_from(
-       source_id="module-456",
-       context_type="configuration"
-   )
-   ```
-
-## AI Agents: The Control Layer
-
-AI agents in Hivon are specialized language models that:
-
-### Tool Interaction
-The agent uses a standardized tool interface:
-```python
-class Tool:
-    name: str
-    description: str
-    parameters: Dict[str, Any]
-    function: Callable
-    
-    async def execute(self, **params) -> Result:
-        """Execute the tool with given parameters"""
-```
-
-### Context Building
-Agents construct their understanding through:
-
-1. Static Context
-   - Module documentation
-   - Workflow definitions
-   - Historical patterns
-
-2. Dynamic Context
-   - Current state
-   - Related module information
-   - Environmental conditions
-   - Recent actions and their outcomes
-
-### Decision Making
-The agent follows a structured decision process:
-
-```mermaid
-graph LR
-    A[Observe State] --> B[Gather Context]
-    B --> C[Evaluate Options]
-    C --> D[Select Action]
-    D --> E[Execute]
-    E --> F[Monitor Results]
-    F --> A
-```
-
-## Integration Points
-
-Hivon provides several integration mechanisms:
-
-### 1. API Integration
-```python
-from hivon import Module, Action
-
-class CustomModule(Module):
-    @Action
-    async def integrate_with_service(self, endpoint: str):
-        """Custom integration logic"""
-        pass
-```
-
-### 2. Event System
-```python
-# Event subscription
-@module.on_event("state_change")
-async def handle_state_change(event: StateChangeEvent):
-    """React to state changes"""
-    pass
-```
-
-### 3. Plugin Architecture
-```python
-from hivon.plugins import Plugin
-
-class CustomPlugin(Plugin):
-    """Extend functionality through plugins"""
-    
-    async def initialize(self):
-        """Plugin initialization"""
-        pass
-```
-
-## Next Steps
-
-1. Explore the [Quickstart Guide](/guides/quickstart) to create your first module
-2. Learn about [Kit Development](/guides/creating-kits/basic-kit)
-3. Understand [Module Management](/guides/using-modules/initialization)
-4. Join our [Community](/community)
+This modular approach makes Genbase powerful for complex development tasks where different types of expertise must work together effectively.

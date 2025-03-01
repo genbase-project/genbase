@@ -157,13 +157,14 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       return null;
     }
 
-    switch (activeTab) {
-      case "modules":
-        return <ModuleExplorer initialModules={kits} onCollapse={() => onExpand(false)} />;
-      case "registry":
-        return <RegistryExplorer onCollapse={() => onExpand(false)} />;
-      default:
-        return (
+    // Common wrapper with width constraints and overflow control
+    return (
+      <div className="h-full flex-1 overflow-hidden border-r border-gray-800">
+        {activeTab === "modules" ? (
+          <ModuleExplorer initialModules={kits} onCollapse={() => onExpand(false)} />
+        ) : activeTab === "registry" ? (
+          <RegistryExplorer onCollapse={() => onExpand(false)} />
+        ) : (
           <div className="flex flex-col h-full">
             <div className="px-3 py-4 flex justify-between items-center backdrop-blur-sm bg-neutral-900/50 border-b border-gray-800">
               <h2 className="text-lg font-medium text-gray-200">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h2>
@@ -172,7 +173,6 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 size="icon"
                 onClick={() => onExpand(false)}
                 className="h-8 w-8 rounded-md hover:bg-neutral-800/70 hover:text-gray-100 text-gray-400"
-                
               >
                 <Sidebar size={16} />
               </Button>
@@ -186,12 +186,13 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
               </div>
             </div>
           </div>
-        );
-    }
+        )}
+      </div>
+    );
   };
 
   return (
-    <div className="h-full flex flex-row bg-neutral-950">
+    <div className="h-full flex flex-row bg-neutral-950 w-full overflow-hidden">
       <SidebarNav 
         onTabChange={handleTabChange} 
         activeTab={activeTab} 

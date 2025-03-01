@@ -222,14 +222,14 @@ class KitRouter:
         self.router.add_api_route(
             "/install/{owner}/{kit_id}/{version}",
             self._install_kit,
-            methods=["GET"],
+            methods=["POST"],
             summary="Install kit from registry with specific version"
         )
 
         self.router.add_api_route(
             "/install/{owner}/{kit_id}",
             self._install_kit,
-            methods=["GET"],
+            methods=["POST"],
             summary="Install kit from registry with latest version"
         )
 

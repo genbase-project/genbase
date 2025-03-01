@@ -258,11 +258,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Startup event to initialize database
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database on startup"""
-    pass
+    """Initialize database on startup and run migrations"""
+    try:
+        logger.info("Running database migrations...")
+        
+        # Use subprocess to run alembic migrations
+        import subprocess
+        import sys
+        
+        # Run alembic upgrade
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        if result.returncode == 0:
+            logger.info("Database migrations completed successfully")
+        else:
+            logger.error(f"Migration failed with code {result.returncode}")
+            logger.error(f"Migration error: {result.stderr}")
+            logger.error(f"Migration output: {result.stdout}")
+            
+            sys.exit(1)
+    except Exception as e:
+        logger.error(f"Error running migrations: {str(e)}")
+        logger.error(traceback.format_exc())
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     import uvicorn

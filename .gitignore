@@ -58,3 +58,5 @@ yalc.lock
 
 engine/.pdm-python
 engine/*.log
+
+.tmp

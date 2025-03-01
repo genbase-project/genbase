@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from "@/components/ui/resizable";
 import MainContent from './layout/MainContent';
 import BottomPanel from './layout/BottomPanel';
 import { GripHorizontal } from 'lucide-react';
 import { useModuleStore } from './store';
+import RegistryPage, { RegistryKit } from './registry/RegistryPage';
+
 
 interface MainContentContainerProps {
   activeTab: string;
@@ -12,6 +14,7 @@ interface MainContentContainerProps {
 const MainContentContainer: React.FC<MainContentContainerProps> = ({ activeTab }) => {
   const selectedModule = useModuleStore(state => state.selectedModule);
   const [isBottomPanelMaximized, setIsBottomPanelMaximized] = useState(false);
+  const [selectedKit, setSelectedKit] = useState<RegistryKit | null>(null);
   
   // State to control the min/max sizes of panels
   const [topPanelConstraints, setTopPanelConstraints] = useState({ minSize: 30, maxSize: 90 });
@@ -44,6 +47,26 @@ const MainContentContainer: React.FC<MainContentContainerProps> = ({ activeTab }
     }
   };
 
+  // Listen for kit selection events from the sidebar
+  useEffect(() => {
+    const handleKitSelected = (event: CustomEvent) => {
+      try {
+        // Parse the stringified kit data from the event
+        const kitData = JSON.parse(event.detail);
+        console.log("MainContentContainer received kit:", kitData.kitConfig.name);
+        setSelectedKit(kitData);
+      } catch (error) {
+        console.error("Error parsing kit data:", error);
+      }
+    };
+
+    window.addEventListener('registry-kit-selected', handleKitSelected as EventListener);
+
+    return () => {
+      window.removeEventListener('registry-kit-selected', handleKitSelected as EventListener);
+    };
+  }, []);
+
   const renderContent = () => {
     switch (activeTab) {
       case "modules":
@@ -75,17 +98,7 @@ const MainContentContainer: React.FC<MainContentContainerProps> = ({ activeTab }
           </ResizablePanelGroup>
         );
       case "registry":
-        return (
-          <div className="h-full flex items-center justify-center bg-black text-white">
-            <div className="text-center space-y-4">
-              <h2 className="text-2xl font-semibold">Registry</h2>
-              <p className="text-gray-400 max-w-md">
-                The registry feature will provide a centralized repository for modules.
-                This section is currently under development.
-              </p>
-            </div>
-          </div>
-        );
+        return <RegistryPage selectedKit={selectedKit} />;
       default:
         return (
           <div className="h-full flex items-center justify-center bg-neutral-900">

@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15
+    container_name: genbase-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-genbase}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - genbase-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend (Engine)
+  engine:
+    build:
+      context: ../engine
+      dockerfile: Dockerfile
+    container_name: genbase-engine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../engine/.env
+    environment:
+      # Database connection (overrides .env file if present)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres/${POSTGRES_DB:-genbase}
+      # Core settings with defaults
+      - REGISTRY_URL=${REGISTRY_URL:-https://registry.genbase.io}
+      - DATA_DIR=${DATA_DIR:-.data}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-password}
+      # LLM API Keys are loaded from .env file
+    volumes:
+      - engine_data:${DATA_DIR:-.data}
+      # Mount the engine .env file for dynamic updates
+      - ../engine/.env:/app/.env:ro
+    ports:
+      - "8000:8000"
+    networks:
+      - genbase-network
+
+  # React Frontend (Studio)
+  studio:
+    build:
+      context: ../studio
+      dockerfile: Dockerfile
+      args:
+        - VITE_ENGINE_URL=${VITE_ENGINE_URL:-http://localhost:8000}
+        - VITE_API_USERNAME=${VITE_API_USERNAME:-admin}
+        - VITE_API_PASSWORD=${VITE_API_PASSWORD:-password}
+    container_name: genbase-studio
+    restart: unless-stopped
+    depends_on:
+      - engine
+    ports:
+      - "5173:5173"
+    networks:
+      - genbase-network
+
+networks:
+  genbase-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  engine_data:

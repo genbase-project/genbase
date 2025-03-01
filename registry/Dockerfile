@@ -1,23 +1,16 @@
-# Use Node 18
 FROM node:18-alpine
-
-# Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy all files
+# Copy everything
 COPY . .
 
-# # Build app
-# RUN npm run build
+# Install dependencies and build
+RUN npm install
+RUN npm run build
 
-# Expose port
+# Set environment and port
+ENV NODE_ENV=production
+ENV PORT=3000
+
 EXPOSE 3000
-
-# Start the app
-CMD ["npm", "run", "dev"]
+CMD ["npm", "start"]

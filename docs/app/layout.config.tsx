@@ -9,8 +9,8 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
  */
 export const baseOptions: BaseLayoutProps = {
   nav: {
-    // can be JSX too!
-    title: 'Genbase',
+    // @ts-expect-error - Component accepts text in practice despite type definition
+    title: 'Genbase'
   },
   links: [
     {

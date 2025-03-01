@@ -3,7 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ArrowRight, Code, Database, GitBranch, Layers, Share2, SquareCode } from 'lucide-react';
-
+import ModuleAnimation from '../components/ModuleAnimation';
 // Animation variants
 const fadeIn = {
   hidden: { opacity: 0, y: 20 },
@@ -42,6 +42,7 @@ export default function DocsLandingPage() {
           <div className="absolute top-0 right-0 w-1/3 h-1/3 bg-gradient-to-br from-blue-500/10 to-purple-500/10 blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-1/3 h-1/3 bg-gradient-to-tr from-teal-500/10 to-blue-500/10 blur-3xl"></div>
         </div>
+       
 
         <div className="container mx-auto px-4 relative z-10">
           <motion.div 
@@ -97,8 +98,11 @@ export default function DocsLandingPage() {
             </motion.div>
           </motion.div>
         </div>
+
+  
       </section>
 
+<section>  <ModuleAnimation/> </section>
       {/* What is Genbase - With Code Example */}
       <section className="py-20 bg-gray-50 dark:bg-gray-900">
         <div className="container mx-auto px-4">
@@ -114,7 +118,7 @@ export default function DocsLandingPage() {
                 What Makes Genbase Different
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-                Genbase doesn't just generate code—it creates modular, collaborative AI workflows that truly understand your domain.
+                {"Genbase doesn't just generate code—it creates modular, collaborative AI workflows that truly understand your domain."}
               </p>
             </motion.div>
 
@@ -163,15 +167,16 @@ export default function DocsLandingPage() {
                 variants={fadeIn}
                 className="relative rounded-xl shadow-xl overflow-hidden"
               >
+                       <div className='px-8 py-8 bg-cyan-600 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700'>
                 <Image 
                   src="/module.png" 
                   alt="Genbase Dashboard Interface" 
                   width={600} 
                   height={400} 
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700"
-                />
+                  className="w-full  rounded-xl border "/>
+         </div>
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
-                  <p className="text-white text-sm">Genbase module dashboard showing active workflows and module relationships</p>
+                  <p className="text-white text-lg font-bold">Genbase module dashboard showing active workflows and module relationships</p>
                 </div>
               </motion.div>
             </div>
@@ -219,7 +224,7 @@ export default function DocsLandingPage() {
               {/* Connector */}
               <motion.div 
                 variants={fadeIn}
-                className="flex justify-center md:justify-end md:pr-8 my-4"
+                className="flex justify-center  md:pr-8 my-4"
               >
                 <div className="h-12 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
               </motion.div>
@@ -245,7 +250,7 @@ export default function DocsLandingPage() {
               {/* Connector */}
               <motion.div 
                 variants={fadeIn}
-                className="flex justify-center md:justify-end md:pr-8 my-4"
+                className="flex justify-center  md:pr-8 my-4"
               >
                 <div className="h-12 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
               </motion.div>
@@ -271,7 +276,7 @@ export default function DocsLandingPage() {
               {/* Connector */}
               <motion.div 
                 variants={fadeIn}
-                className="flex justify-center md:justify-end md:pr-8 my-4"
+                className="flex justify-center  md:pr-8 my-4"
               >
                 <div className="h-12 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
               </motion.div>
@@ -330,6 +335,7 @@ export default function DocsLandingPage() {
               variants={fadeIn}
               className="mb-16 max-w-5xl mx-auto"
             >
+              <div className='px-8 py-8 bg-purple-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700'>
               <Image 
                 src="/registry.png" 
                 alt="Genbase Module Registry" 
@@ -337,6 +343,7 @@ export default function DocsLandingPage() {
                 height={600}
                 className="w-full rounded-xl shadow-lg border border-gray-200 dark:border-gray-700"
               />
+              </div>
             </motion.div>
             
             <motion.div variants={fadeIn} className="text-center mb-16">
@@ -556,7 +563,7 @@ export default function DocsLandingPage() {
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-4">Documentation</h3>
               <ul className="space-y-2">
-                <li><Link href="/docs/introduction" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Introduction</Link></li>
+                <li><Link href="/introduction" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Introduction</Link></li>
                 <li><Link href="/docs/overview/getting-started" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Getting Started</Link></li>
                 <li><Link href="/docs/overview/concepts" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Core Concepts</Link></li>
                 <li><Link href="/docs/overview/architecture" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Architecture</Link></li>
@@ -566,9 +573,9 @@ export default function DocsLandingPage() {
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-4">Resources</h3>
               <ul className="space-y-2">
-                <li><a href="https://github.com/genbase" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">GitHub</a></li>
+                <li><a href="https://github.com/genbase-project/genbase" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">GitHub</a></li>
                 <li><a href="https://registry.genbase.io" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Module Registry</a></li>
-                <li><a href="https://discord.gg/genbase" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Community</a></li>
+                <li><a href="https://github.com/genbase-project/genbase/discussions" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Community</a></li>
               </ul>
             </div>
           </div>

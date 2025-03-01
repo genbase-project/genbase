@@ -5,8 +5,9 @@ import { source } from '@/lib/source';
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <DocsLayout tree={source.pageTree} {...baseOptions}>
-      {children}
-    </DocsLayout>
+  // @ts-expect-error - Component accepts children in practice despite type definition
+  <DocsLayout tree={source.pageTree} {...baseOptions}>
+  {children}
+</DocsLayout>
   );
 }

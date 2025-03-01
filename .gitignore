@@ -60,3 +60,4 @@ engine/.pdm-python
 engine/*.log
 
 .tmp
+.vscode

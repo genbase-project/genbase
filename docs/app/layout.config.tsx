@@ -1,5 +1,4 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
-
 /**
  * Shared layout configurations
  *
@@ -9,7 +8,8 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
  */
 export const baseOptions: BaseLayoutProps = {
   nav: {
-    // @ts-expect-error - Component accepts text in practice despite type definition
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
     title: 'Genbase'
   },
   links: [

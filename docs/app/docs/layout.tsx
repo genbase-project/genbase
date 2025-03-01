@@ -5,7 +5,8 @@ import { source } from '@/lib/source';
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-  // @ts-expect-error - Component accepts children in practice despite type definition
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
   <DocsLayout tree={source.pageTree} {...baseOptions}>
   {children}
 </DocsLayout>

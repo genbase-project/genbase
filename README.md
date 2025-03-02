@@ -8,9 +8,11 @@
 
 ## What is Genbase?
 
-Genbase is an open platform that enables AI-powered collaboration through specialized modules. Instead of building one agent that knows a little about everything, Genbase allows you to combine domain-specific agents that each bring deep expertise to their area.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/genbase-project/genbase/refs/heads/main/docs/public/logo.png" width="150" alt="Genbase Logo">
+</p>
 
-![Gebase Logo](https://raw.githubusercontent.com/genbase-project/genbase/refs/heads/main/docs/public/logo.png)
+Genbase is an open platform that enables AI-powered collaboration through specialized modules. Instead of building one agent that knows a little about everything, Genbase allows you to combine domain-specific agents that each bring deep expertise to their area.
 
 ### Key Features
 
@@ -167,10 +169,10 @@ VITE_API_PASSWORD="your_secure_password_here"
 
 ## Documentation
 
-- [Getting Started Guide](https://docs.genbase.io/getting-started)
-- [Core Concepts](https://docs.genbase.io/concepts)
-- [Architecture](https://docs.genbase.io/architecture)
-- [Creating Modules](https://docs.genbase.io/creating-modules)
+- [Getting Started Guide](https://docs.genbase.io/docs/overview/getting-started)
+- [Core Concepts](https://docs.genbase.io/docs/overview/concepts)
+- [Architecture](https://docs.genbase.io/docs/overview/architecture)
+- [Creating Modules](https://docs.genbase.io/docs/introduction)
 
 ## Contributing
 

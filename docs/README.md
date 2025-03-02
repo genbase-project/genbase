@@ -1,8 +1,7 @@
 # Genbase
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/genbase-ai/genbase.svg)](https://github.com/genbase-ai/genbase/stargazers)
-[![Discord](https://img.shields.io/discord/1224567890123456?label=discord)](https://discord.gg/genbase)
+[![GitHub Stars](https://img.shields.io/github/stars/genbase-io/genbase.svg)](https://github.com/genbase-io/genbase/stargazers)
 
 > A modular platform for specialized AI agents that collaborate to solve complex problems.
 

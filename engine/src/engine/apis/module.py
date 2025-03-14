@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, validator
 
+from engine.db.models import ProvideType
 from engine.services.core.module import (
     ModuleError,
     ModuleMetadata,
@@ -107,6 +108,64 @@ class CreateRelationRequest(BaseModel):
 class ModuleGraphResponse(BaseModel):
     nodes: List[ModuleResponse]
     edges: List[Dict]
+
+
+
+
+
+
+class CreateModuleProvideRequest(BaseModel):
+    provider_id: str
+    receiver_id: str
+    resource_type: ProvideType
+    description: Optional[str] = None
+    
+
+class UpdateProvideDescriptionRequest(BaseModel):
+    description: str
+    
+    @validator('description')
+    def validate_description(cls, v):
+        if not v.strip():
+            raise ValueError('Description cannot be empty')
+        return v.strip()
+
+class ModuleProvideResponse(BaseModel):
+    provider_id: str
+    receiver_id: str
+    resource_type: str
+    description: Optional[str]
+    created_at: str
+    updated_at: str
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class ModuleRouter:
     """FastAPI router for module management"""
@@ -350,6 +409,307 @@ class ModuleRouter:
             raise HTTPException(status_code=400, detail=str(e))
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    async def _create_module_provide(self, request: CreateModuleProvideRequest):
+        """Create a provide relationship between modules"""
+        try:
+            provide = self.service.create_module_provide(
+                provider_id=request.provider_id,
+                receiver_id=request.receiver_id,
+                resource_type=request.resource_type,
+                description=request.description
+            )
+            
+            return ModuleProvideResponse(
+                provider_id=provide.provider_id,
+                receiver_id=provide.receiver_id,
+                resource_type=provide.resource_type.value,
+                description=provide.description,
+                created_at=provide.created_at.isoformat(),
+                updated_at=provide.updated_at.isoformat()
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except ModuleError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    async def _delete_module_provide(
+        self,
+        provider_id: str,
+        receiver_id: str,
+        resource_type: ProvideType
+    ):
+        """Delete a provide relationship between modules"""
+        try:
+            result = self.service.delete_module_provide(
+                provider_id=provider_id,
+                receiver_id=receiver_id,
+                resource_type=resource_type
+            )
+            
+            if not result:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"No provide relationship found with the specified parameters"
+                )
+                
+            return JSONResponse(
+                content={
+                    "status": "success",
+                    "message": "Provide relationship deleted successfully"
+                }
+            )
+        except ModuleError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    async def _get_module_provides(
+        self, 
+        module_id: str, 
+        as_provider: bool = True,
+        resource_type: Optional[ProvideType] = None
+    ):
+        """Get all provide relationships for a module"""
+        try:
+            provides = self.service.get_module_provides(
+                module_id=module_id,
+                as_provider=as_provider,
+                resource_type=resource_type
+            )
+            
+            return [
+                ModuleProvideResponse(
+                    provider_id=p.provider_id,
+                    receiver_id=p.receiver_id,
+                    resource_type=p.resource_type.value,
+                    description=p.description,
+                    created_at=p.created_at.isoformat(),
+                    updated_at=p.updated_at.isoformat()
+                )
+                for p in provides
+            ]
+        except ModuleError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    async def _get_modules_with_access_to(
+        self,
+        module_id: str,
+        resource_type: ProvideType
+    ):
+        """Get all modules that have access to specified resources of a module"""
+        try:
+            modules = self.service.get_modules_with_access_to(
+                module_id=module_id,
+                resource_type=resource_type
+            )
+            
+            return [ModuleResponse.from_metadata(
+                ModuleMetadata(
+                    module_id=m.module_id,
+                    module_name=m.module_name,
+                    project_id=m.project_mappings[0].project_id if m.project_mappings else "",
+                    kit_id=m.kit_id,
+                    owner=m.owner,
+                    version=m.version,
+                    created_at=m.created_at.isoformat(),
+                    env_vars=m.env_vars,
+                    repo_name=m.repo_name,
+                    path=m.project_mappings[0].path if m.project_mappings else ""
+                )
+            ) for m in modules]
+        except ModuleError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    async def _get_modules_providing_to(
+        self,
+        module_id: str,
+        resource_type: ProvideType
+    ):
+        """Get all modules that provide specified resources to a module"""
+        try:
+            modules = self.service.get_modules_providing_to(
+                module_id=module_id,
+                resource_type=resource_type
+            )
+            
+            return [ModuleResponse.from_metadata(
+                ModuleMetadata(
+                    module_id=m.module_id,
+                    module_name=m.module_name,
+                    project_id=m.project_mappings[0].project_id if m.project_mappings else "",
+                    kit_id=m.kit_id,
+                    owner=m.owner,
+                    version=m.version,
+                    created_at=m.created_at.isoformat(),
+                    env_vars=m.env_vars,
+                    repo_name=m.repo_name,
+                    path=m.project_mappings[0].path if m.project_mappings else ""
+                )
+            ) for m in modules]
+        except ModuleError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    async def _update_module_provide_description(
+        self,
+        provider_id: str,
+        receiver_id: str,
+        resource_type: ProvideType,
+        request: UpdateProvideDescriptionRequest
+    ):
+        """Update the description of a provide relationship"""
+        try:
+            result = self.service.update_module_provide_description(
+                provider_id=provider_id,
+                receiver_id=receiver_id,
+                resource_type=resource_type,
+                description=request.description
+            )
+            
+            if not result:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No provide relationship found with the specified parameters"
+                )
+                
+            return JSONResponse(
+                content={
+                    "status": "success",
+                    "message": "Provide relationship description updated successfully"
+                }
+            )
+        except ModuleError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        
+
+
+
+
+
+    async def get_providing(self, module_id: str):
+        """Get resources that this module provides to other modules"""
+        return (await self._get_module_provides(module_id, as_provider=True))
+        
+    async def get_receiving(self, module_id: str):
+        """Get resources that this module receives from other modules"""
+        return (await self._get_module_provides(module_id, as_provider=False))
+        
+    async def get_providing_by_type(self, module_id: str, resource_type: ProvideType):
+        """Get specific resources that this module provides to other modules"""
+        return (await self._get_module_provides(
+            module_id, 
+            as_provider=True,
+            resource_type=resource_type
+        ))
+        
+    async def get_receiving_by_type(self, module_id: str, resource_type: ProvideType):
+        """Get specific resources that this module receives from other modules"""
+        return (await self._get_module_provides(
+            module_id, 
+            as_provider=False,
+            resource_type=resource_type
+        ))
+
+
+
+
+
+    def add_provide_routes(self):
+        """Add provide-related routes to the router"""
+        
+        self.router.add_api_route(
+            "/provide",
+            self._create_module_provide,
+            methods=["POST"],
+            response_model=ModuleProvideResponse,
+            summary="Create a provide relationship between modules"
+        )
+        
+        self.router.add_api_route(
+            "/provide/{provider_id}/{receiver_id}/{resource_type}",
+            self._delete_module_provide,
+            methods=["DELETE"],
+            summary="Delete a provide relationship"
+        )
+        
+        self.router.add_api_route(
+            "/{module_id}/providing",
+            self.get_providing,
+            methods=["GET"],
+            response_model=List[ModuleProvideResponse],
+            summary="Get all resources this module provides to other modules"
+        )
+        
+        self.router.add_api_route(
+            "/{module_id}/receiving",
+            self.get_receiving,
+            methods=["GET"],
+            response_model=List[ModuleProvideResponse],
+            summary="Get all resources this module receives from other modules"
+        )
+        
+        self.router.add_api_route(
+            "/{module_id}/receiving/{resource_type}",
+            self.get_receiving_by_type,
+            methods=["GET"],
+            response_model=List[ModuleProvideResponse],
+            summary="Get specific resources this module receives from other modules"
+        )
+        
+        self.router.add_api_route(
+            "/{module_id}/providing/{resource_type}",
+            self.get_providing_by_type,
+            methods=["GET"],
+            response_model=List[ModuleProvideResponse],
+            summary="Get specific resources this module provides to other modules"
+        )
+        
+        self.router.add_api_route(
+            "/{module_id}/with-access-to/{resource_type}",
+            self._get_modules_with_access_to,
+            methods=["GET"],
+            response_model=List[ModuleResponse],
+            summary="Get modules with access to this module's resources"
+        )
+        
+        self.router.add_api_route(
+            "/{module_id}/providers/{resource_type}",
+            self._get_modules_providing_to,
+            methods=["GET"],
+            response_model=List[ModuleResponse],
+            summary="Get modules providing resources to this module"
+        )
+        
+        self.router.add_api_route(
+            "/provide/{provider_id}/{receiver_id}/{resource_type}/description",
+            self._update_module_provide_description,
+            methods=["PUT"],
+            summary="Update provide relationship description"
+        )
+
+
+
+
+
+
+
     def _setup_routes(self):
         """Setup all routes"""
         self.router.add_api_route(
@@ -444,3 +804,6 @@ class ModuleRouter:
             methods=["PUT"],
             summary="Update relation description"
         )
+
+
+        self.add_provide_routes()

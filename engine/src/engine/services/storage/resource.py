@@ -93,46 +93,20 @@ class ResourceService:
         except (ModuleError, ResourceError) as e:
             raise ResourceError(str(e))
 
-    def get_documentation_resources(self, module_id: str) -> List[Resource]:
-        """Get documentation resources"""
-        try:
-            # Get kit config with full paths populated
-            kit_config = self.module_service.get_module_kit_config(module_id)
-            
-            # Early return if no documentation
-            if not kit_config.instructions or not kit_config.instructions.documentation:
-                return []
 
-            resources = []
-            # Process each documentation resource
-            for doc in kit_config.instructions.documentation:
-                file_path = Path(doc.full_path)
-                if file_path.exists():
-                    resources.append(Resource(
-                        path=doc.path,
-                        name=file_path.name,
-                        content=self._read_file_content(file_path),
-                        description=doc.description
-                    ))
-
-            return resources
-
-        except (ModuleError, ResourceError) as e:
-            raise ResourceError(str(e))
-
-    def get_specification_resources(self, module_id: str) -> List[Resource]:
+    def get_provided_instruction_resources(self, module_id: str) -> List[Resource]:
         """Get specification resources"""
         try:
             # Get kit config with full paths populated
             kit_config = self.module_service.get_module_kit_config(module_id)
             
             # Early return if no specifications
-            if not kit_config.instructions or not kit_config.instructions.specification:
+            if not kit_config.provide or not kit_config.provide.instructions:
                 return []
 
             resources = []
             # Process each specification resource
-            for spec in kit_config.instructions.specification:
+            for spec in kit_config.provide.instructions:
                 file_path = Path(spec.full_path)
                 if file_path.exists():
                     resources.append(Resource(

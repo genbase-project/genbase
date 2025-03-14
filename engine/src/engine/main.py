@@ -29,6 +29,7 @@ from engine.apis.project import ProjectRouter
 from engine.apis.repository import RepositoryRouter
 from engine.apis.resource import ResourceRouter
 from engine.apis.workflow import WorkflowRouter
+from engine.const import BASE_DATA_DIR, KIT_BASE_DIR, REPO_BASE_DIR
 from engine.services.agents.base_agent import AgentServices
 from engine.services.execution.action import ActionService
 
@@ -120,10 +121,6 @@ app = FastAPI(
 )
 app.add_middleware(LogMiddleware)
 
-# Configuration
-BASE_DATA_DIR = Path(os.getenv("DATA_DIR"))
-REPO_BASE_DIR = BASE_DATA_DIR / "repositories"
-KIT_BASE_DIR = BASE_DATA_DIR / "kit"
 
 # Create necessary directories
 BASE_DATA_DIR.mkdir(exist_ok=True)

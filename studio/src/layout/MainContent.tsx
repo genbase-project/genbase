@@ -7,9 +7,10 @@ import {
 import { Tree, NodeRendererProps } from 'react-arborist';
 import CodeEditor from '../components/CodeEditor';
 import { ChevronRight, ChevronDown, Box, RefreshCw, Code, Eye, Package, Expand, Minimize, Network } from 'lucide-react';
-import RightSidebar from './RightSidebar';
+import RightSidebar from './provide/RightSidebar';
 import { Module } from '../components/TreeView';
-import ReactMarkdown from 'react-markdown';
+import MarkdownToJSX from 'markdown-to-jsx';
+
 import { 
   Select,
   SelectContent,
@@ -62,7 +63,7 @@ interface ApiResponse {
   description: string;
 }
 
-const RESOURCE_TYPES = ['documentation', 'specification', 'workspace', 'manifests'];
+const RESOURCE_TYPES = ['provide-instructions', 'workspace', 'manifests'];
 
 const buildTreeFromPaths = (items: ApiResponse[]): TreeItem[] => {
   const root: { [key: string]: TreeItem } = {};
@@ -108,7 +109,6 @@ const ContentViewer = ({
   isMarkdown: boolean; 
   onChange: (value: string) => void;
   viewMode: 'preview' | 'code';
-  isExpanded?: boolean;
 }) => {
   if (!isMarkdown) {
     return (
@@ -120,12 +120,66 @@ const ContentViewer = ({
   }
 
   return viewMode === 'preview' ? (
-
-    <div className=" flex flex-col overflow-auto">
-         <ScrollArea className="flex-1 overflow-x-hidden">
-      <div className="prose max-w-none p-4 ">
-        <ReactMarkdown>{content}</ReactMarkdown>
-      </div>
+    <div className="h-full w-full overflow-hidden">
+      <ScrollArea className="h-full w-full overflow-auto" scrollHideDelay={0}>
+        <div className="prose max-w-none p-4">
+          <MarkdownToJSX options={{
+            overrides: {
+              h1: {
+                props: {
+                  className: 'text-2xl font-bold my-4',
+                },
+              },
+              h2: {
+                props: {
+                  className: 'text-xl font-bold my-3',
+                },
+              },
+              h3: {
+                props: {
+                  className: 'text-lg font-bold my-2',
+                },
+              },
+              p: {
+                props: {
+                  className: 'my-2',
+                },
+              },
+              ul: {
+                props: {
+                  className: 'list-disc ml-5 my-2',
+                },
+              },
+              ol: {
+                props: {
+                  className: 'list-decimal ml-5 my-2',
+                },
+              },
+              li: {
+                props: {
+                  className: 'my-1',
+                },
+              },
+              blockquote: {
+                props: {
+                  className: 'border-l-4 border-gray-200 pl-4 italic my-2',
+                },
+              },
+              code: {
+                props: {
+                  className: 'bg-gray-100 rounded px-1 font-mono text-sm',
+                },
+              },
+              pre: {
+                props: {
+                  className: 'bg-gray-100 rounded p-3 my-2 overflow-auto',
+                },
+              },
+            },
+          }}>
+            {content}
+          </MarkdownToJSX>
+        </div>
       </ScrollArea>
     </div>
   ) : (
@@ -135,6 +189,8 @@ const ContentViewer = ({
     />
   );
 };
+
+
 
 const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
   const [resourceStateCache, setResourceStateCache] = useState<{ 
@@ -151,7 +207,6 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('code');
-const [isExpanded, setIsExpanded] = useState(false);
   const [showRelations, setShowRelations] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -337,9 +392,7 @@ const [isExpanded, setIsExpanded] = useState(false);
     );
   }
 
-  const containerClass = isExpanded && selectedNodeId 
-    ? "fixed inset-4 bg-white rounded-lg shadow-2xl z-50 flex flex-col"
-    : "h-full flex flex-col";
+  const containerClass = "h-full flex flex-col";
 
   return (
     <div className={containerClass}>
@@ -611,18 +664,7 @@ const [isExpanded, setIsExpanded] = useState(false);
                   </Button>
                 </>
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="flex items-center gap-2 rounded-full border-0 shadow-none"
-              >
-                {isExpanded ? (
-                  <Minimize className="h-3 w-3" />
-                ) : (
-                  <Expand className="h-3 w-3" />
-                )}
-              </Button>
+           
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -650,33 +692,36 @@ const [isExpanded, setIsExpanded] = useState(false);
             className="flex items-center gap-2"
           >
             <Network className="h-4 w-4" />
-            Relations
+            Provide
           </Button>
           </div>
         </div>
       </div>
 
       {/* Main content section */}
-      <div className="flex-1">
+      <div className="flex-1 overflow-hidden">
         <div className="h-full border rounded">
           <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={20} minSize={15}>
-              <div className="h-full border-r">
-                <Tree<TreeItem>
-                  data={treeData}
-                  width="100%"
-                  height={800}
-                  indent={16}
-                  rowHeight={24}
-                  overscanCount={1}
-                >
-                  {Node}
-                </Tree>
-              </div>
-            </ResizablePanel>
+          <ResizablePanel defaultSize={20} minSize={15}>
+  <div className="h-full border-r">
+    <ScrollArea className="h-full w-full" scrollHideDelay={0}>
+      <Tree<TreeItem>
+        data={treeData}
+        width="100%"
+        height={800}
+        indent={16}
+        rowHeight={24}
+        overscanCount={1}
+      >
+        {Node}
+      </Tree>
+    </ScrollArea>
+  </div>
+</ResizablePanel>
+
             <ResizableHandle withHandle />
             <ResizablePanel>
-              <div className="h-full">
+              <div className="h-full overflow-auto">
                 {selectedNodeId ? (
                   isLoading ? (
                     <div className="p-4">
@@ -697,7 +742,6 @@ const [isExpanded, setIsExpanded] = useState(false);
                       isMarkdown={isMarkdownFile(selectedNodeId)}
                       onChange={handleContentChange}
                       viewMode={viewMode}
-                      isExpanded={isExpanded}
                     />
                   )
                 ) : (
@@ -711,13 +755,16 @@ const [isExpanded, setIsExpanded] = useState(false);
               <>
                 <ResizableHandle withHandle />
                 <ResizablePanel defaultSize={30} minSize={10}>
-                  <RightSidebar selectedModule={selectedModule} />
+                  <div className="h-full overflow-auto">
+                    <RightSidebar selectedModule={selectedModule} />
+                  </div>
                 </ResizablePanel>
               </>
             )}
           </ResizablePanelGroup>
         </div>
       </div>
+
     </div>
   );
 };

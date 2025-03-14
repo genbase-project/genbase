@@ -2,11 +2,12 @@ import subprocess
 from typing import Tuple
 from pathlib import Path
 from typing import Dict, Optional, List
+from engine.const import REPO_BASE_DIR
 from engine.services.core.module import ModuleService
 from engine.services.storage.repository import RepoService
 from engine.services.agents.code_edit import CodeEdit, CodeEditResult, CodeBlockEditUtil
 from loguru import logger
-from directory_tree import DisplayTree
+from directory_tree import DisplayTree, display_tree
 
 class AgentUtils:
     """Utility class for common agent operations"""
@@ -28,7 +29,7 @@ class AgentUtils:
 
         # Get module metadata to access repo info
         self.module_metadata = self.module_service.get_module_metadata(module_id)
-        self.repo_path = self.repo_service.get_repo_path(self.module_metadata.repo_name)
+        self.repo_path =  REPO_BASE_DIR / self.module_metadata.repo_name
 
     def read_file(self, relative_path: str) -> Optional[str]:
         """
@@ -58,6 +59,18 @@ class AgentUtils:
         except Exception as e:
             logger.error(f"Error reading file {relative_path}: {str(e)}")
             raise
+    
+    def read_files(self, relative_paths: List[str]) -> Dict[str, Optional[str]]:
+        """
+        Read contents of multiple files relative to the repository root
+        
+        Args:
+            relative_paths: List of paths relative to repository root
+            
+        Returns:
+            Dict[str, Optional[str]]: Dictionary of file contents keyed by relative path
+        """
+        return {path: self.read_file(path) for path in relative_paths}
 
 
     def write_file(self, relative_path: str, content: str) -> bool:
@@ -151,35 +164,56 @@ class AgentUtils:
 
 
     def get_repo_tree(self, path: Optional[Path]=None) -> str:
-        """
-        Get the repository tree
-
-        args:
-
-            path: Optional path to get tree for
-            
-        """
-        kit = self.module_service.get_module_kit_config(self.module_id)
+        """Get the repository tree structure"""
+        import os
+        from pathlib import Path
+        
+        # Setup paths and ignore list
         if path:
-            return DisplayTree(
-                dirPath=str(self.repo_path / path),
-            )
-
-        ignore_list = [".git"]
+            dir_path = REPO_BASE_DIR / self.module_metadata.repo_name / path
+        else:
+            dir_path = REPO_BASE_DIR / self.module_metadata.repo_name
+            
+        logger.info(f"Getting tree for repo: {dir_path}")
+        
+        kit = self.module_service.get_module_kit_config(self.module_id)
+        ignore_list = [".git", "node_modules", ".venv", ".env", ".DS_Store", ".next", ".gitignore", ".gitmodules"]
         ignore_list.extend(kit.workspace.ignore)
-        return DisplayTree(
-         dirPath=str(self.repo_path),
-         ignoreList=ignore_list
-        )
-
-
-
-
-
-
-
-
-
+        
+        # Tree symbols
+        symbols = {
+            'space': '    ',
+            'branch': '│   ',
+            'tee': '├── ',
+            'last': '└── '
+        }
+        
+        # Generate tree recursively
+        def _tree(path, prefix=''):
+            if not os.path.isdir(path):
+                return ""
+                
+            contents = sorted([p for p in os.listdir(path) if p not in ignore_list])
+            result = ""
+            
+            for i, item in enumerate(contents):
+                is_last = i == len(contents) - 1
+                pointer = symbols['last'] if is_last else symbols['tee']
+                item_path = Path(path) / item
+                
+                result += f"{prefix}{pointer}{item}\n"
+                
+                if os.path.isdir(item_path):
+                    extension = symbols['space'] if is_last else symbols['branch']
+                    result += _tree(item_path, prefix + extension)
+                    
+            return result
+        
+        # Generate the full tree
+        tree = f"{dir_path.name}\n" + _tree(dir_path)
+        logger.info(f"Tree: {tree}")
+        
+        return tree
 
 
 

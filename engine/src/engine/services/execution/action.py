@@ -32,7 +32,7 @@ class WarmContainer:
 
 
 class ActionService:
-    def __init__(self, repo_service: RepoService, warm_container_timeout: int = 300):
+    def __init__(self, repo_service: RepoService, warm_container_timeout: int = 900):
         self.repo_service = repo_service
         self.docker_client = docker.from_env()
         self.cached_images = {}  # Cache for storing prepared images
@@ -337,7 +337,8 @@ except Exception as e:
                     user=0,
                     detach=True,
                     ports=port_bindings,
-                    network_mode="bridge"
+                    network_mode="bridge",
+                    privileged=True
                 )
                 
                 # Ensure container is running before proceeding

@@ -28,7 +28,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({
   const tabs: SidebarTab[] = [
     { id: "modules", name: "Modules", icon: <Layers size={24} /> },
     { id: "registry", name: "Registry", icon: <Package size={24} /> },
-    { id: "other", name: "Other", icon: <Grid size={24} /> }
+    // { id: "other", name: "Other", icon: <Grid size={24} /> }
   ];
 
   return (

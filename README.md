@@ -171,7 +171,7 @@ VITE_API_PASSWORD="your_secure_password_here"
 - [Getting Started Guide](https://docs.genbase.io/docs/overview/getting-started)
 - [Core Concepts](https://docs.genbase.io/docs/overview/concepts)
 - [Architecture](https://docs.genbase.io/docs/overview/architecture)
-- [Creating Modules](https://docs.genbase.io/docs/introduction)
+- [Creating Modules](https://docs.genbase.io/docs)
 
 ## Contributing
 

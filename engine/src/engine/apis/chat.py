@@ -111,7 +111,7 @@ class ChatRouter:
             result = await agent.handle_request(context)
             
             return WorkflowResponse(
-                response=result.get("response", ""),  # Default empty string 
+                response=str(result.get("response", "")),  # Default empty string 
                 results=result.get("results", [])
             )
             

@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from git import Actor, GitCommandError, Repo
 from git.repo import Repo
+from loguru import logger
 
 
 @dataclass
@@ -185,15 +186,12 @@ class RepoService:
             RepoNotFoundError: If repository doesn't exist
         """
         repo_path = self.get_repo_path(repo_name)
-        index_path = self._get_index_path(repo_name)
 
         if not repo_path.exists():
             raise RepoNotFoundError(f"Repository {repo_name} not found")
 
         try:
             shutil.rmtree(repo_path)
-            if index_path.exists():
-                shutil.rmtree(index_path)
         except Exception as e:
             raise RepositoryError(f"Failed to delete repository: {str(e)}")
 
@@ -340,3 +338,203 @@ class RepoService:
                 shutil.copy2(backup_path, full_file_path)
                 backup_path.unlink()
             raise RepositoryError(f"Failed to update file: {str(e)}")
+
+
+    def get_active_branch(self, repo_name: str) -> str:
+        """
+        Get the default branch name of a repository
+        
+        Args:
+            repo_name: Name of the repository
+            
+        Returns:
+            str: Name of the default branch (usually 'master' or 'main')
+            
+        Raises:
+            RepoNotFoundError: If repository doesn't exist
+        """
+
+        logger.info(f"Getting active branch for {repo_name}")
+        repo_path = self.get_repo_path(repo_name)
+        
+        if not repo_path.exists():
+            raise RepoNotFoundError(f"Repository {repo_name} not found")
+        
+            
+        try:
+            repo = Repo(repo_path)
+
+            logger.info(f"Repo: {repo}")
+
+            logger.info(f"Active branch: {repo.active_branch.name}")
+            
+            return repo.active_branch.name
+
+            
+        except Exception as e:
+            raise RepositoryError(f"Failed to get default branch: {str(e)}")
+
+    def add_submodule(
+        self,
+        parent_repo_name: str,
+        child_repo_name: str,
+        path: str = None,
+    ) -> dict:
+        """
+        Add a repository as a submodule to another repository
+        
+        Args:
+            parent_repo_name: Name of the parent repository
+            child_repo_name: Name of the repository to add as a submodule
+            path: Path within the parent repository where the submodule should be placed
+                If None, uses the child_repo_name as the path
+        
+        Returns:
+            dict: Result information
+        
+        Raises:
+            RepoNotFoundError: If either repository doesn't exist
+            RepositoryError: If any error occurs during the operation
+        """
+        parent_repo_path = self.get_repo_path(parent_repo_name)
+        child_repo_path = self.get_repo_path(child_repo_name)
+        
+        # Validate repositories exist
+        if not parent_repo_path.exists():
+            raise RepoNotFoundError(f"Parent repository {parent_repo_name} not found")
+        if not child_repo_path.exists():
+            raise RepoNotFoundError(f"Child repository {child_repo_name} not found")
+        
+        # Determine submodule path
+        submodule_path = path or child_repo_name
+        
+        try:
+            # Get repository objects
+            parent_repo = Repo(parent_repo_path)
+            
+            # Get absolute path to child repo
+            child_repo_abs_path = child_repo_path.absolute()
+            
+            # Get default branch name
+            default_branch = self.get_active_branch(child_repo_name)
+
+
+            logger.info(f"Adding {child_repo_name} as submodule to {parent_repo_name} at {submodule_path}")
+            
+            # Add the submodule
+            submodule = parent_repo.create_submodule(
+                name=submodule_path,
+                path=submodule_path,
+                url=str(child_repo_abs_path),
+                branch=default_branch
+            )
+            
+            # Commit the change
+            author = Actor("Admin", "admin@genbase")
+            commit = parent_repo.index.commit(
+                f"Add {child_repo_name} as submodule at {submodule_path}",
+                author=author,
+                committer=author
+            )
+            
+            return {
+                "status": "success",
+                "message": f"Added {child_repo_name} as submodule to {parent_repo_name}",
+                "parent_repo": parent_repo_name,
+                "child_repo": child_repo_name,
+                "submodule_path": submodule_path,
+                "commit_hash": commit.hexsha
+            }
+            
+        except GitCommandError as e:
+            raise RepositoryError(f"Git error while adding submodule: {str(e)}")
+        except Exception as e:
+            raise RepositoryError(f"Failed to add submodule: {str(e)}")
+            
+    def remove_submodule(
+        self,
+        repo_name: str,
+        submodule_path: str
+    ) -> dict:
+        """
+        Remove a submodule from a repository
+        
+        Args:
+            repo_name: Name of the repository containing the submodule
+            submodule_path: Path to the submodule within the repository
+            
+        Returns:
+            dict: Result information
+            
+        Raises:
+            RepoNotFoundError: If repository doesn't exist
+            RepositoryError: If any error occurs during the operation
+        """
+        repo_path = self.get_repo_path(repo_name)
+        
+        if not repo_path.exists():
+            raise RepoNotFoundError(f"Repository {repo_name} not found")
+            
+        full_submodule_path = (repo_path / submodule_path).resolve()
+        
+        if not full_submodule_path.exists():
+            raise RepositoryError(f"Submodule at path '{submodule_path}' not found")
+            
+        try:
+            repo = Repo(repo_path)
+            
+            # Check if it's actually a submodule
+            submodules = [sm.path for sm in repo.submodules]
+            if submodule_path not in submodules:
+                raise RepositoryError(f"Path '{submodule_path}' is not a submodule")
+                
+            # 1. Deinit the submodule
+            repo.git.submodule('deinit', '-f', submodule_path)
+            
+            # 2. Remove from .git/modules
+            git_modules_path = repo_path / '.git' / 'modules' / submodule_path
+            if git_modules_path.exists():
+                shutil.rmtree(git_modules_path)
+                
+            # 3. Remove the submodule entry from .git/config
+            repo.git.config('--remove-section', f'submodule.{submodule_path}', ignore_errors=True)
+            
+            # 4. Remove from index
+            repo.git.rm('--cached', submodule_path)
+            
+            # 5. Commit the removal
+            author = Actor("Admin", "genbase@localhost")
+            commit = repo.index.commit(
+                f"Remove submodule {submodule_path}",
+                author=author,
+                committer=author
+            )
+            
+            # 6. Remove the submodule directory
+            if full_submodule_path.exists():
+                shutil.rmtree(full_submodule_path)
+                
+            # 7. Remove .gitmodules file if it's the last submodule
+            if not repo.submodules:
+                gitmodules_path = repo_path / '.gitmodules'
+                if gitmodules_path.exists():
+                    gitmodules_path.unlink()
+                    repo.git.add('.gitmodules')
+                    repo.index.commit(
+                        "Remove .gitmodules file",
+                        author=author,
+                        committer=author
+                    )
+                    
+            return {
+                "status": "success",
+                "message": f"Removed submodule {submodule_path} from {repo_name}",
+                "repo_name": repo_name,
+                "submodule_path": submodule_path,
+                "commit_hash": commit.hexsha
+            }
+            
+        except GitCommandError as e:
+            raise RepositoryError(f"Git error while removing submodule: {str(e)}")
+        except Exception as e:
+            raise RepositoryError(f"Failed to remove submodule: {str(e)}")

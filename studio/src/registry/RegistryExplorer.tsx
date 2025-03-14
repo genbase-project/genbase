@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from '@/hooks/use-toast';
 import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
-import { RegistryKit } from './registry/RegistryPage';
+import { RegistryKit } from './RegistryPage';
 
 interface RegistryExplorerProps {
   onCollapse: () => void;

@@ -97,8 +97,65 @@ class Module(Base):
         back_populates="module",
         cascade="all, delete-orphan"
     )
+        
+    resources_provided: Mapped[List["ModuleProvide"]] = relationship(
+        "ModuleProvide",
+        foreign_keys="ModuleProvide.provider_id",
+        back_populates="provider",
+        cascade="all, delete-orphan"
+    )
+
+    resources_received: Mapped[List["ModuleProvide"]] = relationship(
+        "ModuleProvide",
+        foreign_keys="ModuleProvide.receiver_id",
+        back_populates="receiver",
+        cascade="all, delete-orphan"
+    )
 
 
+
+
+
+
+class ProvideType(enum.Enum):
+    """Types of resources a module can provide to another module"""
+    WORKSPACE = "workspace"
+    ACTION = "action"
+    
+class ModuleProvide(Base):
+    """Tracks which module provides what resources to which other modules"""
+    __tablename__ = "module_provides"
+    
+    provider_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id', ondelete='CASCADE'), primary_key=True)
+    receiver_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id', ondelete='CASCADE'), primary_key=True)
+    resource_type: Mapped[ProvideType] = mapped_column(Enum(ProvideType), primary_key=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=text('CURRENT_TIMESTAMP'),
+        onupdate=text('CURRENT_TIMESTAMP')
+    )
+    
+    # Relationships with back_populates instead of backref
+    provider: Mapped[Module] = relationship(
+        "Module",
+        foreign_keys=[provider_id],
+        back_populates="resources_provided"
+    )
+    receiver: Mapped[Module] = relationship(
+        "Module",
+        foreign_keys=[receiver_id],
+        back_populates="resources_received"
+    )
+    
+    # Indexes for efficient lookups
+    __table_args__ = (
+        Index('idx_module_provides_provider', 'provider_id'),
+        Index('idx_module_provides_receiver', 'receiver_id'),
+        Index('idx_module_provides_resource', 'resource_type'),
+    )
 
 
 class StoreType(enum.Enum):

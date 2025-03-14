@@ -19,13 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
-import { TreeView, Kit, Module, TreeNode, MoveParams } from './components/TreeView';
-import { useModuleStore } from './store';
+import { TreeView, Kit, Module, TreeNode, MoveParams } from '../components/TreeView';
+import { useModuleStore } from '../store';
 import {
   DEFAULT_PROJECT_ID,
   buildTreeFromModules,
   getNewPath
-} from './lib/tree';
+} from '../lib/tree';
 import { SidebarHeader } from '@/components/ui/sidebar';
 import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
 

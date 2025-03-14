@@ -48,34 +48,6 @@ class InstructionItem:
     full_path: str = ""  # Full filesystem path constructed as module_path/instructions/path
 
 @dataclass
-class Instructions:
-    """Instructions configuration"""
-    documentation: List[InstructionItem] = field(default_factory=list)
-    specification: List[InstructionItem] = field(default_factory=list)
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any], kit_path: Optional[Path] = None) -> 'Instructions':
-        def create_instruction_item(item: Dict[str, Any]) -> InstructionItem:
-            instruction = InstructionItem(
-                name=item['name'],
-                path=item['path'],
-                description=item.get('description')
-            )
-            if kit_path:
-                instruction.full_path = str(kit_path / "instructions" / item['path'])
-            return instruction
-
-        documentation = [
-            create_instruction_item(item)
-            for item in data.get('documentation', [])
-        ]
-        specification = [
-            create_instruction_item(item)
-            for item in data.get('specification', [])
-        ]
-        return cls(documentation=documentation, specification=specification)
-
-@dataclass
 class WorkflowAction:
     """Workflow action definition"""
     path: str  # Original path in format "module:function"
@@ -145,6 +117,21 @@ class Port:
     port: int
     name: Optional[str]
 
+
+
+
+@dataclass
+class WorkspaceProvide:
+    """Workspace definition for provide section"""
+    description: Optional[str] = None
+
+@dataclass
+class Provide:
+    """Resources provided by the kit"""
+    actions: List[WorkflowAction] = field(default_factory=list)
+    instructions: List[InstructionItem] = field(default_factory=list) 
+    workspace: Optional[WorkspaceProvide] = None
+
 @dataclass
 class KitConfig:
     """Complete kit configuration"""
@@ -155,9 +142,8 @@ class KitConfig:
     owner: str
     environment: List[EnvironmentVariable]
     agents: List[Agent]
-    instructions: Instructions
     workflows: Dict[str, Workflow]
-    shared_actions: List[WorkflowAction]
+    provide: Provide
     dependencies: List[str]
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
     image: str = None
@@ -165,6 +151,39 @@ class KitConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'KitConfig':
+        # Check if docVersion is v1
+        if data.get('docVersion') != 'v1':
+            raise KitError(f"Unsupported document version: {data.get('docVersion')}")
+            
+        # Create provide section
+        provide = Provide(
+            # Move shared_actions to provide.actions
+            actions=[
+                WorkflowAction(
+                    path=action['path'],
+                    name=action['name'],
+                    description=action.get('description'),
+                    full_file_path=str(data['kit_path'] / "actions" / f"{action['path'].split(':')[0]}.py"),
+                    function_name=action['path'].split(':')[1]
+                )
+                for action in data.get('provide', {}).get('actions', [])
+            ],
+            # Move instruction.specification to provide.instructions
+            instructions=[
+                InstructionItem(
+                    name=item['name'],
+                    path=item['path'],
+                    description=item.get('description'),
+                    full_path=str(data['kit_path'] / "instructions" / item['path']) if data.get('kit_path') else ""
+                )
+                for item in data.get('provide', {}).get('instructions', [])
+            ],
+            # Create workspace in provide section
+            workspace=WorkspaceProvide(
+                description=data.get('provide', {}).get('workspace', {}).get('description')
+            ) if data.get('provide', {}).get('workspace') else None
+        )
+
         return cls(
             doc_version=data['docVersion'],
             id=data['id'],
@@ -177,21 +196,11 @@ class KitConfig:
             ],
             image=data.get('image', 'python:3.11-slim'),
             agents=[Agent.from_dict(agent) for agent in data.get('agents', [])],
-            instructions=Instructions.from_dict(data.get('instructions', {}), kit_path=data['kit_path']),
             workflows={
                 name: Workflow.from_dict(workflow, kit_path=data['kit_path'])
                 for name, workflow in data.get('workflows', {}).items()
             },
-            shared_actions=[
-                WorkflowAction(
-                    path=action['path'],
-                    name=action['name'],
-                    description=action.get('description'),
-                    full_file_path=str(data['kit_path'] / "actions" / f"{action['path'].split(':')[0]}.py"),
-                    function_name=action['path'].split(':')[1]
-                )
-                for action in data.get('shared_actions', [])
-            ],
+            provide=provide,
             dependencies=data.get('dependencies', []),
             workspace=WorkspaceConfig(
                 files=[WorkspaceFile(**f) for f in data.get('workspace', {}).get('files', [])],

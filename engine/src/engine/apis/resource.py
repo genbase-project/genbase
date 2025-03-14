@@ -27,18 +27,12 @@ class ResourceRouter:
         except ResourceError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    async def _get_documentation_resources(self, module_id: str) -> List[Resource]:
-        """Get documentation resources"""
-        try:
-            resources = self.service.get_documentation_resources(module_id)
-            return resources
-        except ResourceError as e:
-            raise HTTPException(status_code=400, detail=str(e))
 
-    async def _get_specification_resources(self, module_id: str) -> List[Resource]:
+
+    async def _get_provide_instruction_resources(self, module_id: str) -> List[Resource]:
         """Get specification resources"""
         try:
-            resources = self.service.get_specification_resources(module_id)
+            resources = self.service.get_provided_instruction_resources(module_id)
             return resources
         except ResourceError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -95,17 +89,9 @@ class ResourceRouter:
         )
 
         self.router.add_api_route(
-            "/{module_id}/documentation",
-            self._get_documentation_resources,
+            "/{module_id}/provide-instructions",
+            self._get_provide_instruction_resources,
             methods=["GET"],
             response_model=List[Resource],
-            summary="Get documentation resources"
-        )
-
-        self.router.add_api_route(
-            "/{module_id}/specification",
-            self._get_specification_resources,
-            methods=["GET"],
-            response_model=List[Resource],
-            summary="Get specification resources"
+            summary="Get Provide Instructions resources"
         )

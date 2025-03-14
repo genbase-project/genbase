@@ -8,8 +8,8 @@ from datetime import datetime, UTC
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
-from sqlalchemy import case, or_, select
-from engine.db.models import Module, ModuleRelation, ProjectModuleMapping
+from sqlalchemy import and_, case, delete, or_, select, update
+from engine.db.models import Module, ModuleProvide, ModuleRelation, ProjectModuleMapping, ProvideType
 from engine.db.session import SessionLocal
 from sqlalchemy.orm import Session
 import networkx as nx
@@ -603,3 +603,352 @@ class ModuleService:
                 return relation.description
         except Exception as e:
             raise ModuleError(f"Failed to get relation description: {str(e)}")
+
+
+
+
+
+
+# ModuleService provide-related functions to add
+
+    def create_module_provide(
+        self, 
+        provider_id: str, 
+        receiver_id: str, 
+        resource_type: ProvideType,
+        description: Optional[str] = None
+    ) -> ModuleProvide:
+        """
+        Create a new provide relationship between modules
+        
+        Args:
+            provider_id: ID of module providing the resource
+            receiver_id: ID of module receiving the resource
+            resource_type: Type of resource being provided (ACTION or WORKSPACE)
+            description: Optional description of the provide relationship
+            
+        Returns:
+            The created ModuleProvide instance
+            
+        Raises:
+            ValueError: If either module does not exist
+        """
+        # Validate that both modules exist
+        db = self._get_db()
+        provider = db.get(Module, provider_id)
+        receiver = db.get(Module, receiver_id)
+        
+        if not provider:
+            raise ValueError(f"Provider module with ID {provider_id} not found")
+        if not receiver:
+            raise ValueError(f"Receiver module with ID {receiver_id} not found")
+        
+        # Create the provide relationship
+        now = datetime.now(UTC)
+        provide = ModuleProvide(
+            provider_id=provider_id,
+            receiver_id=receiver_id,
+            resource_type=resource_type,
+            description=description,
+            created_at=now,
+            updated_at=now
+        )
+        
+        db.add(provide)
+        db.commit()
+        db.refresh(provide)
+        
+        return provide
+
+
+    def get_module_provides(
+        self, 
+        module_id: str, 
+        as_provider: bool = True,
+        resource_type: Optional[ProvideType] = None
+    ) -> List[ModuleProvide]:
+        """
+        Get all provide relationships for a module
+        
+        Args:
+            module_id: ID of the module
+            as_provider: If True, get relationships where module is provider,
+                        otherwise get relationships where module is receiver
+            resource_type: Optional filter by resource type
+            
+        Returns:
+            List of ModuleProvide instances
+        """
+        db = self._get_db()
+        query = None
+        if as_provider:
+            query = select(ModuleProvide).where(ModuleProvide.provider_id == module_id)
+        else:
+            query = select(ModuleProvide).where(ModuleProvide.receiver_id == module_id)
+            
+        if resource_type:
+            query = query.where(ModuleProvide.resource_type == resource_type)
+            
+        result = db.execute(query)
+        return list(result.scalars().all())
+
+
+    def delete_module_provide(
+        self, 
+        provider_id: str, 
+        receiver_id: str, 
+        resource_type: ProvideType
+    ) -> bool:
+        """
+        Delete a provide relationship between modules
+        
+        Args:
+            provider_id: ID of provider module
+            receiver_id: ID of receiver module
+            resource_type: Type of resource
+            
+        Returns:
+            True if relationship was deleted, False if it didn't exist
+        """
+        db = self._get_db()
+        query = delete(ModuleProvide).where(
+            ModuleProvide.provider_id == provider_id,
+            ModuleProvide.receiver_id == receiver_id,
+            ModuleProvide.resource_type == resource_type
+        )
+        
+        result = db.execute(query)
+        db.commit()
+        
+        return result.rowcount > 0
+
+
+    def get_modules_with_access_to(
+        self, 
+        module_id: str, 
+        resource_type: ProvideType
+    ) -> List[Module]:
+        """
+        Get all modules that have access to specified resources of a module
+        
+        Args:
+            module_id: ID of the provider module
+            resource_type: Type of resource
+            
+        Returns:
+            List of Module instances that have access
+        """
+        db = self._get_db()
+        query = select(Module).join(
+            ModuleProvide, 
+            and_(
+                ModuleProvide.receiver_id == Module.module_id,
+                ModuleProvide.provider_id == module_id,
+                ModuleProvide.resource_type == resource_type
+            )
+        )
+        
+        result = db.execute(query)
+        return list(result.scalars().all())
+
+
+    def get_modules_providing_to(
+        self, 
+        module_id: str, 
+        resource_type: ProvideType
+    ) -> List[Module]:
+        """
+        Get all modules that provide specified resources to a module
+        
+        Args:
+            module_id: ID of the receiver module
+            resource_type: Type of resource
+            
+        Returns:
+            List of Module instances that provide access
+        """
+        db = self._get_db()
+        query = select(Module).join(
+            ModuleProvide, 
+            and_(
+                ModuleProvide.provider_id == Module.module_id,
+                ModuleProvide.receiver_id == module_id,
+                ModuleProvide.resource_type == resource_type
+            )
+        )
+        
+        result = db.execute(query)
+        return list(result.scalars().all())
+
+
+    def update_module_provide_description(
+        self,
+        provider_id: str,
+        receiver_id: str,
+        resource_type: ProvideType,
+        description: str
+    ) -> bool:
+        """
+        Update the description of a provide relationship
+        
+        Args:
+            provider_id: ID of provider module
+            receiver_id: ID of receiver module
+            resource_type: Type of resource
+            description: New description
+            
+        Returns:
+            True if relationship was updated, False if it didn't exist
+        """
+        db = self._get_db()
+        query = update(ModuleProvide).where(
+            ModuleProvide.provider_id == provider_id,
+            ModuleProvide.receiver_id == receiver_id,
+            ModuleProvide.resource_type == resource_type
+        ).values(
+            description=description,
+            updated_at=datetime.now(UTC)
+        )
+        
+        result = db.execute(query)
+        db.commit()
+        
+        return result.rowcount > 0
+
+
+
+
+
+
+
+
+    def create_module_provide(
+        self, 
+        provider_id: str, 
+        receiver_id: str, 
+        resource_type: ProvideType,
+        description: Optional[str] = None
+    ) -> ModuleProvide:
+        """
+        Create a new provide relationship between modules
+        
+        Args:
+            provider_id: ID of module providing the resource
+            receiver_id: ID of module receiving the resource
+            resource_type: Type of resource being provided (ACTION or WORKSPACE)
+            description: Optional description of the provide relationship
+            
+        Returns:
+            The created ModuleProvide instance
+            
+        Raises:
+            ValueError: If either module does not exist
+        """
+        # Validate that both modules exist
+        db = self._get_db()
+        provider = db.get(Module, provider_id)
+        receiver = db.get(Module, receiver_id)
+        
+        if not provider:
+            raise ValueError(f"Provider module with ID {provider_id} not found")
+        if not receiver:
+            raise ValueError(f"Receiver module with ID {receiver_id} not found")
+        
+        # Create the provide relationship
+        now = datetime.now(UTC)
+        provide = ModuleProvide(
+            provider_id=provider_id,
+            receiver_id=receiver_id,
+            resource_type=resource_type,
+            description=description,
+            created_at=now,
+            updated_at=now
+        )
+        
+        db.add(provide)
+        db.commit()
+        db.refresh(provide)
+        
+        # If providing WORKSPACE, add provider's repo as submodule to receiver's repo
+        if resource_type == ProvideType.WORKSPACE:
+            try:
+                provider_metadata = self.get_module_metadata(provider_id)
+                receiver_metadata = self.get_module_metadata(receiver_id)
+                
+                # Add provider's repo as submodule to receiver's repo within a dedicated workspaces folder
+                submodule_path = f"workspaces/{provider_metadata.module_id}"
+                self.repo_service.add_submodule(
+                    parent_repo_name=receiver_metadata.repo_name,
+                    child_repo_name=provider_metadata.repo_name,
+                    path=submodule_path  # Place in workspaces/module_id
+                )
+                
+                logger.info(f"Added submodule from {provider_id} to {receiver_id}")
+            except Exception as e:
+                # If submodule creation fails, roll back the provide relationship
+                db.delete(provide)
+                db.commit()
+                raise ModuleError(f"Failed to add submodule while creating provide relationship: {str(e)}")
+        
+        return provide
+
+
+    def delete_module_provide(
+        self, 
+        provider_id: str, 
+        receiver_id: str, 
+        resource_type: ProvideType
+    ) -> bool:
+        """
+        Delete a provide relationship between modules
+        
+        Args:
+            provider_id: ID of provider module
+            receiver_id: ID of receiver module
+            resource_type: Type of resource
+            
+        Returns:
+            True if relationship was deleted, False if it didn't exist
+        """
+        db = self._get_db()
+        
+        # First check if the relationship exists
+        provide_query = select(ModuleProvide).where(
+            ModuleProvide.provider_id == provider_id,
+            ModuleProvide.receiver_id == receiver_id,
+            ModuleProvide.resource_type == resource_type
+        )
+        provide = db.execute(provide_query).scalar_one_or_none()
+        
+        if not provide:
+            return False
+        
+        # If deleting WORKSPACE relationship, remove submodule
+        if resource_type == ProvideType.WORKSPACE:
+            try:
+                provider_metadata = self.get_module_metadata(provider_id)
+                receiver_metadata = self.get_module_metadata(receiver_id)
+                
+                # Remove the submodule from receiver's repo
+                submodule_path = f"workspaces/{provider_metadata.module_id}"
+                self.repo_service.remove_submodule(
+                    repo_name=receiver_metadata.repo_name,
+                    submodule_path=submodule_path  # Using workspaces/module_id path
+                )
+                
+                logger.info(f"Removed submodule of {provider_id} from {receiver_id}")
+            except Exception as e:
+                logger.error(f"Failed to remove submodule while deleting provide relationship: {str(e)}")
+                # Continue with deletion of relationship even if submodule removal fails
+        
+        # Delete the relationship
+        query = delete(ModuleProvide).where(
+            ModuleProvide.provider_id == provider_id,
+            ModuleProvide.receiver_id == receiver_id,
+            ModuleProvide.resource_type == resource_type
+        )
+        
+        result = db.execute(query)
+        db.commit()
+        
+        return result.rowcount > 0

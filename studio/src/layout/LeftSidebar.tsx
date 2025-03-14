@@ -22,8 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
 import SidebarNav from '../SidebarNav';
-import ModuleExplorer from '../ModuleExplorer';
-import RegistryExplorer from '../RegistryExplorer';
+import ModuleExplorer from '../module/ModuleExplorer';
+import RegistryExplorer from '../registry/RegistryExplorer';
 
 interface LeftSidebarProps {
   initialModules?: Kit[];

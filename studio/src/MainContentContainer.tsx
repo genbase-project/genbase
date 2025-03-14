@@ -37,12 +37,12 @@ const MainContentContainer: React.FC<MainContentContainerProps> = ({ activeTab }
     } else {
       // First, set exact constraints to force the size
       setTopPanelConstraints({ minSize: 65, maxSize: 65 });  // Larger top panel
-      setBottomPanelConstraints({ minSize: 45, maxSize: 45 });  // More visible bottom panel
+      setBottomPanelConstraints({ minSize: 35, maxSize: 35 });  // More visible bottom panel
       
       // Then, after a short delay, restore flexibility
       setTimeout(() => {
         setTopPanelConstraints({ minSize: 25, maxSize: 90 });  // Flexible top
-        setBottomPanelConstraints({ minSize: 15, maxSize: 75 });  // Ensure minimum visibility for bottom
+        setBottomPanelConstraints({ minSize: 10, maxSize: 75 });  // Ensure minimum visibility for bottom
       }, 50);
     }
   };
@@ -71,13 +71,16 @@ const MainContentContainer: React.FC<MainContentContainerProps> = ({ activeTab }
     switch (activeTab) {
       case "modules":
         return (
-          <ResizablePanelGroup direction="vertical">
+          <ResizablePanelGroup direction="vertical" className="h-full">
             <ResizablePanel 
               defaultSize={isBottomPanelMaximized ? 10 : 65}
               minSize={topPanelConstraints.minSize} 
               maxSize={topPanelConstraints.maxSize}
+              className="h-full"
             >
-              <MainContent selectedModule={selectedModule} />
+              <div className="h-full overflow-hidden">
+                <MainContent selectedModule={selectedModule} />
+              </div>
             </ResizablePanel>
             <ResizableHandle withHandle>
               <div className="flex h-full w-full items-center justify-center">
@@ -85,15 +88,18 @@ const MainContentContainer: React.FC<MainContentContainerProps> = ({ activeTab }
               </div>
             </ResizableHandle>
             <ResizablePanel 
-              defaultSize={isBottomPanelMaximized ? 90 : 45}
+              defaultSize={isBottomPanelMaximized ? 90 : 35}
               minSize={bottomPanelConstraints.minSize} 
               maxSize={bottomPanelConstraints.maxSize}
+              className="h-full"
             >
-              <BottomPanel 
-                selectedModule={selectedModule} 
-                onMaximize={toggleMaximized}
-                isMaximized={isBottomPanelMaximized}
-              />
+              <div className="h-full overflow-hidden">
+                <BottomPanel 
+                  selectedModule={selectedModule} 
+                  onMaximize={toggleMaximized}
+                  isMaximized={isBottomPanelMaximized}
+                />
+              </div>
             </ResizablePanel>
           </ResizablePanelGroup>
         );
@@ -114,7 +120,7 @@ const MainContentContainer: React.FC<MainContentContainerProps> = ({ activeTab }
   };
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full overflow-hidden">
       {renderContent()}
     </div>
   );

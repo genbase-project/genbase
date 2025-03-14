@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Union, get_type
 from engine.services.execution.action import FunctionMetadata
 from loguru import logger
 
-class CustomActionManager:
+class InternalActionManager:
     """
     Manages registration and metadata extraction for custom actions.
     Handles JSON schema generation for function definitions.
@@ -13,9 +13,10 @@ class CustomActionManager:
     def __init__(self):
         """Initialize the custom action manager"""
         # Dictionary to store custom (internal) actions
-        self._custom_actions: Dict[str, Callable] = {}
+        self._internal_actions: Dict[str, Callable] = {}
         # Metadata cache for custom actions
-        self._custom_action_metadata: Dict[str, FunctionMetadata] = {}
+        self._internal_action_metadata: Dict[str, FunctionMetadata] = {}
+        logger.info("InternalActionManager initialized")
     
     def register_action(self, name: str, func: Callable, description: str = None) -> None:
         """
@@ -26,19 +27,30 @@ class CustomActionManager:
             func: Method reference to call when action is invoked
             description: Optional description of what the action does
         """
-        if name in self._custom_actions:
+        logger.info(f"Registering action '{name}' with function {func}")
+        
+        if name in self._internal_actions:
+            logger.warning(f"Custom action '{name}' already registered")
             raise ValueError(f"Custom action '{name}' already registered")
             
-        self._custom_actions[name] = func
+        self._internal_actions[name] = func
         
         # Extract metadata and cache it
-        metadata = self._extract_function_metadata(func, name, description)
-        self._custom_action_metadata[name] = metadata
+        try:
+            metadata = self._extract_function_metadata(func, name, description)
+            self._internal_action_metadata[name] = metadata
+            logger.info(f"Successfully registered action '{name}' with metadata: {metadata}")
+        except Exception as e:
+            logger.error(f"Failed to extract metadata for action '{name}': {str(e)}")
+            # Remove action from registry if metadata extraction fails
+            del self._internal_actions[name]
+            raise
     
     def clear_actions(self) -> None:
         """Clear all registered custom actions"""
-        self._custom_actions = {}
-        self._custom_action_metadata = {}
+        logger.info("Clearing all registered actions")
+        self._internal_actions = {}
+        self._internal_action_metadata = {}
     
     def register_actions(self, functions: Dict[str, Callable]) -> None:
         """
@@ -47,11 +59,21 @@ class CustomActionManager:
         Args:
             functions: Dictionary mapping action names to function references
         """
+        logger.info(f"Registering multiple actions: {list(functions.keys())}")
         self.clear_actions()
+        
         for name, func in functions.items():
-            # Extract description from docstring if available
-            description = inspect.getdoc(func) or f"Execute the {name} action"
-            self.register_action(name, func, description)
+            try:
+                # Extract description from docstring if available
+                description = inspect.getdoc(func)
+                logger.debug(f"Function '{name}' docstring: {description}")
+                if not description:
+                    description = f"Execute the {name} action"
+                    logger.debug(f"No docstring found for '{name}', using default description")
+                
+                self.register_action(name, func, description)
+            except Exception as e:
+                logger.error(f"Failed to register action '{name}': {str(e)}")
     
     def get_action_metadata(self, action_name: str) -> Optional[FunctionMetadata]:
         """
@@ -63,7 +85,9 @@ class CustomActionManager:
         Returns:
             FunctionMetadata or None if action not found
         """
-        return self._custom_action_metadata.get(action_name)
+        metadata = self._internal_action_metadata.get(action_name)
+        logger.debug(f"Retrieved metadata for action '{action_name}': {metadata}")
+        return metadata
     
     def get_action_function(self, action_name: str) -> Optional[Callable]:
         """
@@ -75,7 +99,9 @@ class CustomActionManager:
         Returns:
             Function reference or None if not found
         """
-        return self._custom_actions.get(action_name)
+        function = self._internal_actions.get(action_name)
+        logger.debug(f"Retrieved function for action '{action_name}': {function}")
+        return function
     
     def get_all_actions(self) -> List[str]:
         """
@@ -84,7 +110,9 @@ class CustomActionManager:
         Returns:
             List of action names
         """
-        return list(self._custom_actions.keys())
+        actions = list(self._internal_actions.keys())
+        logger.debug(f"All registered actions: {actions}")
+        return actions
     
     def has_action(self, action_name: str) -> bool:
         """
@@ -96,40 +124,61 @@ class CustomActionManager:
         Returns:
             True if action exists, False otherwise
         """
-        return action_name in self._custom_actions
-    
-    def get_tool_definitions(self, action_names: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        exists = action_name in self._internal_actions
+        logger.debug(f"Action '{action_name}' exists: {exists}")
+        return exists
+        
+    def get_tool_definitions(self, action_names: Optional[Union[List[str], Literal["all", "none"]]] = None) -> List[Dict[str, Any]]:
         """
         Get tool definitions for specified actions in OpenAI format
         
         Args:
             action_names: Optional list of action names to include, 
-                          or None for all registered actions
+                        "all" for all actions, "none" for no actions,
+                        or None for all registered actions
             
         Returns:
             List of tool definitions
         """
-        if action_names is None:
+        logger.info(f"Getting tool definitions for actions: {action_names}")
+        logger.info(f"Currently registered actions: {self.get_all_actions()}")
+        logger.info(f"Action metadata available: {list(self._internal_action_metadata.keys())}")
+        
+        # Handle special string values
+        if action_names == "all" or action_names is None:
             action_names = self.get_all_actions()
+            logger.debug(f"Using all registered actions: {action_names}")
+        elif action_names == "none":
+            logger.debug("No actions requested")
+            return []
         else:
-            # Filter to only include actions that exist
+            # If it's a list, filter to only include actions that exist
+            original_names = action_names
             action_names = [name for name in action_names if self.has_action(name)]
+            logger.debug(f"Filtered action names from {original_names} to {action_names}")
         
         tools = []
         for action_name in action_names:
-            metadata = self._custom_action_metadata.get(action_name)
+            metadata = self._internal_action_metadata.get(action_name)
+            logger.debug(f"Metadata for action '{action_name}': {metadata}")
+            
             if metadata:
-                tools.append({
+                tool = {
                     "type": "function",
                     "function": {
                         "name": action_name,
                         "description": metadata.description,
                         "parameters": metadata.parameters
                     }
-                })
+                }
+                tools.append(tool)
+                logger.debug(f"Added tool definition for '{action_name}'")
+            else:
+                logger.warning(f"No metadata found for action '{action_name}', skipping")
         
+        logger.info(f"Generated {len(tools)} tool definitions")
         return tools
-    
+
     async def execute_action(self, action_name: str, parameters: Dict[str, Any]) -> Any:
         """
         Execute a custom action by name
@@ -144,16 +193,25 @@ class CustomActionManager:
         Raises:
             ValueError: If action not found
         """
+        logger.info(f"Executing action '{action_name}' with parameters: {parameters}")
+        
         if not self.has_action(action_name):
+            logger.error(f"Custom action '{action_name}' not found")
             raise ValueError(f"Custom action '{action_name}' not found")
         
-        func = self._custom_actions[action_name]
-        if inspect.iscoroutinefunction(func):
-            # Handle async functions
-            return await func(**parameters)
-        else:
-            # Handle synchronous functions
-            return func(**parameters)
+        func = self._internal_actions[action_name]
+        try:
+            if inspect.iscoroutinefunction(func):
+                # Handle async functions
+                logger.debug(f"Executing async function '{action_name}'")
+                return await func(**parameters)
+            else:
+                # Handle synchronous functions
+                logger.debug(f"Executing sync function '{action_name}'")
+                return func(**parameters)
+        except Exception as e:
+            logger.error(f"Error executing action '{action_name}': {str(e)}")
+            raise
     
     def _extract_function_metadata(self, func: Callable, name: str, description: str = None) -> FunctionMetadata:
         """
@@ -167,20 +225,36 @@ class CustomActionManager:
         Returns:
             FunctionMetadata: Metadata in OpenAI function format
         """
+        logger.debug(f"Extracting metadata for function '{name}'")
+        
         # Get docstring for description if not provided
         if description is None:
             docstring = inspect.getdoc(func)
+            logger.debug(f"Original docstring: {docstring}")
+            
             if docstring:
                 # Use first paragraph of docstring as description
                 description = docstring.split('\n\n')[0].strip()
+                logger.debug(f"Using first paragraph as description: {description}")
             else:
                 description = f"Execute the {name} action"
+                logger.debug(f"No docstring found, using default description")
             
         # Get function signature
-        sig = inspect.signature(func)
+        try:
+            sig = inspect.signature(func)
+            logger.debug(f"Function signature: {sig}")
+        except ValueError as e:
+            logger.error(f"Could not get signature for function '{name}': {str(e)}")
+            sig = inspect.Signature()  # Empty signature
         
         # Get type hints if available
-        type_hints = get_type_hints(func)
+        try:
+            type_hints = get_type_hints(func)
+            logger.debug(f"Type hints: {type_hints}")
+        except Exception as e:
+            logger.warning(f"Could not get type hints for function '{name}': {str(e)}")
+            type_hints = {}
         
         # Build parameters schema
         parameters = {
@@ -192,16 +266,24 @@ class CustomActionManager:
         for param_name, param in sig.parameters.items():
             # Skip self parameter
             if param_name == "self":
+                logger.debug(f"Skipping 'self' parameter")
                 continue
                 
             # Get parameter type
             param_type = type_hints.get(param_name, Any)
+            logger.debug(f"Parameter '{param_name}' has type: {param_type}")
             
             # Convert type to JSON schema type
-            json_type = self._type_to_json_schema(param_type)
+            try:
+                json_type = self._type_to_json_schema(param_type)
+                logger.debug(f"Converted type to JSON schema: {json_type}")
+            except Exception as e:
+                logger.warning(f"Error converting type to JSON schema for '{param_name}': {str(e)}")
+                json_type = {"type": "object"}
             
             # Extract parameter description from docstring
             param_description = self._extract_param_description(func, param_name)
+            logger.debug(f"Parameter description: {param_description}")
             
             # Create parameter property
             param_property = {}
@@ -230,17 +312,22 @@ class CustomActionManager:
             
             # Add to properties dictionary
             parameters["properties"][param_name] = param_property
+            logger.debug(f"Added parameter property: {param_property}")
                 
             # Add to required list if no default value
             if param.default is param.empty:
                 parameters["required"].append(param_name)
+                logger.debug(f"Parameter '{param_name}' is required")
         
-        return FunctionMetadata(
+        metadata = FunctionMetadata(
             name=name,
             description=description,
             parameters=parameters,
             is_async=inspect.iscoroutinefunction(func)
         )
+        
+        logger.debug(f"Created metadata: {metadata}")
+        return metadata
         
     def _extract_param_description(self, func: Callable, param_name: str) -> Optional[str]:
         """
@@ -255,7 +342,10 @@ class CustomActionManager:
         """
         docstring = inspect.getdoc(func)
         if not docstring:
+            logger.debug(f"No docstring found for parameter '{param_name}'")
             return None
+        
+        logger.debug(f"Looking for parameter '{param_name}' in docstring")
             
         # Try to find parameter in Args section using common docstring formats
         
@@ -263,14 +353,19 @@ class CustomActionManager:
         pattern = rf"(?:Args|Arguments):\s+.*?{param_name}\s*:\s*(.*?)(?:\n\s*\w+\s*:|$)"
         match = re.search(pattern, docstring, re.DOTALL)
         if match:
-            return match.group(1).strip()
+            desc = match.group(1).strip()
+            logger.debug(f"Found Google-style description: {desc}")
+            return desc
             
         # Numpy/Sphinx style
         pattern = rf"Parameters\s+.*?{param_name}\s*:\s*(.*?)(?:\n\s*\w+\s*:|$)"
         match = re.search(pattern, docstring, re.DOTALL)
         if match:
-            return match.group(1).strip()
+            desc = match.group(1).strip()
+            logger.debug(f"Found Numpy/Sphinx-style description: {desc}")
+            return desc
         
+        logger.debug(f"No description found for parameter '{param_name}'")
         return None
         
     def _type_to_json_schema(self, type_hint: Any) -> Dict[str, Any]:
@@ -283,6 +378,8 @@ class CustomActionManager:
         Returns:
             Dict with JSON schema type information
         """
+        logger.debug(f"Converting type hint to JSON schema: {type_hint}")
+        
         # Handle common types
         if type_hint is str:
             return {"type": "string"}
@@ -298,6 +395,7 @@ class CustomActionManager:
             # Handle generics like List, Dict, etc.
             origin = type_hint.__origin__
             args = type_hint.__args__
+            logger.debug(f"Generic type with origin {origin} and args {args}")
             
             if origin is list or origin is List:
                 item_type = self._type_to_json_schema(args[0])
@@ -346,9 +444,12 @@ class CustomActionManager:
         # Try to handle Pydantic models if available
         try:
             if hasattr(type_hint, "model_json_schema"):
-                return type_hint.model_json_schema()
-        except:
-            pass
+                schema = type_hint.model_json_schema()
+                logger.debug(f"Got schema from Pydantic model: {schema}")
+                return schema
+        except Exception as e:
+            logger.warning(f"Error getting Pydantic schema: {str(e)}")
             
         # Default for unknown/complex types
+        logger.debug(f"Using default object schema for type: {type_hint}")
         return {"type": "object"}

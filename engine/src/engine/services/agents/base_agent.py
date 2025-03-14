@@ -13,11 +13,11 @@ from litellm import ChatCompletionMessageToolCall, Choices
 from engine.services.agents.giml_definitions import GIML_DEFINITIONS
 from engine.services.core.kit import KitConfig
 from engine.services.execution.action import FunctionMetadata
-from engine.services.execution.custom_actions import CustomActionManager
+from engine.services.execution.internal_actions import InternalActionManager
 from engine.services.execution.model import ModelService, ResponseType
 from engine.services.execution.state import StateService
 from engine.services.execution.workflow import (
-    EnhancedWorkflowAction,
+    FullWorkflowAction,
     WorkflowExecutionResult,
     WorkflowService,
     WorkflowMetadataResult,
@@ -61,7 +61,7 @@ IncludeType = Union[Literal["all", "none"], List[str]]
 TModel = TypeVar('TModel', bound=BaseModel)
 
 class IncludeOptions(BaseModel):
-    shared_actions: bool = False
+    provided_actions: bool = False
     giml_elements: IncludeType = "all"
     actions: IncludeType = "all"
     
@@ -108,9 +108,11 @@ class BaseAgent(ABC):
         self.system_prompt: Optional[str] = None
         self._utils: Optional[AgentUtils] = None
 
+        self.module_action_map: Dict[str, FullWorkflowAction] = {}
+
 
         # Initialize the custom action manager
-        self.action_manager = CustomActionManager()
+        self.action_manager = InternalActionManager()
 
 
 
@@ -136,7 +138,7 @@ class BaseAgent(ABC):
         agent_instructions: str = None,
         internal_actions: Optional[Dict[str, Callable]] = None,
         include: IncludeOptions = IncludeOptions(
-            shared_actions=True,
+            provided_actions=False,
             giml_elements="all",
             actions="all",
         )
@@ -148,9 +150,7 @@ class BaseAgent(ABC):
         Args:
             agent_instructions: Optional agent-specific instructions
             actions: List of action names to include, or None for all actions
-            include_shared_actions: Whether to include shared actions as tools
-            giml_elements: List of XML element templates to include
-            internal_actions: Dictionary of functions to register as custom actions (replaces existing ones)
+            include: Whether to include provided actions and GIML elements
             
         Returns:
             Tuple of (system prompt, list of tools)
@@ -164,10 +164,12 @@ class BaseAgent(ABC):
         # Get workflow metadata
         workflow_data: WorkflowMetadataResult = self.services.workflow_service.get_workflow_metadata(
             self.context.module_id,
-            self.context.workflow
+            self.context.workflow,
+            with_provided=include.provided_actions
         )
 
         # Clear existing custom actions if we're passed new ones
+        logger.info(f"Setting context with internal actions: {internal_actions}")
         if internal_actions is not None:
             self.action_manager.register_actions(internal_actions)
 
@@ -191,6 +193,8 @@ class BaseAgent(ABC):
                 }
                 for action in workflow_data.actions
             ]
+            for action in workflow_data.actions:
+                self.module_action_map[action.action.name] = action
         else:
             # Filter workflow actions by name
             workflow_actions = [
@@ -205,13 +209,18 @@ class BaseAgent(ABC):
                 for action in workflow_data.actions
                 if action.action.name in include.actions
             ]
+            for action in workflow_data.actions:
+                if action.action.name in include.actions:
+                    self.module_action_map[action.action.name] = action
         
         # Add workflow actions to tools
         tools.extend(workflow_actions)
         
         # Add custom actions from the action manager
-        custom_action_tools = self.action_manager.get_tool_definitions(include.actions)
-        tools.extend(custom_action_tools)
+
+        internal_action_tools = self.action_manager.get_tool_definitions(include.actions)
+        logger.info(f"Internal action tools: {internal_action_tools}")
+        tools.extend(internal_action_tools)
 
         # Add tool descriptions to prompt
         workflow_tool_descriptions = []
@@ -243,6 +252,8 @@ class BaseAgent(ABC):
                 final_instruction += f"\n\n##{key}:\n{value}"
             
         self.actions = tools
+
+        logger.info(f"Set context with actions: {tools}")
         self.system_prompt = final_instruction
         return final_instruction, tools
         
@@ -263,14 +274,15 @@ class BaseAgent(ABC):
             
             # Otherwise, execute as a normal workflow action
             action_info = ActionInfo(
-                module_id=self.context.module_id,
+                module_id=(self.module_action_map[action_name]).module_id or self.context.module_id,
                 workflow=self.context.workflow,
                 name=action_name
             )
 
             result = self.services.workflow_service.execute_workflow_action(
                 action_info=action_info,
-                parameters=parameters
+                parameters=parameters,
+                with_provided=self.module_action_map[action_name].is_provided
             )
 
             return result
@@ -421,6 +433,7 @@ class BaseAgent(ABC):
                         try:
                             # Parse parameters
                             parameters = json.loads(tool_call.function.arguments)
+
 
                             # Execute the workflow action
                             result = await self.run_action(

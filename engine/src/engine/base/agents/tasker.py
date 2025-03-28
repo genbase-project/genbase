@@ -1,10 +1,10 @@
 from typing import Dict, List, Any, Optional, Tuple
 import json
 from engine.services.agents.base_agent import BaseAgent, AgentContext, IncludeOptions
-from engine.services.execution.workflow import WorkflowMetadataResult
+from engine.services.execution.profile import ProfileMetadataResult
 from loguru import logger
 
-TASKER_INSTRUCTIONS = """You are a task execution agent responsible for managing workflow operations.
+TASKER_INSTRUCTIONS = """You are a task execution agent responsible for managing profile operations.
 
 When handling user requests:
 
@@ -29,14 +29,14 @@ When handling user requests:
 - When asking for user input, use XML prompts format
 
 4. Task Management:
-- Process and execute workflow tasks
+- Process and execute profiles tasks
 - Handle tool dependencies and execution order
 - Track task completion status
 - Provide progress updates
 - Handle errors and retries"""
 
 class TaskerAgent(BaseAgent):
-    """Agent for handling task-based workflows"""
+    """Agent for handling task-based profiles"""
 
     @property
     def agent_type(self) -> str:
@@ -45,10 +45,10 @@ class TaskerAgent(BaseAgent):
     async def process_request(
         self,
         context: AgentContext,
-        workflow_data: WorkflowMetadataResult,
+        profile_data: ProfileMetadataResult,
         responses: Optional[List[Tuple[str, str, str]]] = None
     ) -> Dict[str, Any]:
-        """Process a workflow request"""
+        """Process a request"""
         try:
 
             # response processing
@@ -71,16 +71,16 @@ class TaskerAgent(BaseAgent):
 
 
 
-            # Build initial context with workflow-specific instructions
+            # Build initial context with profile-specific instructions
             instructions = TASKER_INSTRUCTIONS
 
 
 
 
 
-            # Add workflow-specific instructions if available
-            if workflow_data.instructions:
-                instructions += f"\n\n##Workflow Instructions:\n{workflow_data.instructions}"
+            # Add profile-specific instructions if available
+            if profile_data.instructions:
+                instructions += f"\n\n##Agent Profile Instructions:\n{profile_data.instructions}"
 
             # Build context with combined instructions
             system_prompt, _ = await self.set_context(

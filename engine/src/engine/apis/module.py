@@ -1,11 +1,14 @@
+from datetime import datetime
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_serializer, validator
+from sqlalchemy import UUID
 
 from engine.db.models import ProvideType
+from engine.services.core.api_key import ApiKeyService
 from engine.services.core.module import (
     ModuleError,
     ModuleMetadata,
@@ -13,6 +16,37 @@ from engine.services.core.module import (
     RelationType,
 )
 from loguru import logger
+
+
+class ApiKeyResponse(BaseModel):
+    id: Any  # Use Any to accept any type for id
+    module_id: str
+    api_key: str
+    description: Optional[str] = None
+    is_active: bool
+    created_at: Any  # Use Any to accept any type for created_at
+    last_used_at: Optional[Any] = None  # Use Any for last_used_at
+    
+    # Add serializers to convert to strings
+    @field_serializer('id')
+    def serialize_id(self, id, _info):
+        return str(id)
+        
+    @field_serializer('created_at')
+    def serialize_created_at(self, dt, _info):
+        return dt.isoformat() if dt else None
+        
+    @field_serializer('last_used_at')
+    def serialize_last_used_at(self, dt, _info):
+        return dt.isoformat() if dt else None
+    
+    class Config:
+        from_attributes = True
+        arbitrary_types_allowed = True  # Allow arbitrary types
+
+
+class ApiKeyRequest(BaseModel):
+    description: Optional[str] = None
 
 
 class CreateModuleRequest(BaseModel):
@@ -173,9 +207,11 @@ class ModuleRouter:
     def __init__(
         self,
         module_service: ModuleService,
+        api_key_service: ApiKeyService = None,  
         prefix: str = "/module"
     ):
         self.service = module_service
+        self.api_key_service = api_key_service
         self.router = APIRouter(prefix=prefix, tags=["module"])
         self._setup_routes()
 
@@ -410,10 +446,25 @@ class ModuleRouter:
 
 
 
-
-
-
-
+    async def _create_or_reset_module_api_key(
+        self, 
+        module_id: str = Path(..., description="Module ID"),
+        request: ApiKeyRequest = None
+    ):
+        """Create or reset the API key for a module"""
+        if not self.api_key_service:
+            raise HTTPException(status_code=501, detail="API key service not configured")
+            
+        try:
+            description = request.description if request else None
+            api_key = self.api_key_service.create_api_key(
+                module_id=module_id,
+                description=description
+            )
+            
+            return ApiKeyResponse.from_orm(api_key)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create API key: {str(e)}")
 
 
 
@@ -804,6 +855,16 @@ class ModuleRouter:
             methods=["PUT"],
             summary="Update relation description"
         )
+
+
+        self.router.add_api_route(
+            "/{module_id}/api-key",
+            self._create_or_reset_module_api_key,
+            methods=["POST"],
+            response_model=ApiKeyResponse,
+            summary="Create or reset API key for a module"
+        )
+
 
 
         self.add_provide_routes()

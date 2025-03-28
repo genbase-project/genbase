@@ -12,20 +12,20 @@ from directory_tree import DisplayTree, display_tree
 class AgentUtils:
     """Utility class for common agent operations"""
 
-    def __init__(self, module_service: ModuleService, repo_service: RepoService, module_id: str, workflow: str):
+    def __init__(self, module_service: ModuleService, repo_service: RepoService, module_id: str, profile: str):
         """
-        Initialize AgentUtils for a specific module and workflow
+        Initialize AgentUtils for a specific module and profile
         
         Args:
             module_service: Module service instance
             repo_service: Repository service instance
             module_id: Module ID this utils instance is for
-            workflow: Workflow name this utils instance is for
+            profile: Profile name this utils instance is for
         """
         self.module_service = module_service
         self.repo_service = repo_service
         self.module_id = module_id
-        self.workflow = workflow
+        self.profile = profile
 
         # Get module metadata to access repo info
         self.module_metadata = self.module_service.get_module_metadata(module_id)

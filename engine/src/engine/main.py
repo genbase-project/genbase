@@ -28,9 +28,10 @@ from engine.apis.module import ModuleRouter
 from engine.apis.project import ProjectRouter
 from engine.apis.repository import RepositoryRouter
 from engine.apis.resource import ResourceRouter
-from engine.apis.workflow import WorkflowRouter
+from engine.apis.profile import ProfileRouter
 from engine.const import BASE_DATA_DIR, KIT_BASE_DIR, REPO_BASE_DIR
 from engine.services.agents.base_agent import AgentServices
+from engine.services.core.api_key import ApiKeyService
 from engine.services.execution.action import ActionService
 
 # Import services
@@ -41,10 +42,12 @@ from engine.services.core.project import ProjectService
 from engine.services.storage.repository import RepoService
 from engine.services.storage.resource import ResourceService
 from engine.services.execution.state import StateService
-from engine.services.execution.workflow import WorkflowService
+from engine.services.execution.profile import ProfileService
 from engine.services.storage.vector_store import VectorStoreService
 from engine.services.storage.embedder import EmbeddingService
 from engine.apis.models.embedding import EmbeddingRouter
+
+from engine.apis.llm_gateway import LLMGatewayRouter
 
 
 
@@ -127,6 +130,9 @@ BASE_DATA_DIR.mkdir(exist_ok=True)
 REPO_BASE_DIR.mkdir(exist_ok=True)
 KIT_BASE_DIR.mkdir(exist_ok=True)
 
+
+
+api_key_service = ApiKeyService()
 # Initialize services
 repo_service = RepoService(
     base_path=REPO_BASE_DIR
@@ -161,7 +167,7 @@ resource_service = ResourceService(
 action_service = ActionService(repo_service=repo_service)
 
 # Add this with other service initializations
-workflow_service = WorkflowService(
+profile_service = ProfileService(
     workspace_base=str(KIT_BASE_DIR),
     module_base=str(KIT_BASE_DIR),
     module_service=module_service,
@@ -189,6 +195,7 @@ project_router = ProjectRouter(
 
 module_router = ModuleRouter(
     module_service=module_service,
+    api_key_service=api_key_service,
     prefix="/module"
 )
 
@@ -208,9 +215,9 @@ operation_router = ActionRouter(
 )
 
 # Add this with other router initializations
-workflow_router = WorkflowRouter(
-    workflow_service=workflow_service,
-    prefix="/workflow"
+profile_router = ProfileRouter(
+    profile_service=profile_service,
+    prefix="/profile"
 )
 
 # 3. Add to router initializations after other routers
@@ -218,6 +225,16 @@ embedding_router = EmbeddingRouter(
     embedding_service=embedding_service,
     prefix="/embedding"
 )
+
+
+
+# Initialize LLM gateway router
+llm_gateway_router = LLMGatewayRouter(
+    model_service=model_service,
+    api_key_service=api_key_service
+)
+
+
 
 # Include routers
 app.include_router(kit_router.router)
@@ -227,13 +244,22 @@ app.include_router(project_router.router)
 app.include_router(resource_router.router)  # Add resource router
 app.include_router(model_router.router)
 app.include_router(operation_router.router)
-app.include_router(workflow_router.router)
+app.include_router(profile_router.router)
 app.include_router(embedding_router.router)
+
+
+
+
+gateway_app = FastAPI()
+gateway_app.include_router(llm_gateway_router.router)
+
+# Mount the gateway app to the main app
+app.mount("/gateway", gateway_app)
 
 
 agent_services = AgentServices(
     model_service=model_service,
-    workflow_service=workflow_service,
+    profile_service=profile_service,
     state_service=state_service,
     module_service=module_service,
     repo_service=repo_service

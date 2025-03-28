@@ -32,17 +32,17 @@ class ChatHistoryManager:
     def get_chat_history(
         self,
         module_id: str,
-        workflow: str,
+        profile: str,
         session_id: Optional[str] = None,
         return_json: bool = False
 
     ) -> List[Dict[str, Any]]:
         """
-        Get chat history for a module and workflow session
+        Get chat history for a module and profile session
         
         Args:
             module_id: Module ID
-            workflow: Workflow type
+            profile: Profile type
             session_id: Optional session ID. If not provided, returns default session (all zeros UUID)
         """
         try:
@@ -51,7 +51,7 @@ class ChatHistoryManager:
                     select(ChatHistory)
                     .where(
                         ChatHistory.module_id == module_id,
-                        ChatHistory.workflow == workflow,
+                        ChatHistory.profile == profile,
                         ChatHistory.session_id == (session_id or str(uuid.UUID(int=0)))
                     )
                     .order_by(ChatHistory.timestamp.asc())
@@ -66,7 +66,7 @@ class ChatHistoryManager:
     def add_to_history(
         self,
         module_id: str,
-        workflow: str, 
+        profile: str, 
         role: str,
         content: str,
         message_type: str = "text",
@@ -78,10 +78,10 @@ class ChatHistoryManager:
     ):
         """
         Add message to chat history
-        
+        W
         Args:
             module_id: Module ID
-            workflow: Workflow type
+            profile: Profile type
             role: Message role (user/assistant)
             content: Message content
             message_type: Message type (text/tool_call/tool_result)
@@ -93,7 +93,7 @@ class ChatHistoryManager:
                 logger.debug(f"tool_calls: {tool_calls}")
                 chat_message = ChatHistory(
                     module_id=module_id,
-                    workflow=workflow,
+                    profile=profile,
                     role=role,
                     content=content,
                     timestamp=datetime.now(UTC),
@@ -147,7 +147,7 @@ class ChatHistoryManager:
     def get_last_message(
         self,
         module_id: str,
-        workflow: str,
+        profile: str,
         session_id: Optional[str] = None,
         return_json: bool = False,
         role: str = "assistant"
@@ -157,7 +157,7 @@ class ChatHistoryManager:
         
         Args:
             module_id: Module ID
-            workflow: Workflow type
+            profile: Profile type
             session_id: Optional session ID. If not provided, uses default session (all zeros UUID)
             return_json: Whether to return tool calls as JSON
             
@@ -170,7 +170,7 @@ class ChatHistoryManager:
                     select(ChatHistory)
                     .where(
                         ChatHistory.module_id == module_id,
-                        ChatHistory.workflow == workflow,
+                        ChatHistory.profile == profile,
                         ChatHistory.session_id == (session_id or str(uuid.UUID(int=0))),
                         ChatHistory.role == role
                     )

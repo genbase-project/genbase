@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Type, Optional, Union
 
 from engine.services.agents.base_agent import BaseAgent, AgentServices
-from engine.config.workflow_config import WorkflowConfig
+from engine.config.profile_config import ProfileConfig
 from loguru import logger
 from engine.base.agents import __all__ as base_agents
 
@@ -109,19 +109,19 @@ class AgentLoader:
         except Exception as e:
             raise AgentLoaderError(f"Failed to get agent {agent_name}: {str(e)}")
 
-    def load_workflow_agent(
+    def load_profile_agent(
         self,
         kit_path: Path,
-        workflow_name: str,
-        workflow_config: Union[dict, WorkflowConfig]
+        profile_name: str,
+        profile_config: Union[dict, ProfileConfig]
     ) -> Optional[BaseAgent]:
         """
-        Load agent for specific workflow based on kit.yaml config.
+        Load agent for specific profile based on kit.yaml config.
 
         Args:
             kit_path: Path to kit root directory
-            workflow_name: Name of workflow
-            workflow_config: Workflow configuration from kit.yaml
+            profile_name: Name of profile
+            profile_config: profile configuration from kit.yaml
 
         Returns:
             Optional[BaseAgent]: Agent instance if agent is configured, None otherwise
@@ -135,9 +135,9 @@ class AgentLoader:
                 import yaml
                 kit_config = yaml.safe_load(f)
 
-            # Convert WorkflowConfig to dict if needed
-            if isinstance(workflow_config, WorkflowConfig):
-                workflow_config = {"agent": workflow_config.agent_type}
+            # Convert profileConfig to dict if needed
+            if isinstance(profile_config, ProfileConfig):
+                profile_config = {"agent": profile_config.agent_type}
                 
             # Get agent configs
             agents = {
@@ -145,14 +145,14 @@ class AgentLoader:
                 for agent in kit_config.get("agents", [])
             }
 
-            # Check workflow-specific agent
-            agent_name = workflow_config.get("agent") 
+            # Check profile-specific agent
+            agent_name = profile_config.get("agent") 
             if not agent_name:
-                # Check default agent at workflow root
-                agent_name = kit_config.get("workflows", {}).get("agent")
+                # Check default agent at profile root
+                agent_name = kit_config.get("profiles", {}).get("agent")
 
             if not agent_name:
-                raise AgentLoaderError(f"No agent specified for workflow {workflow_name}")
+                raise AgentLoaderError(f"No agent specified for profile {profile_name}")
                 
             # First try loading from base agents
             if agent_name in self.loaded_agents:
@@ -171,5 +171,5 @@ class AgentLoader:
 
         except Exception as e:
             raise AgentLoaderError(
-                f"Failed to load workflow agent for {workflow_name}: {str(e)}"
+                f"Failed to load profile agent for {profile_name}: {str(e)}"
             )

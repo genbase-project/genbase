@@ -1,5 +1,6 @@
 from datetime import datetime, UTC
 import enum
+import secrets
 from typing import Any, Dict, List, Optional
 import uuid
 
@@ -12,17 +13,6 @@ from engine.db.base import Base
 class Base(DeclarativeBase):
     pass
 
-class WorkManifest(Base):
-    """Stores AI-generated work manifests explaining module state"""
-    __tablename__ = "work_manifests"
-    
-    id: Mapped[int] = mapped_column(primary_key=True)
-    module_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id', ondelete='CASCADE'), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-    
-    # Relationship
-    module: Mapped["Module"] = relationship(back_populates="manifests")
 
 
 # From chat_history table in agent.py
@@ -31,7 +21,7 @@ class ChatHistory(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True)
     module_id: Mapped[str] = mapped_column(String, nullable=False)
-    workflow: Mapped[str] = mapped_column(String, nullable=False)
+    profile: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -42,7 +32,7 @@ class ChatHistory(Base):
     name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     
     __table_args__ = (
-        UniqueConstraint('module_id', 'workflow', 'timestamp', 'session_id'),
+        UniqueConstraint('module_id', 'profile', 'timestamp', 'session_id'),
     )
 
 # From modules, project_module_mappings, and module_relations tables in module.py
@@ -80,16 +70,12 @@ class Module(Base):
         uselist=False
     )
 
-    workflow_statuses: Mapped[List["WorkflowStatus"]] = relationship(
+    profile_statuses: Mapped[List["ProfileStatus"]] = relationship(
         back_populates="module",
         cascade="all, delete-orphan"
     )
-    
-    manifests: Mapped[List["WorkManifest"]] = relationship(
-        back_populates="module", 
-        cascade="all, delete-orphan"
-    )
-    workflow_stores: Mapped[List["WorkflowStore"]] = relationship(
+  
+    profile_stores: Mapped[List["ProfileStore"]] = relationship(
         back_populates="module",
         cascade="all, delete-orphan"
     )
@@ -112,7 +98,35 @@ class Module(Base):
         cascade="all, delete-orphan"
     )
 
+    api_keys: Mapped[List["ModuleApiKey"]] = relationship(
+        back_populates="module",
+        cascade="all, delete-orphan"
+    )
 
+
+
+
+
+class ModuleApiKey(Base):
+    """API keys for authenticating module access to the LLM gateway"""
+    __tablename__ = "module_api_keys"
+    
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    module_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id', ondelete='CASCADE'), nullable=False)
+    api_key: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # Relationship with Module
+    module = relationship("Module", back_populates="api_keys")
+    
+    @staticmethod
+    def generate_key() -> str:
+        """Generate a secure API key"""
+        # Format: mk_[random string]
+        return f"mk_{secrets.token_urlsafe(32)}"
 
 
 
@@ -183,9 +197,9 @@ class VectorStoreConfig(Base):
     module: Mapped["Module"] = relationship(back_populates="vector_store_configs")
 
 
-class WorkflowStore(Base):
-    """Store for workflow-specific data"""
-    __tablename__ = "workflow_stores"
+class ProfileStore(Base):
+    """Store for profile-specific data"""
+    __tablename__ = "profile_stores"
     
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), 
@@ -198,7 +212,7 @@ class WorkflowStore(Base):
         nullable=False
     )
 
-    workflow: Mapped[str] = mapped_column(String, nullable=False)
+    profile: Mapped[str] = mapped_column(String, nullable=False)
     collection: Mapped[str] = mapped_column(String, nullable=False)
     value: Mapped[Dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -213,11 +227,8 @@ class WorkflowStore(Base):
         onupdate=text('CURRENT_TIMESTAMP')
     )
     # Add relationship to Module
-    module: Mapped["Module"] = relationship(back_populates="workflow_stores")
+    module: Mapped["Module"] = relationship(back_populates="profile_stores")
 
-    __table_args__ = (
-        Index('idx_workflow_store_lookup', 'module_id', 'workflow', 'collection'),
-    )
 
 
 
@@ -290,25 +301,44 @@ class AgentStatus(Base):
 
 
 
-class WorkflowStatus(Base):
-    """Tracks completion status of workflows for a module"""
-    __tablename__ = "workflow_status"
+class ProfileStatus(Base):
+    """Tracks completion status of profiles for a module"""
+    __tablename__ = "profile_status"
     
     module_id: Mapped[str] = mapped_column(
         String, 
         ForeignKey('modules.module_id', ondelete='CASCADE'),
         primary_key=True
     )
-    workflow_type: Mapped[str] = mapped_column(String, primary_key=True)
+    profile_type: Mapped[str] = mapped_column(String, primary_key=True)
     is_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     
     # Relationship
-    module: Mapped["Module"] = relationship(back_populates="workflow_statuses")
+    module: Mapped["Module"] = relationship(back_populates="profile_statuses")
 
 
 
 
 
-# Index for chat_history
-Index('idx_module_workflow', ChatHistory.module_id, ChatHistory.workflow)
+
+
+
+class GlobalConfig(Base):
+    """Stores global configuration settings"""
+    __tablename__ = "global_configs"
+    
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    value: Mapped[Any] = mapped_column(JSON, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, 
+        nullable=False, 
+        server_default=text('CURRENT_TIMESTAMP')
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=text('CURRENT_TIMESTAMP'),
+        onupdate=text('CURRENT_TIMESTAMP')
+    )

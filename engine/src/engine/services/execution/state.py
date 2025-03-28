@@ -5,7 +5,7 @@ from typing import Any, Dict
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from engine.db.models import AgentStatus, WorkflowStatus
+from engine.db.models import AgentStatus, ProfileStatus
 from engine.db.session import SessionLocal
 
 
@@ -81,47 +81,13 @@ class StateService:
             return status.last_updated.isoformat()
 
 
-    def complete_workflow(self, module_id: str, workflow_type: str) -> Dict[str, Any]:
-        """Mark a workflow as completed"""
-
-        with SessionLocal() as db:
-            # Try to update existing record
-            stmt = (
-                update(WorkflowStatus)
-                .where(
-                    WorkflowStatus.module_id == module_id,
-                    WorkflowStatus.workflow_type == workflow_type
-                )
-                .values(
-                    is_completed=True,
-                    last_updated=datetime.now(UTC)
-                )
-            )
-            result = db.execute(stmt)
-            
-            # If no record exists, insert new one
-            if result.rowcount == 0:
-                workflow_status = WorkflowStatus(
-                    module_id=module_id,
-                    workflow_type=workflow_type,
-                    is_completed=True,
-                    last_updated=datetime.now(UTC)
-                )
-                db.add(workflow_status)
-            
-            db.commit()
-            
-            return {
-                "status": "success", 
-                "message": f"Workflow {workflow_type} marked as completed"
-            }
-            
-    def get_workflow_status(self, module_id: str, workflow_type: str) -> bool:
-        """Get completion status for a workflow"""
+       
+    def get_profile_status(self, module_id: str, profile_type: str) -> bool:
+        """Get completion status for a profile"""
         with self._get_db() as db:
-            stmt = select(WorkflowStatus).where(
-                WorkflowStatus.module_id == module_id,
-                WorkflowStatus.workflow_type == workflow_type
+            stmt = select(ProfileStatus).where(
+                ProfileStatus.module_id == module_id,
+                ProfileStatus.profile_type == profile_type
             )
             status = db.execute(stmt).scalar_one_or_none()
             

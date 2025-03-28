@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from engine.services.execution.model import ModelService
@@ -28,7 +28,7 @@ class ModelRouter:
             model_name = self.service.set_model(request.model_name)
             return {"model_name": model_name}
         except Exception as e:
-            raise Exception(str(e))
+            raise HTTPException(status_code=400, detail=str(e))
 
     async def _get_current_model(self):
         """Handle get current model request"""
@@ -36,7 +36,7 @@ class ModelRouter:
             model_name = self.service.get_current_model()
             return {"model_name": model_name}
         except Exception as e:
-            raise Exception(str(e))
+            raise HTTPException(status_code=500, detail=str(e))
 
     async def _list_models(self):
         """Handle list models request"""
@@ -44,15 +44,15 @@ class ModelRouter:
             available_models = self.service.get_available_models()
             return available_models
         except Exception as e:
-            raise Exception(str(e))
+            raise HTTPException(status_code=500, detail=str(e))
 
     async def _chat_completion(self, request: Dict[str, Any]):
         """Handle chat completion request"""
         try:
-            response = await self.service.create(**request)
+            response = await self.service.chat_completion(**request)
             return response
         except Exception as e:
-            raise Exception(str(e))
+            raise HTTPException(status_code=500, detail=str(e))
 
     def _setup_routes(self):
         """Setup API routes"""
@@ -70,8 +70,7 @@ class ModelRouter:
         self.router.add_api_route(
             "/list",
             self._list_models,
-            methods=["GET"],
-            response_model=Dict[str, List[str]]
+            methods=["GET"]
         )
         self.router.add_api_route(
             "/current",

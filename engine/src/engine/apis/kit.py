@@ -196,19 +196,70 @@ class KitRouter:
 
 
 
-
-    # Add this method to the KitRouter class
-    async def _get_registry_kits(self):
-        """Get all kits from registry"""
+    async def _get_registry_kit_versions(self, owner: str, kit_id: str):
+        """
+        Get all available versions of a kit from the registry
+        
+        Args:
+            owner: Kit owner
+            kit_id: Kit identifier
+            
+        Returns:
+            JSON response with versions list
+        """
         try:
-            kits = self.service.get_registry_kits()
-            return RegistryKitsResponse(kits=[RegistryKitResponse(**kit) for kit in kits])
+            versions = self.service.get_registry_kit_versions(owner, kit_id)
+            return JSONResponse(content={"versions": versions})
+        except KitNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
         except RegistryError as e:
             raise HTTPException(status_code=503, detail=f"Registry error: {str(e)}")
         except KitError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
 
+
+    async def _get_registry_kits(self):
+        """Get all kits from registry and format them according to RegistryKitResponse"""
+        try:
+            # Get registry kits (already transformed to match RegistryKitResponse format)
+            kits = self.service.get_registry_kits()
+            
+            # Create response without additional transformation
+            return RegistryKitsResponse(kits=kits)
+        except RegistryError as e:
+            raise HTTPException(status_code=503, detail=f"Registry error: {str(e)}")
+        except KitError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+    async def _upload_install_kit(
+        self,
+        kit_file: UploadFile = File(...)
+    ):
+        """Handle direct kit upload and installation"""
+        try:
+            metadata = self.service.save_kit(
+                kit_file.file
+            )
+
+            return JSONResponse(
+                content={
+                    "status": "success",
+                    "message": "Kit uploaded and installed successfully",
+                    "kit_info": KitResponse.from_metadata(metadata).dict()
+                }
+            )
+
+        except InvalidVersionError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except VersionExistsError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except KitError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    
 
     def _setup_routes(self):
         """Setup all routes"""
@@ -217,6 +268,14 @@ class KitRouter:
             self._upload_kit,
             methods=["POST"],
             summary="Upload kit"
+        )
+
+
+        self.router.add_api_route(
+            "/upload",
+            self._upload_install_kit,
+            methods=["POST"],
+            summary="Upload and install kit from tar.gz file"
         )
 
         self.router.add_api_route(
@@ -273,3 +332,47 @@ class KitRouter:
                 response_model=RegistryKitsResponse,
                 summary="Get all kits from registry"
         )
+
+
+
+
+        self.router.add_api_route(
+            "/registry/config/{owner}/{kit_id}/{version}",
+            self._get_kit_config,
+            methods=["GET"],
+            summary="Get kit configuration (kit.yaml contents)"
+        )
+        
+        # Add registry versions route using our get_registry_kit_versions implementation
+        self.router.add_api_route(
+            "/registry/versions/{owner}/{kit_id}",
+            self._get_registry_kit_versions,
+            methods=["GET"],
+            summary="Get available versions of a kit from registry"
+        )
+        
+
+
+
+    async def _get_kit_config(self, owner: str, kit_id: str, version: str):
+        """
+        Get kit configuration (kit.yaml contents) for a specific kit version
+        
+        Args:
+            owner: Kit owner
+            kit_id: Kit identifier
+            version: Kit version
+            
+        Returns:
+            JSON response with kit configuration
+        """
+        try:
+            # Get kit config from the service
+            kit_config = self.service.get_registry_kit_config(owner, kit_id, version)
+            return JSONResponse(content=kit_config)
+        except KitNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except RegistryError as e:
+            raise HTTPException(status_code=503, detail=f"Registry error: {str(e)}")
+        except KitError as e:
+            raise HTTPException(status_code=500, detail=str(e))

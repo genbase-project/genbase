@@ -10,22 +10,22 @@ import xml.etree.ElementTree as ET
 from pydantic import BaseModel, field_validator, validator
 import xmltodict
 from litellm import ChatCompletionMessageToolCall, Choices
-from engine.services.agents.giml_definitions import GIML_DEFINITIONS
+from engine.services.agents.generative_elements import ELEMENTS_DEFINITIONS
 from engine.services.core.kit import KitConfig
 from engine.services.execution.action import FunctionMetadata
 from engine.services.execution.internal_actions import InternalActionManager
 from engine.services.execution.model import ModelService, ResponseType
 from engine.services.execution.state import StateService
-from engine.services.execution.workflow import (
-    FullWorkflowAction,
-    WorkflowExecutionResult,
-    WorkflowService,
-    WorkflowMetadataResult,
+from engine.services.execution.profile import (
+    FullProfileAction,
+    ProfileExecutionResult,
+    ProfileService,
+    ProfileMetadataResult,
     ActionInfo
 )
 from engine.services.agents.chat_history import ChatHistoryManager
 from engine.services.core.module import ModuleService, RelationType
-from engine.services.execution.workflow_store import WorkflowStoreInfo, WorkflowStoreRecord, WorkflowStoreService
+from engine.services.execution.profile_store import ProfileStoreInfo, ProfileStoreRecord, ProfileStoreService
 from engine.services.storage.repository import RepoService
 from engine.services.agents.agent_utils import AgentUtils
 from loguru import logger
@@ -37,20 +37,14 @@ from litellm import ModelResponse
 from dataclasses import dataclass
 from typing import Optional, List, Union, Literal
 
-@dataclass
-class GimlResponse:
-    """Structured response for GIML elements"""
-    id: str                  # ID of the GIML element
-    giml_type: str          # Type of GIML element (select, code_diff, etc)
-    response_value: Optional[str]  # User's response value if provided
-    structured_giml: Dict    # Full GIML structure as dictionary
+
 
 
 @dataclass
 class AgentServices:
     """Essential services required by all agents"""
     model_service: ModelService     # For LLM interactions
-    workflow_service: WorkflowService  # For workflow execution
+    profile_service: ProfileService  # For profile execution
     module_service: ModuleService   # For module management
     state_service: StateService     # For agent state management
     repo_service: RepoService       # For repository operations
@@ -92,7 +86,7 @@ class IncludeOptions(BaseModel):
 class AgentContext:
     """Context for an agent operation"""
     module_id: str
-    workflow: str
+    profile: str
     user_input: str
     session_id: Optional[str] = None
 
@@ -108,7 +102,7 @@ class BaseAgent(ABC):
         self.system_prompt: Optional[str] = None
         self._utils: Optional[AgentUtils] = None
 
-        self.module_action_map: Dict[str, FullWorkflowAction] = {}
+        self.module_action_map: Dict[str, FullProfileAction] = {}
 
 
         # Initialize the custom action manager
@@ -119,15 +113,15 @@ class BaseAgent(ABC):
 
     @property
     def utils(self) -> AgentUtils:
-        """Get agent utils instance for current module and workflow context"""
+        """Get agent utils instance for current module and profile context"""
         if not self.context:
             raise ValueError("No active context - utils cannot be accessed")
-        if not self._utils or self._utils.module_id != self.context.module_id or self._utils.workflow != self.context.workflow:
+        if not self._utils or self._utils.module_id != self.context.module_id or self._utils.profile != self.context.profile:
             self._utils = AgentUtils(
                 self.services.module_service,
                 self.services.repo_service,
                 self.context.module_id,
-                self.context.workflow
+                self.context.profile
             )
         return self._utils
 
@@ -161,10 +155,10 @@ class BaseAgent(ABC):
         parts: Dict[str, str] = {"Agent Instructions": agent_instructions}
         tools = []
 
-        # Get workflow metadata
-        workflow_data: WorkflowMetadataResult = self.services.workflow_service.get_workflow_metadata(
+        # Get Profile metadata
+        profile_data: ProfileMetadataResult = self.services.profile_service.get_profile_metadata(
             self.context.module_id,
-            self.context.workflow,
+            self.context.profile,
             with_provided=include.provided_actions
         )
 
@@ -173,16 +167,16 @@ class BaseAgent(ABC):
         if internal_actions is not None:
             self.action_manager.register_actions(internal_actions)
 
-        # Get workflow actions
-        workflow_actions = []
+        # Get profile actions
+        profile_actions = []
 
 
         if include.actions == "none":
-            workflow_actions = []        
+            profile_actions = []        
 
         elif include.actions == "all":
-            # Include all workflow actions
-            workflow_actions = [
+            # Include all profile actions
+            profile_actions = [
                 {
                     "type": "function",
                     "function": {
@@ -191,13 +185,13 @@ class BaseAgent(ABC):
                         "parameters": action.metadata.parameters if action.metadata else {}
                     }
                 }
-                for action in workflow_data.actions
+                for action in profile_data.actions
             ]
-            for action in workflow_data.actions:
+            for action in profile_data.actions:
                 self.module_action_map[action.action.name] = action
         else:
-            # Filter workflow actions by name
-            workflow_actions = [
+            # Filter profile actions by name
+            profile_actions = [
                 {
                     "type": "function",
                     "function": {
@@ -206,15 +200,15 @@ class BaseAgent(ABC):
                         "parameters": action.metadata.parameters if action.metadata else {}
                     }
                 }
-                for action in workflow_data.actions
+                for action in profile_data.actions
                 if action.action.name in include.actions
             ]
-            for action in workflow_data.actions:
+            for action in profile_data.actions:
                 if action.action.name in include.actions:
                     self.module_action_map[action.action.name] = action
         
-        # Add workflow actions to tools
-        tools.extend(workflow_actions)
+        # Add profile actions to tools
+        tools.extend(profile_actions)
         
         # Add custom actions from the action manager
 
@@ -223,26 +217,26 @@ class BaseAgent(ABC):
         tools.extend(internal_action_tools)
 
         # Add tool descriptions to prompt
-        workflow_tool_descriptions = []
+        profile_tool_descriptions = []
         for tool in tools:
-            workflow_tool_descriptions.append(
+            profile_tool_descriptions.append(
                 f"- {tool['function']['name']}: {tool['function']['description']}"
             )
 
-        if workflow_tool_descriptions:
-            parts["Available tools"]= "\n".join(workflow_tool_descriptions)
+        if profile_tool_descriptions:
+            parts["Available tools"]= "\n".join(profile_tool_descriptions)
 
         # Add XML element documentation
         if include.giml_elements != "none":
             giml_elements = []
             if include.giml_elements == "all":
-                giml_elements = list(GIML_DEFINITIONS.keys())
+                giml_elements = list(ELEMENTS_DEFINITIONS.keys())
             else:
                 giml_elements = include.giml_elements
             xml_docs = []
             for element in giml_elements:
-                if element in GIML_DEFINITIONS.keys():
-                    xml_docs.append(f"Element {element}\n format: {GIML_DEFINITIONS[element].get("format","")}\n use: {GIML_DEFINITIONS[element].get("use","")}")
+                if element in ELEMENTS_DEFINITIONS.keys():
+                    xml_docs.append(f"Element {element}\n format: {ELEMENTS_DEFINITIONS[element].get("format","")}\n use: {ELEMENTS_DEFINITIONS[element].get("use","")}")
             if xml_docs:
                 parts["GIML Elements"]= "\n\n".join(xml_docs)
 
@@ -262,7 +256,7 @@ class BaseAgent(ABC):
         action_name: str,
         parameters: Dict[str, Any]
     ) -> Any:
-        """Execute a workflow action or custom internal action"""
+        """Execute a profile action or custom internal action"""
         try:
             if not self.context:
                 raise ValueError("No active context")
@@ -272,14 +266,14 @@ class BaseAgent(ABC):
                 # Execute internal action
                 return await self.action_manager.execute_action(action_name, parameters)
             
-            # Otherwise, execute as a normal workflow action
+            # Otherwise, execute as a normal profile action
             action_info = ActionInfo(
                 module_id=(self.module_action_map[action_name]).module_id or self.context.module_id,
-                workflow=self.context.workflow,
+                profile=self.context.profile,
                 name=action_name
             )
 
-            result = self.services.workflow_service.execute_workflow_action(
+            result = self.services.profile_service.execute_profile_action(
                 action_info=action_info,
                 parameters=parameters,
                 with_provided=self.module_action_map[action_name].is_provided
@@ -317,7 +311,7 @@ class BaseAgent(ABC):
 
         self.history_manager.add_to_history(
             module_id=self.context.module_id,
-            workflow=self.context.workflow,
+            profile=self.context.profile,
             role=role,
             content=content,
             tool_call_id=tool_call_id,
@@ -334,7 +328,7 @@ class BaseAgent(ABC):
             
         chat_history = self.history_manager.get_chat_history(
             module_id=self.context.module_id,
-            workflow=self.context.workflow,
+            profile=self.context.profile,
             session_id=self.context.session_id
         )
         # Select only few attributes: role, content(optional), tool_call_id(optional), name(optional), tool calls(optional)
@@ -363,7 +357,7 @@ class BaseAgent(ABC):
             
         return self.history_manager.get_last_message(
             module_id=self.context.module_id,
-            workflow=self.context.workflow,
+            profile=self.context.profile,
             session_id=self.context.session_id,
             return_json=return_json
         )
@@ -435,7 +429,7 @@ class BaseAgent(ABC):
                             parameters = json.loads(tool_call.function.arguments)
 
 
-                            # Execute the workflow action
+                            # Execute the profile action
                             result = await self.run_action(
                                 tool_call.function.name,
                                 parameters
@@ -543,19 +537,15 @@ class BaseAgent(ABC):
         """Process an agent request"""
         try:
             self.context = context
-            # Get workflow metadata
-            workflow_data: WorkflowMetadataResult =  self.services.workflow_service.get_workflow_metadata(
+            # Get profile metadata
+            profile_data: ProfileMetadataResult =  self.services.profile_service.get_profile_metadata(
                 context.module_id,
-                context.workflow
+                context.profile
             )
 
-            # Get responses
-            responses = self.get_responses(context.user_input)
-
-            logger.debug(f"Responses: {responses}")
             
-            # Process workflow
-            result = await self.process_request(context, workflow_data, responses)
+            # Process profile
+            result = await self.process_request(context, profile_data)
 
             return result
         except Exception as e:
@@ -565,109 +555,15 @@ class BaseAgent(ABC):
             self.context = None  # Clear context
 
 
-    def get_responses(self, response_text: str) -> Optional[List[GimlResponse]]:
-        """
-        Extract GIML elements from last assistant message and match with responses
-        
-        Args:
-            response_text: Text containing responses in GIML format
-                Expected format:
-                <giml>
-                    <responses>
-                        <response id="corresponding-id" value="Yes"/>
-                    </responses>
-                </giml>
-                        
-        Returns:
-            List of GimlResponse objects containing:
-            - id: ID of the GIML element
-            - giml_type: Type of GIML element (select, code_diff, etc)
-            - response_value: User's response value if provided
-            - structured_giml: Full GIML structure as dictionary
-
-        Example:
-            For assistant message with multiple GIML blocks:
-                Some text here
-                <giml>
-                    <label id="q1">First question</label>
-                    <select id="s1">
-                        <item description="desc1">Yes</item>
-                        <item description="desc2">No</item>
-                    </select>
-                </giml>
-                More text here
-                <giml>
-                    <label id="q2">Second question</label>
-                    <select id="s2">
-                        <item description="desc3">Option A</item>
-                        <item description="desc4">Option B</item>
-                    </select>
-                </giml>
-        """
-        try:
-            # Parse response GIML
-            response_root = ET.fromstring(response_text)
-            if response_root.tag != 'giml':
-                return None
-
-            # Get all response id/value pairs
-            responses = {}
-            for resp in response_root.findall(".//response"):
-                resp_id = resp.get("id")
-                resp_value = resp.get("value")
-                if resp_id and resp_value:
-                    responses[resp_id] = resp_value
-
-            # Get assistant message
-            message = self._get_last_assistant_message()
-            if not message or 'content' not in message:
-                return None
-
-            result = []
-            
-            # Find all GIML blocks in the message
-            message_content = message['content']
-            giml_blocks = re.findall(r'<giml>.*?</giml>', message_content, re.DOTALL)
-            
-            for giml_block in giml_blocks:
-                try:
-                    # Parse each GIML block
-                    giml_root = ET.fromstring(giml_block)
-                    giml_dict = xmltodict.parse(giml_block)
-
-                    # Check each GIML type we support
-                    for giml_type in GIML_DEFINITIONS.keys():
-                        for elem in giml_root.findall(f".//{giml_type}"):
-                            elem_id = elem.get("id")
-                            if elem_id:
-                                result.append(GimlResponse(
-                                    id=elem_id,
-                                    giml_type=giml_type,
-                                    response_value=responses.get(elem_id),
-                                    structured_giml=giml_dict
-                                ))
-
-                except ET.ParseError:
-                    logger.warning(f"Failed to parse GIML block: {giml_block}")
-                    continue
-
-            return result if result else None
-
-        except ET.ParseError:
-            return None
-        except Exception as e:
-            logger.error(f"Error processing GIML: {str(e)}")
-            return None
-
 
     def get_store(self, collection: str) -> Optional[str]:
         """Get a stored value by key"""
         if not self.context:
             raise ValueError("No active context")
-        return   WorkflowStoreService(
-        storeInfo=WorkflowStoreInfo(
+        return   ProfileStoreService(
+        storeInfo=ProfileStoreInfo(
             module_id=self.context.module_id,
-            workflow=self.context.workflow,
+            profile=self.context.profile,
             collection=collection
         )
     )
@@ -682,8 +578,7 @@ class BaseAgent(ABC):
     async def   process_request(
         self,
         context: AgentContext,
-        workflow_data: WorkflowMetadataResult,
-        responses: Optional[List[GimlResponse]] = None
+        profile_data: ProfileMetadataResult
     ) -> Dict[str, Any]:
-        """Process a workflow request"""
+        """Process a profile request"""
         pass

@@ -14,13 +14,13 @@ from engine.services.execution.action import ActionError, ActionService, Functio
 from engine.services.core.module import ModuleError, ModuleService, RelationType
 from engine.services.storage.resource import ResourceService
 from loguru import logger
-from engine.services.core.kit import WorkflowAction
+from engine.services.core.kit import ProfileAction
 
-class FullWorkflowAction(BaseModel):
-    """Enhanced workflow action that wraps WorkflowAction with additional metadata"""
-    action: WorkflowAction
+class FullProfileAction(BaseModel):
+    """Enhanced profile action that wraps profileAction with additional metadata"""
+    action: ProfileAction
     module_id: str
-    workflow: Optional[str] = None  # Workflow name if part of workflow
+    profile: Optional[str] = None  # profile name if part of profile
     metadata: Optional[FunctionMetadata] = None
     error: Optional[str] = None
     is_provided: Optional[bool] = False
@@ -31,15 +31,15 @@ class FullWorkflowAction(BaseModel):
         return {
             "action":action_dict,
             "module_id": self.module_id,
-            "workflow": self.workflow,
+            "profile": self.profile,
             "metadata": self.metadata.dict() if self.metadata else None,
             "error": self.error
         }
 
-class WorkflowMetadataResult(BaseModel):
-    """Pydantic model for complete workflow metadata response"""
+class ProfileMetadataResult(BaseModel):
+    """Pydantic model for complete profile metadata response"""
     instructions: str
-    actions: List[FullWorkflowAction]
+    actions: List[FullProfileAction]
     requirements: List[str]
 
 @dataclass
@@ -47,14 +47,14 @@ class ActionInfo:
     """Stores information about an action"""
     module_id: str
     name: str
-    workflow: Optional[str] = None
+    profile: Optional[str] = None
     description: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert ActionInfo to dictionary"""
         return {
             "module_id": self.module_id,
-            "workflow": self.workflow,
+            "profile": self.profile,
             "action_path": self.action_path,
             "name": self.name,
             "description": self.description
@@ -62,13 +62,13 @@ class ActionInfo:
 
 
 
-class Workflow(BaseModel):
-    """Workflow metadata"""
+class Profile(BaseModel):
+    """profile metadata"""
     instruction: Optional[str] = None
-    actions: List[WorkflowAction] = []  # Make actions optional with empty default
+    actions: List[ProfileAction] = []  # Make actions optional with empty default
 
-class WorkflowExecutionResult(BaseModel):
-    """Pydantic model for workflow execution result"""
+class ProfileExecutionResult(BaseModel):
+    """Pydantic model for profile execution result"""
     status: str
     message: str 
     result: Any
@@ -81,12 +81,12 @@ class WorkflowExecutionResult(BaseModel):
             "result": self.result
         }
 
-class WorkflowError(Exception):
-    """Base exception for workflow actions"""
+class ProfileError(Exception):
+    """Base exception for profile actions"""
     pass
 
-class WorkflowService:
-    """Service for managing module workflows"""
+class ProfileService:
+    """Service for managing module profiles"""
 
     def __init__(
         self,
@@ -108,21 +108,21 @@ class WorkflowService:
 
 
 
-    def get_workflow_metadata(self, module_id: str, workflow: str, with_provided: bool = False) -> WorkflowMetadataResult:
-        """Get workflow metadata including instructions and steps"""
+    def get_profile_metadata(self, module_id: str, profile: str, with_provided: bool = False) -> ProfileMetadataResult:
+        """Get profile metadata including instructions and steps"""
         try:
             # Get kit config which has all paths resolved and content loaded
             kit_config = self.module_service.get_module_kit_config(module_id)
             
-            if workflow not in kit_config.workflows:
-                logger.error(f"Workflow '{workflow}' not found in kit config")
-                raise WorkflowError(f"Workflow '{workflow}' not found")
+            if profile not in kit_config.profiles:
+                logger.error(f"profile '{profile}' not found in kit config")
+                raise ProfileError(f"profile '{profile}' not found")
 
-            workflow_data = kit_config.workflows[workflow]
+            profile_data = kit_config.profiles[profile]
             
             # Get function metadata for each action
-            actions_metadata: List[FullWorkflowAction] = []
-            for action in workflow_data.actions:
+            actions_metadata: List[FullProfileAction] = []
+            for action in profile_data.actions:
                 try:
                     # Extract file info from pre-resolved paths
                     actions_dir = str(Path(action.full_file_path).parent)
@@ -134,18 +134,18 @@ class WorkflowService:
                         file_path=file_path,
                         function_name=action.function_name
                     )
-                    actions_metadata.append(FullWorkflowAction(
+                    actions_metadata.append(FullProfileAction(
                         action=action,
                         module_id=module_id,
-                        workflow=workflow,
+                        profile=profile,
                         metadata=metadata
                     ))
 
 
-                except (ActionError, WorkflowError) as e:
+                except (ActionError, ProfileError) as e:
                     logger.error(f"Failed to get metadata for action {action.name}: {str(e)}")
                     # Add error information but continue processing other actions
-            final_instructions = workflow_data.instruction_content
+            final_instructions = profile_data.instruction_content
 
             if with_provided:
                 # Get modules
@@ -180,47 +180,47 @@ class WorkflowService:
 
                             logger.info(f"Got metadata for provided action {action.function_name} in module {module.module_id}")
 
-                            actions_metadata.append(FullWorkflowAction(
+                            actions_metadata.append(FullProfileAction(
                                 action=action,
                                 module_id=module.module_id,
-                                workflow=workflow,
+                                profile=profile,
                                 metadata=metadata,
                                 is_provided=True
                             ))
-                        except (ActionError, WorkflowError) as e:
+                        except (ActionError, ProfileError) as e:
                             logger.error(f"Failed to get metadata for shared action {action.name} in module {module.module_id}: {str(e)}")
 
 
 
-            result = WorkflowMetadataResult(
-                instructions=workflow_data.instruction_content,
+            result = ProfileMetadataResult(
+                instructions=profile_data.instruction_content,
                 actions=actions_metadata,
                 requirements=kit_config.dependencies
             )
-            logger.info(f"Got workflow metadata for {workflow}:\n{result}")
+            logger.info(f"Got profile metadata for {profile}:\n{result}")
             return result
 
-        except (ModuleError, WorkflowError) as e:
-            raise WorkflowError(str(e))
+        except (ModuleError, ProfileError) as e:
+            raise ProfileError(str(e))
         except Exception as e:
-            logger.error(f"Unexpected error getting workflow metadata: {str(e)}")
-            raise WorkflowError(f"Failed to get workflow metadata: {str(e)}")
+            logger.error(f"Unexpected error getting profile metadata: {str(e)}")
+            raise ProfileError(f"Failed to get profile metadata: {str(e)}")
 
 
-    def execute_workflow_action(
+    def execute_profile_action(
         self,
         action_info: ActionInfo,
         parameters: Dict[str, Any],
         with_provided: bool = False
     ) -> Any:
-        """Execute a workflow action with full context."""
+        """Execute a profile action with full context."""
         try:
             module_path = self.module_service.get_module_path(action_info.module_id)
             # Get kit config which has all paths resolved
             kit_config = self.module_service.get_module_kit_config(action_info.module_id)
             module_metadata = self.module_service.get_module_metadata(action_info.module_id)
 
-            logger.info(f"Executing action {action_info.name} in workflow {action_info.workflow}")
+            logger.info(f"Executing action {action_info.name} in profile {action_info.profile}")
             
             if with_provided:
                 # Get provided action
@@ -230,17 +230,17 @@ class WorkflowService:
                 )
             else:
 
-                if action_info.workflow not in kit_config.workflows:
-                    raise WorkflowError(f"Workflow '{action_info.workflow}' not found")
+                if action_info.profile not in kit_config.profiles:
+                    raise ProfileError(f"profile '{action_info.profile}' not found")
 
-                workflow_data = kit_config.workflows[action_info.workflow]
-                logger.info(f"""Executing action '{action_info.name}' in workflow {action_info.workflow}
-                Config: {workflow_data}
+                profile_data = kit_config.profiles[action_info.profile]
+                logger.info(f"""Executing action '{action_info.name}' in profile {action_info.profile}
+                Config: {profile_data}
                 """)
 
-                # Find the action in workflow
+                # Find the action in profile
                 action = next(
-                    (a for a in workflow_data.actions if a.name == action_info.name), 
+                    (a for a in profile_data.actions if a.name == action_info.name), 
                     None
                 )
 
@@ -249,8 +249,8 @@ class WorkflowService:
 
             
             if not action:
-                raise WorkflowError(
-                    f"Action '{action_info.name}' not found in workflow '{action_info.workflow}'"
+                raise ProfileError(
+                    f"Action '{action_info.name}' not found in profile '{action_info.profile}'"
                 )
 
             # Extract file info from pre-resolved paths
@@ -274,5 +274,5 @@ class WorkflowService:
 
             return result
 
-        except (ModuleError, ActionError, WorkflowError) as e:
-            raise WorkflowError(str(e))
+        except (ModuleError, ActionError, ProfileError) as e:
+            raise ProfileError(str(e))

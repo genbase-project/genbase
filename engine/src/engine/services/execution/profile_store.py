@@ -8,7 +8,7 @@ from sqlalchemy import Float, asc, desc, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from engine.db.models import Module, WorkflowStore
+from engine.db.models import Module, ProfileStore
 from engine.db.session import SessionLocal
 from dataclasses import dataclass
 from enum import Enum
@@ -36,25 +36,25 @@ class CombineOp(str, Enum):
     OR = "or"
 
 @dataclass
-class WorkflowStoreFilter:
-    """Filter for workflow store queries"""
+class ProfileStoreFilter:
+    """Filter for profile store queries"""
     value_filters: Optional[Dict[str, Dict[str, Any]]] = None
     limit: Optional[int] = None
     offset: Optional[int] = None
     sort_by: Optional[Dict[str, SortOrder]] = None
-    sub_filters: List['WorkflowStoreFilter'] = field(default_factory=list)
+    sub_filters: List['ProfileStoreFilter'] = field(default_factory=list)
     combine_op: Optional[CombineOp] = None
 
-    def __and__(self, other: 'WorkflowStoreFilter') -> 'WorkflowStoreFilter':
+    def __and__(self, other: 'ProfileStoreFilter') -> 'ProfileStoreFilter':
         """Combine two filters with AND operation"""
-        return WorkflowStoreFilter(
+        return ProfileStoreFilter(
             sub_filters=[self, other],
             combine_op=CombineOp.AND
         )
 
-    def __or__(self, other: 'WorkflowStoreFilter') -> 'WorkflowStoreFilter':
+    def __or__(self, other: 'ProfileStoreFilter') -> 'ProfileStoreFilter':
         """Combine two filters with OR operation"""
-        return WorkflowStoreFilter(
+        return ProfileStoreFilter(
             sub_filters=[self, other],
             combine_op=CombineOp.OR
         )
@@ -63,31 +63,31 @@ class WorkflowStoreFilter:
 
 
 @dataclass
-class WorkflowStoreInfo:
-    """WorkflowStore metadata"""
+class ProfileStoreInfo:
+    """ProfileStore metadata"""
     module_id: str
-    workflow: str
+    profile: str
     collection: str
 
 
 @dataclass
-class WorkflowStoreRecord:
-    """WorkflowStore metadata"""
+class ProfileStoreRecord:
+    """ProfileStore metadata"""
     id: uuid.UUID
     module_id: str
-    workflow: str
+    profile: str
     collection: str
     value: Dict[str, Any]
     created_at: str
     updated_at: str
 
     @classmethod
-    def from_orm(cls, store: WorkflowStore) -> 'WorkflowStoreRecord':
-        """Convert SQLAlchemy WorkflowStore object to WorkflowStoreMetadata"""
+    def from_orm(cls, store: ProfileStore) -> 'ProfileStoreRecord':
+        """Convert SQLAlchemy ProfileStore object to ProfileStoreMetadata"""
         return cls(
             id=store.id,
             module_id=store.module_id,
-            workflow=store.workflow,
+            profile=store.profile,
             collection=store.collection,
             value=store.value,
             created_at=store.created_at.isoformat(),
@@ -95,29 +95,29 @@ class WorkflowStoreRecord:
         )
 
 
-class WorkflowStoreError(Exception):
-    """Base exception for workflow store errors"""
+class ProfileStoreError(Exception):
+    """Base exception for profile store errors"""
     pass
 
 
-class WorkflowStoreService:
-    """Service for managing workflow store"""
+class ProfileStoreService:
+    """Service for managing profile store"""
 
-    def __init__(self, storeInfo: WorkflowStoreInfo):
-        """Initialize workflow store service"""
+    def __init__(self, storeInfo: ProfileStoreInfo):
+        """Initialize Profile store service"""
         self.storeInfo = storeInfo
 
     def _get_db(self) -> Session:
         return SessionLocal()
 
 
-    def _build_query(self, db: Session, filter_: WorkflowStoreFilter):
+    def _build_query(self, db: Session, filter_: ProfileStoreFilter):
         """Build query from filter"""
-        query = db.query(WorkflowStore)
+        query = db.query(ProfileStore)
 
-        query = query.filter(WorkflowStore.module_id == self.storeInfo.module_id)
-        query = query.filter(WorkflowStore.workflow == self.storeInfo.workflow)
-        query = query.filter(WorkflowStore.collection == self.storeInfo.collection)
+        query = query.filter(ProfileStore.module_id == self.storeInfo.module_id)
+        query = query.filter(ProfileStore.profile == self.storeInfo.profile)
+        query = query.filter(ProfileStore.collection == self.storeInfo.collection)
 
         if filter_.value_filters:
             for field, ops in filter_.value_filters.items():
@@ -193,25 +193,25 @@ class WorkflowStoreService:
 
         return query
 
-    async def get_by_id(self, id: uuid.UUID) -> Optional[WorkflowStoreRecord]:
+    async def get_by_id(self, id: uuid.UUID) -> Optional[ProfileStoreRecord]:
         """Get a single store entry by ID"""
         try:
             with self._get_db() as db:
-                store = db.query(WorkflowStore).filter(WorkflowStore.id == id).first()
-                return WorkflowStoreRecord.from_orm(store) if store else None
+                store = db.query(ProfileStore).filter(ProfileStore.id == id).first()
+                return ProfileStoreRecord.from_orm(store) if store else None
         except Exception as e:
-            raise WorkflowStoreError(f"Failed to get workflow store by ID: {str(e)}")
+            raise ProfileStoreError(f"Failed to get profile store by ID: {str(e)}")
 
     async def set_value(
         self,
         value: Dict[str, Any]
-    ) -> WorkflowStoreRecord:
+    ) -> ProfileStoreRecord:
         """Set a single value"""
         try:
             with self._get_db() as db:
-                store = WorkflowStore(
+                store = ProfileStore(
                     module_id=self.storeInfo.module_id,
-                    workflow=self.storeInfo.workflow,
+                    profile=self.storeInfo.profile,
                     collection=self.storeInfo.collection,
                     value=value,
                     created_at=datetime.now(UTC),
@@ -220,22 +220,22 @@ class WorkflowStoreService:
                 db.add(store)
                 db.commit()
                 db.refresh(store)
-                return WorkflowStoreRecord.from_orm(store)
+                return ProfileStoreRecord.from_orm(store)
         except Exception as e:
-            raise WorkflowStoreError(f"Failed to set workflow store value: {str(e)}")
+            raise ProfileStoreError(f"Failed to set profile store value: {str(e)}")
 
     async def set_many(
         self,
         values: List[Dict[str, Any]]
-    ) -> List[WorkflowStoreRecord]:
+    ) -> List[ProfileStoreRecord]:
         """Set multiple values"""
         try:
             with self._get_db() as db:
                 stores = []
                 for value_data in values:
-                    store = WorkflowStore(
+                    store = ProfileStore(
                         module_id=self.storeInfo.module_id,
-                        workflow=self.storeInfo.workflow,
+                        profile=self.storeInfo.profile,
                         collection=self.storeInfo.collection,
                         value=value_data,
                         created_at=datetime.now(UTC),
@@ -248,23 +248,23 @@ class WorkflowStoreService:
                 for store in stores:
                     db.refresh(store)
                 
-                return [WorkflowStoreRecord.from_orm(store) for store in stores]
+                return [ProfileStoreRecord.from_orm(store) for store in stores]
         except Exception as e:
-            raise WorkflowStoreError(f"Failed to set multiple workflow store values: {str(e)}")
+            raise ProfileStoreError(f"Failed to set multiple profile store values: {str(e)}")
 
-    async def find(self, filter_: WorkflowStoreFilter) -> List[WorkflowStoreRecord]:
+    async def find(self, filter_: ProfileStoreFilter) -> List[ProfileStoreRecord]:
         """Find store entries using filter"""
         try:
             with self._get_db() as db:
                 query = self._build_query(db, filter_)
                 stores = query.all()
-                return [WorkflowStoreRecord.from_orm(store) for store in stores]
+                return [ProfileStoreRecord.from_orm(store) for store in stores]
         except Exception as e:
-            raise WorkflowStoreError(f"Failed to find workflow store entries: {str(e)}")
+            raise ProfileStoreError(f"Failed to find profile store entries: {str(e)}")
 
     async def update(
         self,
-        filter_: WorkflowStoreFilter,
+        filter_: ProfileStoreFilter,
         value: Dict[str, Any]
     ) -> int:
         """Update values using filter"""
@@ -280,9 +280,9 @@ class WorkflowStoreService:
                 db.commit()
                 return len(stores)
         except Exception as e:
-            raise WorkflowStoreError(f"Failed to update workflow store entries: {str(e)}")
+            raise ProfileStoreError(f"Failed to update profile store entries: {str(e)}")
 
-    async def delete(self, filter_: WorkflowStoreFilter) -> int:
+    async def delete(self, filter_: ProfileStoreFilter) -> int:
         """Delete entries using filter"""
         try:
             with self._get_db() as db:
@@ -295,17 +295,17 @@ class WorkflowStoreService:
                 db.commit()
                 return len(stores)
         except Exception as e:
-            raise WorkflowStoreError(f"Failed to delete workflow store entries: {str(e)}")
+            raise ProfileStoreError(f"Failed to delete profile store entries: {str(e)}")
 
 
 # # Add at the end of the file
-# async def test_workflow_store():
+# async def test_profile_store():
 #     """Advanced test suite with complex edge cases and comprehensive scenarios"""
     
-#     service = WorkflowStoreService(
-#         storeInfo=WorkflowStoreInfo(
+#     service = ProfileStoreService(
+#         storeInfo=ProfileStoreInfo(
 #             module_id="test_module",
-#             workflow="test_workflow",
+#             profile="test_profile",
 #             collection="test_collection"
 #         )
 #     )
@@ -398,19 +398,19 @@ class WorkflowStoreService:
 #     # Test 2: Advanced Filtering with Multiple Nested Conditions
 #     print("\nTest 2: Testing advanced filtering with multiple nested conditions...")
 #     try:
-#         filter1 = WorkflowStoreFilter(
+#         filter1 = ProfileStoreFilter(
 #             value_filters={
 #                 "metrics.accuracy": {"gte": 0.93},
 #                 "metrics.latency_ms": {"lt": 200}
 #             }
 #         )
-#         filter2 = WorkflowStoreFilter(
+#         filter2 = ProfileStoreFilter(
 #             value_filters={
 #                 "metadata.environment.name": {"in": ["production", "staging"]},
 #                 "status.code": {"eq": "SUCCESS"}
 #             }
 #         )
-#         filter3 = WorkflowStoreFilter(
+#         filter3 = ProfileStoreFilter(
 #             value_filters={
 #                 "metadata.tags": {"contains": ["ml-model"]},
 #                 "status.details.warnings": {"contains": []}
@@ -451,7 +451,7 @@ class WorkflowStoreService:
 #     # Test 4: Testing complex updates with conditional logic...
 #     print("\nTest 4: Testing complex updates with conditional logic...")
 #     try:
-#         filter_ = WorkflowStoreFilter(
+#         filter_ = ProfileStoreFilter(
 #             value_filters={
 #                 "metrics.accuracy": {"gte": 0.92},
 #                 "metrics.latency_ms": {"lte": 200},
@@ -523,7 +523,7 @@ class WorkflowStoreService:
 
 #         # Complex query with multiple conditions
 #         start_time = time.time()
-#         filter_ = WorkflowStoreFilter(
+#         filter_ = ProfileStoreFilter(
 #             value_filters={
 #                 "metrics.accuracy": {"gte": 0.95},
 #                 "metrics.latency_ms": {"lte": 300},
@@ -554,4 +554,4 @@ class WorkflowStoreService:
 #     import random
 #     import time
 #     from datetime import timedelta
-#     asyncio.run(test_workflow_store())
+#     asyncio.run(test_profile_store())

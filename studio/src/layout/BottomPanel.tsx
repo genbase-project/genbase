@@ -7,6 +7,7 @@ import {
   Bot, 
   FileText, 
   WorkflowIcon, 
+  BotMessageSquare,
   PackageCheck, 
   Settings, 
   Boxes, 
@@ -53,8 +54,8 @@ return "";
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + '...';
 };
-interface Workflow {
-  workflow_type: string;
+interface Profile {
+  profile_type: string;
   agent_type: string;
   base_instructions: string;
   metadata: {
@@ -109,9 +110,9 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
 
 const [localInputValue, setLocalInputValue] = useState('');
 
-const [workflows, setWorkflows] = useState<Workflow[]>([]);
+const [profiles, setProfiles] = useState<Profile[]>([]);
 
-const [currentWorkflow, setCurrentWorkflow] = useState<string>('maintain');
+const [currentProfile, setCurrentProfile] = useState<string>('maintain');
 
 const [currentSession, setCurrentSession] = useState<string | null>(null);
 
@@ -124,7 +125,7 @@ const [error, setError] = useState<string | null>(null);
 const [elapsedTime, setElapsedTime] = useState<number>(0);
 
 const [completionTime, setCompletionTime] = useState<string | null>(null);
-const [isWorkflowDetailsOpen, setIsWorkflowDetailsOpen] = useState(false);
+const [isProfileDetailsOpen, setIsProfileDetailsOpen] = useState(false);
 const [isFullscreen, setIsFullscreen] = useState(false);
 
 
@@ -162,13 +163,13 @@ sendMessage
 
 useEffect(() => {
 
-if (selectedModule?.module_id && currentWorkflow && currentSession && !pendingSessionId) {
+if (selectedModule?.module_id && currentProfile && currentSession && !pendingSessionId) {
 
 setCurrentContext(
 
 selectedModule.module_id,
 
-currentWorkflow,
+currentProfile,
 
 currentSession
 
@@ -178,7 +179,7 @@ refreshChat();
 
 }
 
-}, [selectedModule?.module_id, currentWorkflow, currentSession, pendingSessionId]);
+}, [selectedModule?.module_id, currentProfile, currentSession, pendingSessionId]);
 
 const adjustTextareaHeight = () => {
 
@@ -266,13 +267,13 @@ clearTimeout(timeout);
 
 const fetchSessions = async () => {
 
-if (!selectedModule?.module_id || !currentWorkflow) return;
+if (!selectedModule?.module_id || !currentProfile) return;
 
 try {
 
 const response = await fetchWithAuth(
 
-`${ENGINE_BASE_URL}/workflow/sessions?module_id=${selectedModule.module_id}&workflow=${currentWorkflow}`
+`${ENGINE_BASE_URL}/profile/sessions?module_id=${selectedModule.module_id}&profile=${currentProfile}`
 
 );
 
@@ -300,48 +301,48 @@ console.error('Error fetching sessions:', error);
 
 };
 
-// Update the fetchWorkflows function and its useEffect
+// Update the fetchProfiles function and its useEffect
 
-const fetchWorkflows = async () => {
+const fetchProfiles = async () => {
   if (!selectedModule?.module_id) return;
   
   try {
     const response = await fetchWithAuth(
-      `${ENGINE_BASE_URL}/workflow/workflows?module_id=${selectedModule.module_id}`
+      `${ENGINE_BASE_URL}/profile/profiles?module_id=${selectedModule.module_id}`
     );
     
-    const data: Workflow[] = await response.json();
-    setWorkflows(data);
+    const data: Profile[] = await response.json();
+    setProfiles(data);
     
-    // Automatically select the first workflow if none is selected
+    // Automatically select the first profile if none is selected
     if (data.length > 0) {
-      // Only set if currentWorkflow is empty or not in the list of available workflows
-      const workflowExists = data.some(w => w.workflow_type === currentWorkflow);
-      if (!currentWorkflow || !workflowExists) {
-        setCurrentWorkflow(data[0].workflow_type);
+      // Only set if currentProfile is empty or not in the list of available profiles
+      const profileExists = data.some(w => w.profile_type === currentProfile);
+      if (!currentProfile || !profileExists) {
+        setCurrentProfile(data[0].profile_type);
       }
     }
   } catch (error) {
-    console.error('Error fetching workflows:', error);
+    console.error('Error fetching profiles:', error);
   }
 };
 
 useEffect(() => {
-  // Reset workflow when module changes to ensure proper selection
-  setCurrentWorkflow('');
-  fetchWorkflows();
+  // Reset profile when module changes to ensure proper selection
+  setCurrentProfile('');
+  fetchProfiles();
 }, [selectedModule?.module_id]);
 
 
 useEffect(() => {
 
-if (currentWorkflow) {
+if (currentProfile) {
 
 fetchSessions();
 
 }
 
-}, [currentWorkflow, selectedModule?.module_id]);
+}, [currentProfile, selectedModule?.module_id]);
 
 const { inputValue: storeInputValue, setInputValue: setStoreInputValue } = useChatPromptStore();
 
@@ -356,7 +357,7 @@ try {
 
 const response = await fetchWithAuth(
 
-`${ENGINE_BASE_URL}/workflow/session/create?module_id=${selectedModule?.module_id}&workflow=${currentWorkflow}`,
+`${ENGINE_BASE_URL}/profile/session/create?module_id=${selectedModule?.module_id}&profile=${currentProfile}`,
 
 { method: 'POST' }
 
@@ -389,7 +390,7 @@ await sendMessage(text);
 };
 
   // Get current workflow details
-  const currentWorkflowData = workflows.find(w => w.workflow_type === currentWorkflow);
+  const currentProfileData = profiles.find(w => w.profile_type === currentProfile);
   
   // Get current session details
   const currentSessionData = sessions.find(s => s.session_id === currentSession);
@@ -426,15 +427,15 @@ await sendMessage(text);
   return (
 <div className={`${isFullscreen ? 'fixed inset-4 bg-white shadow-2xl rounded-lg z-50' : 'h-full'} flex flex-col overflow-hidden`}>
 
-      {/* Improved Top Bar with Workflow Selector and Session Tabs */}
+      {/* Improved Top Bar with Profile Selector and Session Tabs */}
       <div className={`border-b bg-gray-50 ${isFullscreen ? 'rounded-t-lg' : ''} flex flex-col`}>
 
-        {/* Workflow Selector Row */}
+        {/* Profile Selector Row */}
         <div className="px-4 py-2 flex items-center gap-2 border-b">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Dialog open={isWorkflowDetailsOpen} onOpenChange={setIsWorkflowDetailsOpen}>
+                <Dialog open={isProfileDetailsOpen} onOpenChange={setIsProfileDetailsOpen}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button 
@@ -444,53 +445,53 @@ await sendMessage(text);
                       >
                         <AgentIcon className="h-3.5 w-3.5 text-blue-500" />
                         <span className="capitalize font-medium truncate">
-                          {currentWorkflow}
+                          {currentProfile}
                         </span>
                         <ChevronDown className="h-3.5 w-3.5 opacity-70" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-[180px]">
-                      {workflows.map((workflow) => (
+                      {profiles.map((profile) => (
                         <DropdownMenuItem 
-                          key={workflow.workflow_type}
+                          key={profile.profile_type}
                           className="flex items-center justify-between gap-2 capitalize"
-                          onClick={() => setCurrentWorkflow(workflow.workflow_type)}
+                          onClick={() => setCurrentProfile(profile.profile_type)}
                         >
-                          <span className="truncate">{workflow.workflow_type}</span>
+                          <span className="truncate">{profile.profile_type}</span>
                   
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  {currentWorkflowData && (
+                  {currentProfileData && (
                     <DialogTrigger asChild>
                       <Button 
                         variant="ghost" 
                         size="sm" 
                         className="ml-1 h-8 w-8 p-0" 
-                        title="View workflow details"
+                        title="View profile details"
                       >
                         <BadgeInfo className="h-3.5 w-3.5 text-gray-500" />
                       </Button>
                     </DialogTrigger>
                   )}
 
-{currentWorkflowData && (
+{currentProfileData && (
   <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
     <DialogHeader>
       <DialogTitle className="flex items-center gap-3">
-        <span className="capitalize">{currentWorkflowData.workflow_type}</span>
-        {currentWorkflowData.agent_type && (
+        <span className="capitalize">{currentProfileData.profile_type}</span>
+        {currentProfileData.agent_type && (
           <Badge variant="secondary" className="flex items-center gap-1">
             <AgentIcon className="h-3 w-3" />
-            {currentWorkflowData.agent_type}
+            {currentProfileData.agent_type}
           </Badge>
         )}
-        {currentWorkflowData.kit_config?.agent && !currentWorkflowData.agent_type && (
+        {currentProfileData.kit_config?.agent && !currentProfileData.agent_type && (
           <Badge variant="secondary" className="flex items-center gap-1">
             <AgentIcon className="h-3 w-3" />
-            {currentWorkflowData.kit_config.agent}
+            {currentProfileData.kit_config.agent}
           </Badge>
         )}
       </DialogTitle>
@@ -500,25 +501,25 @@ await sendMessage(text);
         <TabsTrigger value="instructions" className="flex items-center gap-2">
           <FileText className="h-3 w-3" />
           <span>Instructions</span>
-          {(currentWorkflowData.base_instructions || currentWorkflowData.metadata.instructions) && (
+          {(currentProfileData.base_instructions || currentProfileData.metadata.instructions) && (
             <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
           )}
         </TabsTrigger>
         <TabsTrigger value="actions" className="flex items-center gap-2">
-          <WorkflowIcon className="h-3 w-3" />
+          <BotMessageSquare className="h-3 w-3" />
           <span>Actions</span>
-          {(currentWorkflowData.metadata.actions.length > 0 || currentWorkflowData.default_actions.length > 0) && (
+          {(currentProfileData.metadata.actions.length > 0 || currentProfileData.default_actions.length > 0) && (
             <Badge variant="secondary" className="ml-1">
-              {currentWorkflowData.metadata.actions.length + currentWorkflowData.default_actions.length}
+              {currentProfileData.metadata.actions.length + currentProfileData.default_actions.length}
             </Badge>
           )}
         </TabsTrigger>
         <TabsTrigger value="requirements" className="flex items-center gap-2">
           <PackageCheck className="h-3 w-3" />
           <span>Requirements</span>
-          {currentWorkflowData.metadata.requirements.length > 0 && (
+          {currentProfileData.metadata.requirements.length > 0 && (
             <Badge variant="secondary" className="ml-1">
-              {currentWorkflowData.metadata.requirements.length}
+              {currentProfileData.metadata.requirements.length}
             </Badge>
           )}
         </TabsTrigger>
@@ -526,38 +527,38 @@ await sendMessage(text);
       <div className="overflow-y-auto pr-6">
         <TabsContent value="instructions" className="m-0">
           <div className="space-y-4 pb-4">
-            {currentWorkflowData.base_instructions && (
+            {currentProfileData.base_instructions && (
               <div className="rounded-lg border bg-card text-card-foreground">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
                   <FileText className="h-3 w-3 text-gray-600" />
                   <h3 className="text-sm font-medium">Base Instructions</h3>
                 </div>
                 <div className="p-4 text-sm text-gray-600 leading-relaxed">
-                  {currentWorkflowData.base_instructions}
+                  {currentProfileData.base_instructions}
                 </div>
               </div>
             )}
-            {currentWorkflowData.metadata.instructions && (
+            {currentProfileData.metadata.instructions && (
               <div className="rounded-lg border bg-card text-card-foreground">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
                   <FileText className="h-3 w-3 text-gray-600" />
                   <h3 className="text-sm font-medium">Specific Instructions</h3>
                 </div>
                 <div className="p-4 text-sm text-gray-600 leading-relaxed">
-                  {currentWorkflowData.metadata.instructions}
+                  {currentProfileData.metadata.instructions}
                 </div>
               </div>
             )}
-            {!currentWorkflowData.base_instructions && !currentWorkflowData.metadata.instructions && (
+            {!currentProfileData.base_instructions && !currentProfileData.metadata.instructions && (
               <div className="p-4 text-sm text-gray-500 text-center">
-                No instructions provided for this workflow.
+                No instructions provided for this profile.
               </div>
             )}
           </div>
         </TabsContent>
         <TabsContent value="actions" className="m-0">
           <div className="space-y-4 pb-4">
-            {currentWorkflowData.metadata.actions.length > 0 && (
+            {currentProfileData.metadata.actions.length > 0 && (
               <div className="rounded-lg border bg-card text-card-foreground">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
                   <div className="flex items-center gap-2">
@@ -565,11 +566,11 @@ await sendMessage(text);
                     <h3 className="text-sm font-medium">Custom Actions</h3>
                   </div>
                   <Badge variant="default" className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-                    {currentWorkflowData.metadata.actions.length}
+                    {currentProfileData.metadata.actions.length}
                   </Badge>
                 </div>
                 <div className="divide-y">
-                  {currentWorkflowData.metadata.actions.map((actionItem, idx) => {
+                  {currentProfileData.metadata.actions.map((actionItem, idx) => {
                     const action = actionItem.action! || {};
                     return (
                       <div key={`metadata-${idx}`} className="p-4">
@@ -587,7 +588,7 @@ await sendMessage(text);
                 </div>
               </div>
             )}
-            {currentWorkflowData.default_actions.length > 0 && (
+            {currentProfileData.default_actions.length > 0 && (
               <div className="rounded-lg border bg-card text-card-foreground">
                 <div className="border-b bg-gray-50 px-4 py-3 flex items-center gap-2">
                   <div className="flex items-center gap-2">
@@ -595,11 +596,11 @@ await sendMessage(text);
                     <h3 className="text-sm font-medium">System Actions</h3>
                   </div>
                   <Badge variant="default" className="bg-purple-100 text-purple-700 hover:bg-purple-100">
-                    {currentWorkflowData.default_actions.length}
+                    {currentProfileData.default_actions.length}
                   </Badge>
                 </div>
                 <div className="divide-y">
-                  {currentWorkflowData.default_actions.map((action, idx) => (
+                  {currentProfileData.default_actions.map((action, idx) => (
                     <div key={`default-${idx}`} className="p-4">
                       <p className="text-sm font-medium text-purple-600">{action.name || "Unnamed Action"}</p>
                       {action.description && (
@@ -610,9 +611,9 @@ await sendMessage(text);
                 </div>
               </div>
             )}
-            {currentWorkflowData.metadata.actions.length === 0 && currentWorkflowData.default_actions.length === 0 && (
+            {currentProfileData.metadata.actions.length === 0 && currentProfileData.default_actions.length === 0 && (
               <div className="p-4 text-sm text-gray-500 text-center">
-                No actions available for this workflow.
+                No actions available for this profile.
               </div>
             )}
           </div>
@@ -626,13 +627,13 @@ await sendMessage(text);
                   <h3 className="text-sm font-medium">Requirements</h3>
                 </div>
                 <Badge variant="default" className="bg-gray-100 text-gray-700 hover:bg-gray-100">
-                  {currentWorkflowData.metadata.requirements.length}
+                  {currentProfileData.metadata.requirements.length}
                 </Badge>
               </div>
               <div className="p-4">
-                {currentWorkflowData.metadata.requirements.length > 0 ? (
+                {currentProfileData.metadata.requirements.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
-                    {currentWorkflowData.metadata.requirements.map((req, idx) => (
+                    {currentProfileData.metadata.requirements.map((req, idx) => (
                       <Badge key={idx} variant="outline" className="flex items-center gap-1.5 px-3 py-1">
                         <PackageCheck className="h-3 w-3" />
                         {req}
@@ -654,7 +655,7 @@ await sendMessage(text);
                 </Dialog>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>Select workflow</p>
+                <p>Select Profile</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -720,7 +721,7 @@ await sendMessage(text);
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {/* New Session Tab */}
-            {currentWorkflowData?.allow_multiple && (
+            {currentProfileData?.allow_multiple && (
               <Button
                 variant={pendingSessionId ? "secondary" : "ghost"}
                 size="sm"

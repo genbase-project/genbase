@@ -17,6 +17,7 @@ interface SidebarNavProps {
   onLogout: () => void;
 }
 
+
 const SidebarNav: React.FC<SidebarNavProps> = ({ 
   onTabChange, 
   activeTab, 

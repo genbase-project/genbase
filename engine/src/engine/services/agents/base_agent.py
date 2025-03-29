@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 from pydantic import BaseModel, field_validator, validator
 import xmltodict
 from litellm import ChatCompletionMessageToolCall, Choices
-from engine.services.agents.generative_elements import ELEMENTS_DEFINITIONS
+from engine.services.agents.generative_elements import get_element_format_documentation
 from engine.services.core.kit import KitConfig
 from engine.services.execution.action import FunctionMetadata
 from engine.services.execution.internal_actions import InternalActionManager
@@ -56,10 +56,10 @@ TModel = TypeVar('TModel', bound=BaseModel)
 
 class IncludeOptions(BaseModel):
     provided_actions: bool = False
-    giml_elements: IncludeType = "all"
+    elements: IncludeType = "all"
     actions: IncludeType = "all"
     
-    @field_validator('giml_elements', 'actions')
+    @field_validator('elements', 'actions')
     @classmethod
     def validate_include_type(cls, value, info):
         field_name = info.field_name
@@ -133,7 +133,7 @@ class BaseAgent(ABC):
         internal_actions: Optional[Dict[str, Callable]] = None,
         include: IncludeOptions = IncludeOptions(
             provided_actions=False,
-            giml_elements="all",
+            elements="all",
             actions="all",
         )
 
@@ -226,19 +226,11 @@ class BaseAgent(ABC):
         if profile_tool_descriptions:
             parts["Available tools"]= "\n".join(profile_tool_descriptions)
 
-        # Add XML element documentation
-        if include.giml_elements != "none":
-            giml_elements = []
-            if include.giml_elements == "all":
-                giml_elements = list(ELEMENTS_DEFINITIONS.keys())
-            else:
-                giml_elements = include.giml_elements
-            xml_docs = []
-            for element in giml_elements:
-                if element in ELEMENTS_DEFINITIONS.keys():
-                    xml_docs.append(f"Element {element}\n format: {ELEMENTS_DEFINITIONS[element].get("format","")}\n use: {ELEMENTS_DEFINITIONS[element].get("use","")}")
-            if xml_docs:
-                parts["GIML Elements"]= "\n\n".join(xml_docs)
+        element_format_docs = get_element_format_documentation(include.elements)
+        if element_format_docs:
+            parts["Generative Elements Formatting"] = element_format_docs
+            logger.info(f"Included documentation for element formats: {include.elements}")
+
 
         final_instruction = ""
         for key, value in parts.items():

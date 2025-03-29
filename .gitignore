@@ -61,3 +61,7 @@ engine/*.log
 
 .tmp
 .vscode/
+
+.repomix
+
+repomix-output.txt

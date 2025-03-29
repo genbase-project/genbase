@@ -4,24 +4,39 @@ import './index.css'
 import App from './App.tsx'
 import { ThemeProvider } from "@/components/themeProvider"
 import { AuthPage } from '@/components/AuthPage'
-import { getAuthCredentials } from './config.ts'
+import { isAuthenticated } from './config.ts'  // Using the new isAuthenticated function
 
 function Root() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const credentials = getAuthCredentials();
-    setIsAuthenticated(!!credentials.username && !!credentials.password);
+    // Check if user is authenticated using the new method
+    setIsLoggedIn(isAuthenticated());
+    setLoading(false);
   }, []);
 
-  if (!isAuthenticated) {
+  // Show loading state (optional)
+  if (loading) {
     return (
       <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-        <AuthPage onAuthSuccess={() => setIsAuthenticated(true)} />
+        <div className="min-h-screen flex items-center justify-center">
+          <p>Loading...</p>
+        </div>
       </ThemeProvider>
     );
   }
 
+  // Show auth page if not logged in
+  if (!isLoggedIn) {
+    return (
+      <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
+        <AuthPage onAuthSuccess={() => setIsLoggedIn(true)} />
+      </ThemeProvider>
+    );
+  }
+
+  // Show main app if logged in
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
       <App />

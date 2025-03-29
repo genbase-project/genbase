@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
-import { ENGINE_BASE_URL, fetchWithAuth, setAuthCredentials, setEngineUrl } from '@/config';
+import { ENGINE_BASE_URL, setEngineUrl } from '@/config';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 interface AuthPageProps {
@@ -8,37 +8,65 @@ interface AuthPageProps {
 }
 
 export const AuthPage = ({ onAuthSuccess }: AuthPageProps) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [engineUrl, setEngineUrlState] = useState(ENGINE_BASE_URL);
 
-  const testAndSaveCredentials = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      // Test the credentials with a simple API call
-      const headers = {
-        'Authorization': `Basic ${btoa(`${username}:${password}`)}`
-      };
-      await fetchWithAuth(`${engineUrl}/module/project/default/list`, {
-        skipAuth: true, // Skip the default auth handling
-        headers: headers
-      });
+      if (isLogin) {
+        // Login using form data as required by FastAPI-Users
+        const formData = new FormData();
+        formData.append('username', email);
+        formData.append('password', password);
+        
+        const response = await fetch(`${engineUrl}/auth/jwt/login`, {
+          method: 'POST',
+          body: formData,
+        });
 
-      // If the call succeeds, save the credentials
-      setAuthCredentials(username, password);
-      toast({
-        title: "Success",
-        description: "Authentication credentials saved"
-      });
-      onAuthSuccess();
+        if (!response.ok) {
+          throw new Error('Login failed');
+        }
+
+        const data = await response.json();
+        localStorage.setItem('auth_token', data.access_token);
+        
+        toast({
+          title: "Success",
+          description: "Logged in successfully"
+        });
+        
+        onAuthSuccess();
+      } else {
+        // Registration using JSON as required by FastAPI-Users
+        const response = await fetch(`${engineUrl}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Registration failed');
+        }
+
+        toast({
+          title: "Success",
+          description: "Registration successful. You can now log in."
+        });
+        
+        setIsLogin(true);
+      }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Invalid credentials",
+        description: error instanceof Error ? error.message : "Authentication failed",
         variant: "destructive"
       });
     } finally {
@@ -59,24 +87,24 @@ export const AuthPage = ({ onAuthSuccess }: AuthPageProps) => {
             Genbase Studio
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            Please enter your credentials to continue
+            {isLogin ? "Sign in to your account" : "Create a new account"}
           </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={testAndSaveCredentials}>
+        <form className="mt-8 space-y-6" onSubmit={handleAuth}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="username" className="sr-only">
-                Username
+              <label htmlFor="email" className="sr-only">
+                Email
               </label>
               <input
-                id="username"
-                name="username"
-                type="text"
+                id="email"
+                name="email"
+               
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div>
@@ -131,7 +159,17 @@ export const AuthPage = ({ onAuthSuccess }: AuthPageProps) => {
               disabled={isLoading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-neutral-700 hover:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              {isLoading ? 'Authenticating...' : 'Sign in'}
+              {isLoading ? (isLogin ? 'Signing in...' : 'Registering...') : (isLogin ? 'Sign in' : 'Register')}
+            </button>
+          </div>
+          
+          <div className="text-center">
+            <button 
+              type="button"
+              className="text-sm text-neutral-600 hover:text-neutral-900"
+              onClick={() => setIsLogin(!isLogin)}
+            >
+              {isLogin ? 'Need an account? Register' : 'Already have an account? Sign in'}
             </button>
           </div>
         </form>

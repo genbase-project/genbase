@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Kit } from '../components/TreeView';
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-
+import {handleLogout} from '@/components/Logout';
 import SidebarNav from '../SidebarNav';
 import ModuleExplorer from '../module/ModuleExplorer';
 import RegistryExplorer from '../registry/RegistryExplorer';
@@ -41,17 +41,12 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<string>("modules");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [availableModels, setAvailableModels] = useState<Record<string, string[]>>({});
+  const [availableModels, setAvailableModels] = useState<Record<string, any[]>>({});
   const [currentModel, setCurrentModel] = useState<string>('');
   const [selectedProvider, setSelectedProvider] = useState<string>('');
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [kits, setKits] = useState<Kit[]>(initialModules);
 
-  // Handle logout function
-  const handleLogout = () => {
-    localStorage.removeItem('auth_credentials');
-    window.location.reload();
-  };
 
   useEffect(() => {
     fetchKits();
@@ -100,17 +95,18 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   }, []);
 
   // Set initial values when currentModel changes
-  useEffect(() => {
-    if (currentModel) {
-      const provider = Object.keys(availableModels).find(p => 
-        availableModels[p].includes(currentModel)
-      );
-      if (provider) {
-        setSelectedProvider(provider);
-        setSelectedModel(currentModel);
-      }
+// Set initial values when currentModel changes
+useEffect(() => {
+  if (currentModel) {
+    const provider = Object.keys(availableModels).find(p => 
+      availableModels[p].some(model => model.name === currentModel)
+    );
+    if (provider) {
+      setSelectedProvider(provider);
+      setSelectedModel(currentModel);
     }
-  }, [currentModel, availableModels]);
+  }
+}, [currentModel, availableModels]);
 
   const handleSaveModelSettings = async () => {
     if (!selectedModel) return;
@@ -259,16 +255,16 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     <SelectValue placeholder="Select model" className="text-gray-400" />
                   </SelectTrigger>
                   <SelectContent className="bg-neutral-900 border-gray-700">
-                    {availableModels[selectedProvider]?.map((model) => (
-                      <SelectItem 
-                        key={model} 
-                        value={model}
-                        className="text-gray-100 hover:bg-neutral-800"
-                      >
-                        {model}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+  {availableModels[selectedProvider]?.map((model) => (
+    <SelectItem 
+      key={model.identifier} 
+      value={model.name}
+      className="text-gray-100 hover:bg-neutral-800"
+    >
+      {model.label}
+    </SelectItem>
+  ))}
+</SelectContent>
                 </Select>
               </div>
             </div>

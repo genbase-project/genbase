@@ -86,7 +86,7 @@ class TaskerAgent(BaseAgent):
             system_prompt, _ = await self.set_context(
                 agent_instructions=instructions,
                include=IncludeOptions(
-                   giml_elements=["select", "code_diff"]
+                   elements=["select", "code_diff"]
                )
             )
             

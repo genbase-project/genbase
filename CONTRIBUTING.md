@@ -5,9 +5,8 @@ Thank you for your interest in contributing to GenBase! This document provides g
 ## Project Structure
 
 
-- **Engine**: Genbase Server  (Python with PDM)
-- **Studio**: Frontend application for Genbase (JavaScript/TypeScript)
-
+- **Engine**: Genbase Server  (Python)
+- **Studio**: Frontend application for Genbase
 ```
 .
 ├── engine/                    # FastAPI backend

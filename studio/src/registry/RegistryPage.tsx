@@ -28,7 +28,7 @@ interface KitAction {
   description: string;
 }
 
-interface KitWorkflow {
+interface KitProfile {
   agent?: string;
   instruction: string;
   actions?: KitAction[];
@@ -67,11 +67,7 @@ export interface RegistryKitConfig {
   description?: string;
   owner: string;
   agents?: KitAgent[];
-  instructions?: {
-    specification?: KitInstruction[];
-    documentation?: KitInstruction[];
-  };
-  workflows?: Record<string, KitWorkflow>;
+  profiles?: Record<string, KitProfile>;
   image?: string;
   workspace?: {
     files?: KitWorkspaceFile[];
@@ -101,7 +97,7 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
   // Fetch available versions for a kit
   const fetchVersions = async (owner: string, kitId: string) => {
     try {
-      const response = await fetchWithAuth(`${ENGINE_BASE_URL}/kit/registry/versions/${owner}/${kitId}`);
+      const response = await fetchWithAuth(`${ENGINE_BASE_URL}/kit/${owner}/${kitId}/versions`);
       if (!response.ok) throw new Error('Failed to fetch kit versions');
       
       const data = await response.json();
@@ -258,15 +254,13 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
             <Tabs defaultValue="overview" className="w-full">
               <TabsList className="bg-gray-100 border-gray-200">
                 <TabsTrigger value="overview" className="data-[state=active]:bg-white data-[state=active]:text-blue-600">Overview</TabsTrigger>
-                {kitConfig.workflows && Object.keys(kitConfig.workflows).length > 0 && (
-                  <TabsTrigger value="workflows" className="data-[state=active]:bg-white data-[state=active]:text-blue-600">Workflows</TabsTrigger>
+                {kitConfig.profiles && Object.keys(kitConfig.profiles).length > 0 && (
+                  <TabsTrigger value="profiles" className="data-[state=active]:bg-white data-[state=active]:text-blue-600">Profiles</TabsTrigger>
                 )}
                 {kitConfig.workspace?.files && kitConfig.workspace.files.length > 0 && (
                   <TabsTrigger value="workspace" className="data-[state=active]:bg-white data-[state=active]:text-blue-600">Workspace</TabsTrigger>
                 )}
-                {kitConfig.instructions && (
-                  <TabsTrigger value="documentation" className="data-[state=active]:bg-white data-[state=active]:text-blue-600">Documentation</TabsTrigger>
-                )}
+          
               </TabsList>
               
               <TabsContent value="overview" className="mt-6">
@@ -353,35 +347,35 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
                 </div>
               </TabsContent>
               
-              <TabsContent value="workflows" className="mt-6">
+              <TabsContent value="profiles" className="mt-6">
                 <div className="rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                    <h3 className="font-medium text-gray-800">Available Workflows</h3>
+                    <h3 className="font-medium text-gray-800">Available Profiles</h3>
                   </div>
                   <div className="bg-white divide-y divide-gray-200">
-                    {kitConfig.workflows && Object.entries(kitConfig.workflows).map(([name, workflow], index) => (
+                    {kitConfig.profiles && Object.entries(kitConfig.profiles).map(([name, profile], index) => (
                       <div key={index} className="p-4 space-y-3">
                         <h4 className="text-md font-medium text-gray-800">{name}</h4>
                         
-                        {workflow.agent && (
+                        {profile.agent && (
                           <div className="text-sm text-gray-600 flex items-center gap-1">
                             <span>Agent:</span>
                             <Badge variant="outline" className="bg-gray-50 border-gray-300 text-gray-700">
-                              {workflow.agent}
+                              {profile.agent}
                             </Badge>
                           </div>
                         )}
                         
                         <div className="text-sm text-gray-600">
                           <span>Instruction: </span>
-                          <span className="font-mono text-gray-700">{workflow.instruction}</span>
+                          <span className="font-mono text-gray-700">{profile.instruction}</span>
                         </div>
                         
-                        {workflow.actions && workflow.actions.length > 0 && (
+                        {profile.actions && profile.actions.length > 0 && (
                           <div className="space-y-2">
                             <h5 className="text-sm font-medium text-gray-700">Actions:</h5>
                             <div className="space-y-3 pl-3">
-                              {workflow.actions.map((action, idx) => (
+                              {profile.actions.map((action, idx) => (
                                 <div key={idx} className="bg-gray-50 p-3 rounded-md">
                                   <h6 className="text-sm font-medium text-gray-800">{action.name}</h6>
                                   <p className="text-xs text-gray-600 mt-1">{action.description}</p>
@@ -415,45 +409,7 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
                 </div>
               </TabsContent>
               
-              <TabsContent value="documentation" className="mt-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Documentation */}
-                  {kitConfig.instructions?.documentation && kitConfig.instructions.documentation.length > 0 && (
-                    <div className="rounded-md border border-gray-200 overflow-hidden">
-                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-medium text-gray-800">Documentation</h3>
-                      </div>
-                      <div className="bg-white divide-y divide-gray-200">
-                        {kitConfig.instructions.documentation.map((instruction, index) => (
-                          <div key={index} className="p-3 space-y-1">
-                            <h4 className="text-sm font-medium text-gray-700">{instruction.name}</h4>
-                            <p className="text-xs text-gray-500">{instruction.description}</p>
-                            <p className="text-xs text-gray-600 font-mono">{instruction.path}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Specifications */}
-                  {kitConfig.instructions?.specification && kitConfig.instructions.specification.length > 0 && (
-                    <div className="rounded-md border border-gray-200 overflow-hidden">
-                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-medium text-gray-800">Specifications</h3>
-                      </div>
-                      <div className="bg-white divide-y divide-gray-200">
-                        {kitConfig.instructions.specification.map((instruction, index) => (
-                          <div key={index} className="p-3 space-y-1">
-                            <h4 className="text-sm font-medium text-gray-700">{instruction.name}</h4>
-                            <p className="text-xs text-gray-500">{instruction.description}</p>
-                            <p className="text-xs text-gray-600 font-mono">{instruction.path}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
+             
             </Tabs>
           </div>
         </ScrollArea>

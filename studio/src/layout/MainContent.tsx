@@ -63,7 +63,7 @@ interface ApiResponse {
   description: string;
 }
 
-const RESOURCE_TYPES = ['provide-instructions', 'workspace', 'manifests'];
+const RESOURCE_TYPES = ['provide-instructions', 'workspace'];
 
 const buildTreeFromPaths = (items: ApiResponse[]): TreeItem[] => {
   const root: { [key: string]: TreeItem } = {};
@@ -295,19 +295,7 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
     fetchResources();
   }, [selectedModule, selectedResourceType]);
 
-  const handleGenerateManifest = async () => {
-    if (!selectedModule) return;
-    
-    try {
-      await fetchWithAuth(
-        `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/manifest`,
-        { method: 'GET' }
-      );
-      await fetchResources();  // Refresh to get the newly generated manifest
-    } catch (error) {
-      console.error('Error generating manifest:', error);
-    }
-  };
+
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -668,16 +656,7 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
             </div>
           )}
           <div className="flex items-center gap-2">
-            {selectedResourceType === 'manifests' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleGenerateManifest}
-                className="flex items-center gap-2"
-              >
-                Generate
-              </Button>
-            )}
+         
             <button
               onClick={handleRefresh}
               className="p-2 hover:bg-slate-100 rounded-full"

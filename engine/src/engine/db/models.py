@@ -4,8 +4,10 @@ import secrets
 from typing import Any, Dict, List, Optional
 import uuid
 
+from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from sqlalchemy import JSON, UUID, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
 
 
 from engine.db.base import Base
@@ -342,3 +344,12 @@ class GlobalConfig(Base):
         server_default=text('CURRENT_TIMESTAMP'),
         onupdate=text('CURRENT_TIMESTAMP')
     )
+
+
+
+
+
+
+
+class User(SQLAlchemyBaseUserTableUUID, Base):
+    pass

@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -29,6 +30,8 @@ from engine.apis.project import ProjectRouter
 from engine.apis.repository import RepositoryRouter
 from engine.apis.resource import ResourceRouter
 from engine.apis.profile import ProfileRouter
+from engine.auth.schemas import UserCreate, UserRead, UserUpdate
+from engine.auth.superuser import create_default_superuser
 from engine.const import BASE_DATA_DIR, KIT_BASE_DIR, REPO_BASE_DIR
 from engine.services.agents.base_agent import AgentServices
 from engine.services.core.api_key import ApiKeyService
@@ -45,10 +48,10 @@ from engine.services.execution.state import StateService
 from engine.services.execution.profile import ProfileService
 from engine.services.storage.vector_store import VectorStoreService
 from engine.services.storage.embedder import EmbeddingService
-from engine.apis.models.embedding import EmbeddingRouter
+from engine.apis.embedding import EmbeddingRouter
 
 from engine.apis.llm_gateway import LLMGatewayRouter
-
+from engine.auth.users import auth_backend, current_active_user, fastapi_users
 
 
 load_dotenv()
@@ -103,8 +106,18 @@ Stack Trace:
             raise
 
 
+
+
+
+
+
+
+
+
+
+
 def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
-    correct_username = os.getenv("ADMIN_USERNAME")
+    correct_username = os.getenv("ADMIN_USER")
     correct_password = os.getenv("ADMIN_PASSWORD")
     
     if not secrets.compare_digest(credentials.username, correct_username) or \
@@ -118,11 +131,90 @@ def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
 
 # Create FastAPI app with exception handlers
 app = FastAPI(
-    title="Repository and Module Management API",
+    title="Genbase API",
     debug=True,  # Enable debug mode for detailed error responses
-    dependencies=[Depends(get_current_user)]  # Apply basic auth to all routes
+    dependencies=[Depends(current_active_user)]  # Apply basic auth to all routes
 )
 app.add_middleware(LogMiddleware)
+
+
+
+
+
+
+
+### Authentication Dependency ###
+app.include_router(
+    fastapi_users.get_auth_router(auth_backend), prefix="/auth/jwt", tags=["auth"]
+)
+app.include_router(
+    fastapi_users.get_register_router(UserRead, UserCreate),
+    prefix="/auth",
+    tags=["auth"],
+)
+app.include_router(
+    fastapi_users.get_reset_password_router(),
+    prefix="/auth",
+    tags=["auth"],
+)
+app.include_router(
+    fastapi_users.get_verify_router(UserRead),
+    prefix="/auth",
+    tags=["auth"],
+)
+app.include_router(
+    fastapi_users.get_users_router(UserRead, UserUpdate),
+    prefix="/users",
+    tags=["users"],
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Create necessary directories
@@ -300,6 +392,8 @@ async def startup_event():
             text=True,
             check=False
         )
+        await create_default_superuser()
+
         
         if result.returncode == 0:
             logger.info("Database migrations completed successfully")

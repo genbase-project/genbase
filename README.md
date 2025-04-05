@@ -1,182 +1,134 @@
-# Genbase
-
-[![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/genbase-io/genbase.svg)](https://github.com/genbase-io/genbase/stargazers)
-
-> A modular platform for specialized AI agents that collaborate to solve complex problems.
-
-## What is Genbase?
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/genbase-project/genbase/refs/heads/main/docs/public/logo.png" width="150" alt="Genbase Logo">
 </p>
 
-Genbase is an open platform that enables AI-powered collaboration through specialized modules. Instead of building one agent that knows a little about everything, Genbase allows you to combine domain-specific agents that each bring deep expertise to their area.
+<h1 align="center">Genbase</h1>
 
-### Key Features
+<p align="center">
+  <strong>The Operating System for Modular AI Agents</strong>
+</p>
 
-- **Specialized Modules**: Package domain expertise into modules with purpose-built agents
-- **Collaborative Workflows**: Agents work together through well-defined relationships
-- **Git-Based Workspaces**: Agents operate on real repositories with full filesystem access
-- **Extensible Architecture**: Add new capabilities by creating or combining modules
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/genbase-project/genbase/stargazers"><img src="https://img.shields.io/github/stars/genbase-project/genbase.svg?style=social&label=Star" alt="GitHub Stars"></a>
+  <!-- Add Build Status, Docs, Discord badges when available -->
+</p>
 
-![Dashboard](https://raw.githubusercontent.com/genbase-project/genbase/refs/heads/main/docs/public/module.png)
+---
 
-## Why Genbase?
+**Genbase is an open-source platform designed to help you build, manage, and orchestrate complex AI systems.** Instead of building monolithic AI applications, Genbase enables you to create sophisticated solutions by composing specialized, reusable AI agents that can securely collaborate.
 
-Traditional AI assistants try to know everything but often lack depth in specialized areas. Genbase takes a different approach:
+Building powerful AI systems often involves integrating diverse capabilities – managing databases, generating code, interacting with external APIs, analyzing data, and more. Doing this reliably, securely, and without reinventing the wheel is challenging.
 
-```
-┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
-│  Next.js Expert │   │PostgreSQL Expert│   │ Docker Expert   │
-│                 │◄──►                 │◄──►                 │
-└─────────────────┘   └─────────────────┘   └─────────────────┘
-```
+Genbase tackles this complexity by introducing **Kits**: self-contained, versioned blueprints that package specific AI functionalities. A Kit might contain specialized agent logic, Python tools (Actions), configuration, dependencies, and even initial workspace files. These Kits can be shared and reused across projects.
 
-- **Web Developer Module**: Deep knowledge of frameworks, components and best practices
-- **Database Module**: Expertise in schema design, query optimization and administration
-- **Deployment Module**: Specialized in containerization, networking and cloud services
+You instantiate Kits as **Modules** within your **Project**. Each Module runs as a managed component with its own state and secure execution environment. Crucially, Modules can be interconnected:
+*   They can establish **Relationships** (`Connection`, `Context`) to understand dependencies.
+*   They can securely **Provide** resources like workspace access or specific Actions to other Modules that need them.
 
-Modules collaborate through actions, sharing context, and workspace access - creating solutions no single agent could provide alone.
+This modular, collaborative approach allows you to build systems where specialized agents work together. For example, a code generation Module could use an Action provided by a database management Module to fetch schema information before writing application code.
 
-## Getting Started
+Humans remain central to the process. Genbase Studio provides an intuitive interface to manage your ecosystem, interact with agents through defined **Profiles** (specific operational modes like 'initialize' or 'maintain'), monitor progress, and guide the overall system.
 
-### Running with Docker Compose (Recommended)
+![Genbase Studio Interface - Module View](https://raw.githubusercontent.com/genbase-project/genbase/refs/heads/main/docs/public/module.png)
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/genbase-ai/genbase.git
-   cd genbase
-   ```
+## Key Highlights
 
-2. Copy the environment templates:
-   ```bash
-   cp docker/.env.template docker/.env
-   cp engine/.env.template engine/.env
-   cp studio/.env.template studio/.env
-   ```
+*   **Build with Reusable Blocks:** Package expertise into shareable Kits, drastically reducing redundant development.
+*   **Orchestrate Collaboration:** Define how Modules connect and securely share capabilities (`Provide` Workspaces/Actions).
+*   **Secure & Isolated Execution:** Run custom Python Actions in sandboxed Docker containers with managed dependencies.
+*   **Centralized LLM Access:** Configure your preferred LLM centrally and let Modules access it securely via an OpenAI-compatible gateway using unique API keys.
+*   **Human-in-the-Loop Interface:** Manage, monitor, and interact with your AI system through the Genbase Studio web UI.
 
-3. Edit the `.env` files with your credentials (at minimum, add an LLM API key):
-   ```bash
-   nano engine/.env
-   ```
+## Core Concepts
 
-4. Make scripts executable:
-   ```bash
-   chmod +x scripts/*.sh
-   ```
+*   **Kit:** A shareable blueprint for an AI capability (code, config, data, profile). Defined by `kit.yaml`.
+*   **Module:** A live instance of a Kit running within a Project, with its own state and connections.
+*   **Project:** An organizational container for Modules.
+*   **Profile:** A specific task or interaction mode defined for a Module (e.g., `initialize`, `maintain`).
+*   **Action:** A Kit-defined Python function executed securely in a container.
+*   **Relation:** A defined link between Modules (`Connection` or `Context`).
+*   **Provide:** Mechanism for one Module to grant another access to its `Workspace` or specific `Actions`.
 
-5. Start Genbase:
-   ```bash
-   ./scripts/docker-run.sh up
-   ```
+*(For more details, see the [Core Concepts Documentation](link-to-docs/concepts))*
 
-6. Access the applications:
-   - Studio: http://localhost:5173
-   - Engine API: http://localhost:8000
+## Getting Started 🚀
 
-### Running Locally
+The recommended way to run Genbase is using Docker Compose.
 
-1. Make sure you have Python 3.11+ and Node.js 18+ installed.
-2. Follow steps 1-3 above.
-3. Run the local script:
-   ```bash
-   ./scripts/run-local.sh
-   ```
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/genbase-project/genbase.git
+    cd genbase
+    ```
 
-## Quick Demo
+2.  **Prepare Environment Files:** Copy the templates. **You must edit `engine/.env`**.
+    ```bash
+    cp docker/.env.template docker/.env
+    cp engine/.env.template engine/.env
+    cp studio/.env.template studio/.env
+    ```
 
-1. Create a new project
-2. Add the Next.js Web Developer module from the registry
-3. Start the development workflow
-4. Ask the specialized agent to create a feature
-5. Watch as it generates code, runs tests, and explains its approach
+3.  **Configure the Engine:** Edit `engine/.env`:
+    *   **Required:** Set at least one LLM API key (e.g., `OPENAI_API_KEY=sk-...`).
+    *   **Required:** Set `ADMIN_PASSWORD` for the initial 'admin' user.
+    *   **Required:** Configure `DATABASE_URL` for PostgreSQL.
+    *   **Required:** Set `AUTH_SECRET` for JWT security.
+    ```bash
+    nano engine/.env  # Or your preferred text editor
+    ```
 
-## Building and Deployment
+4.  **Make Scripts Executable:**
+    ```bash
+    chmod +x scripts/*.sh
+    ```
 
-### Building for Production
+5.  **Start Genbase:**
+    ```bash
+    ./scripts/docker-run.sh up
+    ```
+    *(Wait for services to start and migrations to complete).*
 
-To build both applications for production:
+6.  **Access Genbase:**
+    *   **Studio UI:** [http://localhost:5173](http://localhost:5173)
+    *   **Engine API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+    *   Log in with username `admin` and the password you set.
 
-```bash
-./scripts/build.sh
-```
+### Running Locally (Development)
 
-### Docker Commands
+1.  Ensure Python 3.11+ and Node.js 18+ are installed.
+2.  Follow steps 1-3 above.
+3.  Run the local development script:
+    ```bash
+    ./scripts/run-local.sh
+    ```
 
-- Start all services: `./scripts/docker-run.sh up`
-- Stop all services: `./scripts/docker-run.sh down`
-- View logs: `./scripts/docker-run.sh logs`
-- Rebuild images: `./scripts/docker-run.sh build`
-- Restart services: `./scripts/docker-run.sh restart`
+## Quick Demo 💡
 
-### Key Environment Variables
+1.  Log in to the Studio.
+2.  Ensure the `default` project is selected (or create one).
+3.  Go to the **Registry** tab, find a Kit, and click **Install Kit**.
+4.  Go to the **Modules** tab and click **Create Module**.
+5.  Select the installed Kit, name your module, and create it.
+6.  Select your new module in the tree.
+7.  In the bottom panel, choose a **Profile** and start chatting with the agent!
 
-#### Engine (FastAPI)
+## Documentation 📚
 
-The Engine supports many environment variables. Key ones include:
+*   [Getting Started Guide](https://docs.genbase.io/docs/overview/getting-started)
+*   [Core Concepts Explained](https://docs.genbase.io/docs/overview/concepts)
+*   [Architecture Details](https://docs.genbase.io/docs/overview/architecture)
+*   [Creating Kits](https://docs.genbase.io/docs/development/creating-kits)
 
-```
-# LLM API Keys (At least one is required)
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here
-GROQ_API_KEY=your_groq_api_key
-MISTRAL_API_KEY=your_mistral_api_key
-DEEPSEEK_API_KEY=your_deepseek_api_key
+## Contributing 🤝
 
-# Core settings
-REGISTRY_URL=http://localhost:5173
-DATA_DIR=".data"
-ADMIN_USERNAME="admin"
-ADMIN_PASSWORD="your_secure_password_here"
-DATABASE_URL="postgresql://user:password@host/database?sslmode=require"
+We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) guide for details.
 
-# Additional settings
-LOG_LEVEL="INFO"
-API_HOST="0.0.0.0"
-API_PORT="8000"
-# ... and many more (see engine/.env.template)
-```
+## Community & Support 💬
 
-#### Studio (React/Vite)
-
-```
-# Core settings
-VITE_ENGINE_URL="http://localhost:8000"
-VITE_API_USERNAME="admin"
-VITE_API_PASSWORD="your_secure_password_here"
-```
-
-> **Note:** When running with Docker Compose, the Engine container will use its own `.env` file mounted as a volume, allowing for runtime configuration changes without rebuilding the container.
-
-### Testing and Troubleshooting
-
-#### Quick Test Guide
-
-1. **Check environment files**
-   - Verify `.env`, `engine/.env`, and `studio/.env` exist and contain the right variables
-
-2. **Test the applications**
-   - Engine API: Make API calls to http://localhost:8000
-   - Studio UI: Open http://localhost:5173 in your browser
-   - Try logging in with the configured admin credentials
-
-3. **Common troubleshooting**
-   - View logs: `./scripts/docker-run.sh logs`
-   - Restart services: `./scripts/docker-run.sh restart`
-   - Check container status: `docker ps -a`
-
-## Documentation
-
-- [Getting Started Guide](https://docs.genbase.io/docs/overview/getting-started)
-- [Core Concepts](https://docs.genbase.io/docs/overview/concepts)
-- [Architecture](https://docs.genbase.io/docs/overview/architecture)
-- [Creating Modules](https://docs.genbase.io/docs)
-
-## Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to get started.
+*   **GitHub Issues:** [Report bugs or request features](https://github.com/genbase-project/genbase/issues)
+*   **GitHub Discussions:** [Ask questions and share ideas](https://github.com/genbase-project/genbase/discussions)
 
 ## License
 
-Genbase is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+Genbase is distributed under the terms of the [Apache License 2.0](LICENSE).

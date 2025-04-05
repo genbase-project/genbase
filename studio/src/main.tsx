@@ -1,17 +1,19 @@
-import { StrictMode, useState, useEffect } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
-import { ThemeProvider } from "@/components/themeProvider"
-import { AuthPage } from '@/components/AuthPage'
-import { isAuthenticated } from './config.ts'  // Using the new isAuthenticated function
+// main.tsx or index.tsx (assuming this structure)
+import { StrictMode, useState, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom'; // Import BrowserRouter
+import './index.css';
+import App from './App.tsx';
+import { ThemeProvider } from "@/components/themeProvider";
+import { AuthPage } from '@/components/AuthPage';
+import { isAuthenticated } from './config.ts';
+import { AuthProvider } from './context/AuthContext.tsx';
 
 function Root() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is authenticated using the new method
     setIsLoggedIn(isAuthenticated());
     setLoading(false);
   }, []);
@@ -39,7 +41,12 @@ function Root() {
   // Show main app if logged in
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-      <App />
+      {/* Wrap App with BrowserRouter */}
+      <BrowserRouter>
+      <AuthProvider> 
+        <App />
+        </AuthProvider>
+      </BrowserRouter>
     </ThemeProvider>
   );
 }

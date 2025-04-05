@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 from sqlalchemy import and_, case, delete, or_, select, update
-from engine.db.models import Module, ModuleProvide, ModuleRelation, ProjectModuleMapping, ProvideType
+from engine.db.models import Module, ModuleProvide, ProjectModuleMapping, ProvideType
 from engine.db.session import SessionLocal
 from sqlalchemy.orm import Session
 import networkx as nx
@@ -23,12 +23,9 @@ from engine.services.core.kit import KitService, KitConfig
 from engine.utils.file import extract_zip
 from loguru import logger
 
-from engine.utils.uid import generate_readable_uid
+from engine.utils.readable_uid import generate_readable_uid
 
 
-class RelationType(Enum):
-    CONNECTION = "connection"
-    CONTEXT = "context"
 
 
 class ModuleError(Exception):
@@ -83,12 +80,12 @@ class ModuleService:
         workspace_base: str,
         module_base: str,
         repo_service: RepoService,
-        stage_state_service: StateService,
+        state_service: StateService,
         kit_service: KitService
     ):
         self.workspace_base = Path(workspace_base)
         self.repo_service = repo_service
-        self.stage_state_service = stage_state_service
+        self.state_service = state_service
         self.module_base = module_base
         self.kit_service = kit_service
 
@@ -121,7 +118,7 @@ class ModuleService:
 
         module_id = generate_readable_uid()
         repo_name = f"{module_id}"
-        created_at = datetime.now(UTC).isoformat()
+        created_at = datetime.now(UTC)
 
         try:
             # Get workspace path
@@ -175,7 +172,7 @@ class ModuleService:
                 db.commit()
                 db.refresh(module)
 
-                self.stage_state_service.initialize_module(module_id)
+                self.state_service.initialize_module(module_id)
                 logger.info(f"Created module {module_id} for {owner}/{kit_id} v{version}")
 
                 return ModuleMetadata.from_orm(module, mapping)
@@ -232,74 +229,10 @@ class ModuleService:
             raise ModuleError(f"Failed to get project modules: {str(e)}")
 
 
-    def create_relation(
-        self,
-        source_id: str,
-        target_id: str,
-        relation_type: RelationType,
-        description: Optional[str] = None  # Add description parameter
-    ):
-        """Create relationship between modules with optional description"""
-        try:
-            with self._get_db() as db:
-                relation = ModuleRelation(
-                    source_id=source_id,
-                    target_id=target_id,
-                    relation_type=relation_type.value,
-                    created_at=datetime.now(UTC),
-                    description=description  # Add description field
-                )
-                db.add(relation)
-                db.commit()
-
-        except Exception as e:
-            raise ModuleError(f"Failed to create relation: {str(e)}")
-
-
-
-    def update_relation_description(
-        self,
-        source_id: str,
-        target_id: str,
-        relation_type: RelationType,
-        description: str
-    ):
-        """Update the description of an existing module relation"""
-        try:
-            with self._get_db() as db:
-                relation = db.query(ModuleRelation).filter_by(
-                    source_id=source_id,
-                    target_id=target_id,
-                    relation_type=relation_type.value
-                ).first()
-                
-                if not relation:
-                    raise ModuleError("Relation not found")
-                    
-                relation.description = description
-                db.commit()
-
-        except Exception as e:
-            raise ModuleError(f"Failed to update relation description: {str(e)}")
-
-
-    def delete_relation(self, source_id: str, target_id: str, relation_type: RelationType):
-        """Delete relationship between modules"""
-        try:
-            with self._get_db() as db:
-                db.query(ModuleRelation).filter_by(
-                    source_id=source_id,
-                    target_id=target_id,
-                    relation_type=relation_type.value
-                ).delete()
-                db.commit()
-
-        except Exception as e:
-            raise ModuleError(f"Failed to delete relation: {str(e)}")
 
 
     def get_module_graph(self) -> nx.DiGraph:
-        """Get NetworkX graph of module relationships"""
+        """Get graph of module relationships"""
         graph = nx.MultiDiGraph()
 
         try:
@@ -322,18 +255,7 @@ class ModuleService:
                         path=module.project_mappings[0].path
                     )
 
-                # Get all relations
-                relations = db.query(ModuleRelation).all()
-
-                for relation in relations:
-                    graph.add_edge(
-                        relation.source_id,
-                        relation.target_id,
-                        key=f"{relation.source_id}_{relation.target_id}_{relation.relation_type}",
-                        type=relation.relation_type,
-                        created_at=relation.created_at,
-                        description=relation.description
-                    )
+                #?TODO: Get module provide
 
                 return graph
 
@@ -366,83 +288,7 @@ class ModuleService:
 
 
 
-    def get_linked_modules(
-        self,
-        module_id: str,
-        relation_type: Optional[RelationType] = None
-    ) -> List[ModuleMetadata]:
-        """
-        Get modules linked to the specified module. Both CONNECTION and CONTEXT
-        relations are bi-directional.
-        """
-        try:
-            with self._get_db() as db:
-                # First find the related module IDs
-                relation_query = (
-                    select(
-                        case(
-                            (ModuleRelation.source_id == module_id, ModuleRelation.target_id),
-                            else_=ModuleRelation.source_id
-                        ).label('related_module_id')
-                    )
-                    .where(or_(
-                        ModuleRelation.source_id == module_id,
-                        ModuleRelation.target_id == module_id
-                    ))
-                )
 
-                if relation_type:
-                    relation_query = relation_query.where(ModuleRelation.relation_type == relation_type.value)
-
-                # Then get the modules
-                stmt = (
-                    select(Module, ProjectModuleMapping)
-                    .join(ProjectModuleMapping)
-                    .where(Module.module_id.in_(relation_query))
-                )
-
-                logger.info(f"Relation type: {relation_type}")
-                logger.info(f"Query: {stmt}")
-
-                results = db.execute(stmt).all()
-                logger.info(f"Results: {results}")
-                
-                return [
-                    ModuleMetadata.from_orm(module, mapping)
-                    for module, mapping in results
-                ]
-
-        except Exception as e:
-            logger.error(f"Error in get_linked_modules: {str(e)}", exc_info=True)
-            raise ModuleError(f"Failed to get linked modules: {str(e)}")
-
-
-
-
-    def verify_connection_access(self, source_id: str, target_id: str) -> bool:
-        """
-        Verify source module has CONNECTION relation with target
-        
-        Args:
-            source_id: Source module ID
-            target_id: Target module ID
-            
-        Returns:
-            bool: True if connection exists
-            
-        Raises:
-            ModuleError: On database errors
-        """
-        try:
-            with self._get_db() as db:
-                relation = db.query(ModuleRelation).filter_by(
-                    source_id=source_id,
-                    target_id=target_id,
-                    relation_type=RelationType.CONNECTION.value
-                ).first()
-                return relation is not None
-        except Exception as e:
-            raise ModuleError(f"Failed to verify connection access: {str(e)}")
 
     def get_module_metadata(self, module_id: str) -> ModuleMetadata:
         """
@@ -582,27 +428,6 @@ class ModuleService:
         except Exception as e:
             raise ModuleError(f"Failed to get kit config: {str(e)}")
 
-    def get_relation_description(
-        self,
-        source_id: str,
-        target_id: str,
-        relation_type: RelationType
-    ) -> Optional[str]:
-        """Get the description of a module relation"""
-        try:
-            with self._get_db() as db:
-                relation = db.query(ModuleRelation).filter_by(
-                    source_id=source_id,
-                    target_id=target_id,
-                    relation_type=relation_type.value
-                ).first()
-                
-                if not relation:
-                    raise ModuleError("Relation not found")
-                    
-                return relation.description
-        except Exception as e:
-            raise ModuleError(f"Failed to get relation description: {str(e)}")
 
 
 

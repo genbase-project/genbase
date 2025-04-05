@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "react-spring": "^9.7.5",
-    "reactflow": "^11.11.4"
-  }
-}

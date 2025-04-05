@@ -4,10 +4,9 @@ from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Path
 from pydantic import BaseModel
 
-from engine.config.profile_config import ProfileConfigurations
 from engine.services.agents.base_agent import BaseAgent
 from engine.services.agents.base_agent import AgentServices, AgentContext
-from engine.config.profile_config import ProfileConfigService
+from engine.services.execution.profile_config import ProfileConfigService
 
 class ProfileExecuteRequest(BaseModel):
     """Request model for profile execution"""
@@ -154,7 +153,7 @@ class ChatRouter:
     ) -> StatusResponse:
         """Get module status"""
         try:
-            stage, state = self.services.state_service.get_status(module_id)
+            state = self.services.state_service.get_status(module_id)
             last_updated = self.services.state_service.get_last_updated(module_id)
             
             return StatusResponse(

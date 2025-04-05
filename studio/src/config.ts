@@ -37,10 +37,8 @@ export const logout = () => {
   localStorage.removeItem('auth_token');
   
   // You can redirect to login page if needed
-  // window.location.href = '/login';
-  
-  // Or refresh the page if your app handles auth state
-  // window.location.reload();
+  window.location.href = '/';
+
 };
 
 // Check if user is authenticated

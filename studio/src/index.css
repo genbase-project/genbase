@@ -5,6 +5,7 @@
   :root {
     --radius: 0.5rem
   ;
+  --background: 0 0% 100%;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;

@@ -9,7 +9,7 @@ from sqlalchemy import select, insert
 from engine.db.models import ChatHistory
 from engine.db.session import SessionLocal
 from engine.services.execution.profile import ProfileError, ProfileService
-from engine.config.profile_config import ProfileConfigService
+from engine.services.execution.profile_config import ProfileConfigService
 from engine.utils.yaml import YAMLUtils
 from loguru import logger
 from engine.services.execution.state import StateService
@@ -33,7 +33,7 @@ class ProfileRouter:
     ):
         self.service = profile_service
         self.config_service = ProfileConfigService()
-        self.stage_state_service = StateService()
+        self.state_service = StateService()
         self.router = APIRouter(prefix=prefix, tags=["profile"])
         self._setup_routes()
     
@@ -86,11 +86,9 @@ class ProfileRouter:
             List[Dict[str, Any]]: List of profile configurations where each contains:
                 - profile_type: The type of profile (initialize, maintain, etc)
                 - agent_type: The type of agent that handles this profile
-                - base_instructions: Default instructions for this profile
                 - prerequisites: List of profiles that must be completed first
                 - module_id: ID of the module
                 - metadata: Profile metadata including instructions and available steps
-                - default_actions: List of actions available by default
                 - kit_config: Module-specific configuration from kit.yaml
         """
         try:
@@ -107,6 +105,7 @@ class ProfileRouter:
             profile_list = list(kit.get('profiles', {}).keys())
 
             
+            
             for profile_type in profile_list:
                 try:
                     # Get kit profile config first and ensure actions list
@@ -114,6 +113,8 @@ class ProfileRouter:
                     # Default empty actions list if not provided
                     if 'actions' not in kit_profile:
                         kit_profile['actions'] = []
+
+                    instructions = kit_profile.get('instructions', [])
                         
                     logger.info(f"""Processing profile {profile_type}:
                     Kit config: {kit_profile}
@@ -131,17 +132,10 @@ class ProfileRouter:
                         profile=profile_type
                     )
                     
-                    # Get default actions
-                    default_actions = []
-                    for action in config.default_actions:
-                        default_actions.append({
-                            "name": action.name,
-                            "description": action.description,
-                            "schema": action.schema
-                        })
+
                     
                     # Get profile completion status
-                    is_completed = self.stage_state_service.get_profile_status(
+                    is_completed = self.state_service.get_profile_status(
                         module_id=module_id,
                         profile_type=profile_type
                     )
@@ -150,13 +144,12 @@ class ProfileRouter:
                     profile_configs.append({
                         "profile_type": config.profile_type,
                         "agent_type": config.agent_type,
-                        "base_instructions": config.base_instructions,
                         "module_id": module_id,
                         "metadata": metadata,
-                        "default_actions": default_actions,
                         "kit_config": kit_profile,
                         "is_completed": is_completed,
-                        "allow_multiple": config.allow_multiple
+                        "allow_multiple": config.allow_multiple,
+                        "instructions": instructions,
                     })
                     
                 except Exception as e:

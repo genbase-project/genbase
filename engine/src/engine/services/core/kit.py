@@ -1,8 +1,10 @@
 import io
 import json
 import os
+import pathlib
 import re
 import shutil
+import tarfile
 import tempfile
 import zipfile
 from urllib.parse import urljoin
@@ -12,8 +14,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from enum import Enum
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, List, Optional, Union
+from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union
 
+from loguru import logger
 import yaml
 
 @dataclass
@@ -46,11 +49,13 @@ class InstructionItem:
     path: str  # Original path from config
     description: Optional[str] = None
     full_path: str = ""  # Full filesystem path constructed as module_path/instructions/path
+    module_id: Optional[str] = None  # Module ID for the instruction
+    content: str = ""
 
 @dataclass
 class ProfileAction:
     """Profile action definition"""
-    path: str  # Original path in format "module:function"
+    path: str  # Original path in format "module:function" or just "function"
     name: str
     description: Optional[str] = None
     full_file_path: str = ""  # Full path to the action file
@@ -64,15 +69,38 @@ class ProfileAction:
             "full_file_path": self.full_file_path,
             "function_name": self.function_name
         }
+    
+    @classmethod
+    def resolve_path(cls, path: str, kit_path: Path) -> Tuple[str, str]:
+        """
+        Resolve action path and function name.
+        If path doesn't contain a colon, assume it's just a function name in __init__.py
+        
+        Args:
+            path: Action path in format "module:function" or just "function"
+            kit_path: Base path to kit
+            
+        Returns:
+            Tuple of (full_file_path, function_name)
+        """
+        if ":" in path:
+            # Traditional format: path:function
+            action_file_path, func_name = path.split(":")
+            full_file_path = str(kit_path / "actions" / f"{action_file_path}.py")
+        else:
+            # New format: just function name, look in __init__.py
+            func_name = path
+            full_file_path = str(kit_path / "actions" / "__init__.py")
+            
+        return full_file_path, func_name
 
 @dataclass
 class Profile:
     """Profile configuration"""
     agent: str
-    instruction: str
     actions: List[ProfileAction]
-    instruction_file_path: str = ""  # Full path to instruction file
-    instruction_content: str = ""  # Instruction content
+    instructions: List[InstructionItem] = field(default_factory=list)
+
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any], kit_path: Optional[Path] = None) -> 'Profile':
@@ -82,20 +110,35 @@ class Profile:
                 name=action['name'],
                 description=action.get('description')
             )
-            action_file_path, func_name = action['path'].split(':')
-            profile_action.full_file_path = str(kit_path / "actions" / f"{action_file_path}.py")
+            
+            # Use the new resolution method
+            full_file_path, func_name = ProfileAction.resolve_path(action['path'], kit_path)
+            profile_action.full_file_path = full_file_path
             profile_action.function_name = func_name
+
             return profile_action
 
-        instruction_file_path = str(kit_path / "instructions" / f"{data['instruction']}")
-        with open(instruction_file_path) as f:
-            instruction_content = f.read()
+
+
+        instruction_data = []
+
+        for instruction in data.get('instructions', []):
+            instruction_item = InstructionItem(
+                name=instruction['name'],
+                path=instruction['path'],
+                description=instruction.get('description'),
+                full_path=str(kit_path / "instructions" / instruction['path']),
+            )
+            instruction_item.full_path = str(kit_path / "instructions" / instruction['path'])
+            with open(instruction_item.full_path) as f:
+                instruction_item.content = f.read()
+                
+            instruction_data.append(instruction_item)
+        
         return cls(
             agent=data['agent'],
-            instruction=data['instruction'],
             actions=[create_profile_action(action) for action in data.get('actions', [])],
-            instruction_file_path=instruction_file_path,
-            instruction_content=instruction_content
+            instructions=instruction_data
         )
 
 @dataclass
@@ -163,12 +206,11 @@ class KitConfig:
                     path=action['path'],
                     name=action['name'],
                     description=action.get('description'),
-                    full_file_path=str(data['kit_path'] / "actions" / f"{action['path'].split(':')[0]}.py"),
-                    function_name=action['path'].split(':')[1]
+                    # Use the new path resolution logic
+                    **_resolve_action_path(action['path'], data['kit_path'])
                 )
                 for action in data.get('provide', {}).get('actions', [])
             ],
-            # Move instruction.specification to provide.instructions
             instructions=[
                 InstructionItem(
                     name=item['name'],
@@ -209,6 +251,31 @@ class KitConfig:
             ports=[Port(**p) for p in data.get('ports', [])]
         )
 
+# Helper function to resolve action paths
+def _resolve_action_path(path: str, kit_path: Path) -> Dict[str, str]:
+    """
+    Resolve action path and return a dictionary with full_file_path and function_name
+    
+    Args:
+        path: Action path as string (either "path:function" or just "function")
+        kit_path: Base kit path
+        
+    Returns:
+        Dict with full_file_path and function_name
+    """
+    if ":" in path:
+        # Traditional format: path:function
+        action_file_path, func_name = path.split(":")
+        full_file_path = str(kit_path / "actions" / f"{action_file_path}.py")
+    else:
+        # New format: just function name, look in __init__.py
+        func_name = path
+        full_file_path = str(kit_path / "actions" / "__init__.py")
+        
+    return {
+        "full_file_path": full_file_path,
+        "function_name": func_name
+    }
 
 
 class KitError(Exception):
@@ -381,14 +448,19 @@ class KitService:
         for owner_dir in self.base_path.iterdir():
             if owner_dir.is_dir():
                 # Iterate through kit directories
+                logger.debug(f"Checking owner directory: {owner_dir}")
                 for kit_dir in owner_dir.iterdir():
                     if kit_dir.is_dir():
                         # Iterate through version directories
+                        logger.debug(f"Checking kit directory: {kit_dir}")
                         for version_dir in kit_dir.iterdir():
+                            logger.debug(f"Checking version directory: {version_dir}")
                             if version_dir.is_dir():
                                 metadata = self._get_metadata(version_dir)
                                 if metadata:
                                     kits.append(metadata)
+
+        logger.debug(f"Found {kits} kits")
 
         if sort_by_name:
             kits.sort(key=lambda x: (x.name, x.version))
@@ -522,12 +594,13 @@ class KitService:
 
 
 
-    def save_kit(self, kit_data: BinaryIO) -> KitMetadata:
+    def save_kit(self, kit_data: BinaryIO, allow_overwrite: bool = True) -> KitMetadata:
         """
         Save a new kit version by extracting it and reading kit.yaml
         
         Args:
             kit_data: Kit file data (tar.gz or zip format)
+            allow_overwrite: If True, allows overwriting existing versions
                 
         Returns:
             KitMetadata: Metadata of saved kit
@@ -535,27 +608,38 @@ class KitService:
         Raises:
             KitError: If kit.yaml is missing or invalid
             InvalidVersionError: If version format is invalid
-            VersionExistsError: If version already exists
+            VersionExistsError: If version already exists and allow_overwrite is False
         """
         # Create temporary directory to extract and inspect kit
         temp_dir = Path(tempfile.mkdtemp())
+        extraction_dir = Path(tempfile.mkdtemp())  # Temporary directory for initial extraction
         try:
-            # Extract to temp directory first
-            try:
-                # First try as tar.gz (default format in new API)
-                import tarfile
-                with tarfile.open(fileobj=kit_data, mode="r:gz") as tar:
-                    tar.extractall(temp_dir)
-            except tarfile.ReadError:
-                # If that fails, reset the file pointer and try as zip
-                kit_data.seek(0)
-                self._extract_kit(kit_data, temp_dir)
-
+            import tarfile
+            # Extract to the temporary extraction directory
+            with tarfile.open(fileobj=kit_data, mode="r:gz") as tar:
+                tar.extractall(extraction_dir)
+            
+            # Get the top-level directory (assuming there's only one)
+            top_dirs = list(extraction_dir.iterdir())
+            if len(top_dirs) == 1 and top_dirs[0].is_dir():
+                # Move contents from the top-level directory to our actual temp_dir
+                for item in top_dirs[0].iterdir():
+                    if item.is_dir():
+                        shutil.copytree(item, temp_dir / item.name)
+                    else:
+                        shutil.copy2(item, temp_dir)
+            else:
+                # Fallback if our assumption is wrong
+                for item in extraction_dir.iterdir():
+                    if item.is_dir():
+                        shutil.copytree(item, temp_dir / item.name)
+                    else:
+                        shutil.copy2(item, temp_dir)
+            
             # Read kit.yaml
             kit_path = temp_dir / "kit.yaml"
             if not kit_path.exists():
                 raise KitError("kit.yaml not found in kit root")
-
             with open(kit_path) as f:
                 try:
                     data = yaml.safe_load(f)
@@ -564,21 +648,22 @@ class KitService:
                     version = data.get("version")
                 except Exception as e:
                     raise KitError(f"Invalid kit.yaml: {str(e)}")
-
             if not all([owner, kit_id, version]):
                 raise KitError("Missing required fields in kit.yaml: owner, id, version")
-
             if not self.validate_semantic_version(version):
                 raise InvalidVersionError(f"Invalid version format: {version}")
-
+            
             # Get final kit path
             kit_path = self.get_kit_path(owner, kit_id, version)
-
             if kit_path.exists():
-                raise VersionExistsError(
-                    f"Version {version} already exists for {owner}/{kit_id}"
-                )
-
+                if allow_overwrite:
+                    # Remove existing version if overwrite is allowed
+                    shutil.rmtree(kit_path)
+                else:
+                    raise VersionExistsError(
+                        f"Version {version} already exists for {owner}/{kit_id}"
+                    )
+            
             # Move from temp to final location
             kit_path.mkdir(parents=True, exist_ok=True)
             for item in temp_dir.iterdir():
@@ -586,7 +671,7 @@ class KitService:
                     shutil.copytree(item, kit_path / item.name, dirs_exist_ok=True)
                 else:
                     shutil.copy2(item, kit_path)
-
+            
             # Get metadata
             stats = kit_path.stat()
             metadata = KitMetadata(
@@ -599,15 +684,11 @@ class KitService:
                 kit_id=kit_id,
                 environment=data.get('environment', [])
             )
-
             return metadata
-
         finally:
-            # Clean up temp directory
+            # Clean up temp directories
             shutil.rmtree(temp_dir, ignore_errors=True)
-
-
-
+            shutil.rmtree(extraction_dir, ignore_errors=True)
 
 
     def get_registry_kits(self) -> List[Dict[str, Any]]:
@@ -709,6 +790,8 @@ class KitService:
         """
         if not (base_url := os.getenv('REGISTRY_URL')):
             raise KitError("REGISTRY_URL environment variable not set")
+        
+        logger.info(f"Installing kit {owner}/{kit_id} version {version} from registry")
             
         # If version is not provided, get all versions and use latest
         if not version:
@@ -750,6 +833,7 @@ class KitService:
                 
                 response_data = response.json()
                 download_url = response_data.get("downloadUrl")
+
                 # Try alternate field name if not found
                 if not download_url:
                     download_url = response_data.get("downloadURL")

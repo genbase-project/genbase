@@ -85,7 +85,7 @@ class KitRouter:
     def __init__(
         self,
         kit_service: KitService,
-        prefix: str = "/kits"
+        prefix: str = "/kit"
     ):
         """
         Initialize kit router

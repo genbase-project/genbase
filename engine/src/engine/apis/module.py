@@ -12,8 +12,7 @@ from engine.services.core.api_key import ApiKeyService
 from engine.services.core.module import (
     ModuleError,
     ModuleMetadata,
-    ModuleService,
-    RelationType,
+    ModuleService
 )
 from loguru import logger
 
@@ -132,11 +131,6 @@ class ModuleResponse(BaseModel):
             path=metadata.path
         )
 
-class CreateRelationRequest(BaseModel):
-    source_id: str
-    target_id: str
-    relation_type: RelationType
-    description: Optional[str] = None  # New optional field
 
 
 class ModuleGraphResponse(BaseModel):
@@ -265,45 +259,7 @@ class ModuleRouter:
         except ModuleError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    async def _create_relation(self, request: CreateRelationRequest):
-        """Create module relation"""
-        try:
-            self.service.create_relation(
-                source_id=request.source_id,
-                target_id=request.target_id,
-                relation_type=request.relation_type,
-                description=request.description
-            )
-            return JSONResponse(
-                content={
-                    "status": "success",
-                    "message": "Relation created successfully"
-                }
-            )
-        except ModuleError as e:
-            raise HTTPException(status_code=400, detail=str(e))
 
-    async def _delete_relation(
-        self,
-        source_id: str,
-        target_id: str,
-        relation_type: RelationType
-    ):
-        """Delete module relation"""
-        try:
-            self.service.delete_relation(
-                source_id=source_id,
-                target_id=target_id,
-                relation_type=relation_type
-            )
-            return JSONResponse(
-                content={
-                    "status": "success",
-                    "message": "Relation deleted successfully"
-                }
-            )
-        except ModuleError as e:
-            raise HTTPException(status_code=400, detail=str(e))
 
     async def get_module_graph(self):
         """Get module relationship graph"""
@@ -355,34 +311,7 @@ class ModuleRouter:
         except ModuleError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    async def _get_linked_modules(
-        self,
-        module_id: str,
-        relation_type: Optional[RelationType] = None
-    ):
-        """Get modules linked to the specified module"""
-        try:
-            modules = self.service.get_linked_modules(
-                module_id=module_id,
-                relation_type=relation_type
-            )
-            return [ModuleResponse.from_metadata(m) for m in modules]
-        except ModuleError as e:
-            raise HTTPException(status_code=400, detail=str(e))
 
-    async def get_module_connections(self, module_id: str):
-        """Get modules with connection relation (bi-directional)"""
-        return await self._get_linked_modules(
-            module_id=module_id,
-            relation_type=RelationType.CONNECTION
-        )
-
-    async def get_module_context(self, module_id: str):
-        """Get modules with context relation (bi-directional)"""
-        return await self._get_linked_modules(
-            module_id=module_id,
-            relation_type=RelationType.CONTEXT
-        )
 
 
 
@@ -414,33 +343,6 @@ class ModuleRouter:
                 new_name=request.name
             )
             return ModuleResponse.from_metadata(metadata)
-        except ModuleError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-
-
-
-    async def _update_relation_description(
-        self,
-        source_id: str,
-        target_id: str,
-        relation_type: RelationType,
-        request: UpdateRelationDescriptionRequest
-    ):
-        """Update relation description"""
-        try:
-            self.service.update_relation_description(
-                source_id=source_id,
-                target_id=target_id,
-                relation_type=relation_type,
-                new_description=request.description
-            )
-            return JSONResponse(
-                content={
-                    "status": "success",
-                    "message": "Relation description updated successfully"
-                }
-            )
         except ModuleError as e:
             raise HTTPException(status_code=400, detail=str(e))
 

@@ -16,7 +16,7 @@ class AgentState(Enum):
     EXECUTING = "EXECUTING"
 
 class InvalidTransition(Exception):
-    """Exception for invalid stage/state transitions"""
+    """Exception for invalid state transitions"""
     pass
 
 class StateService:
@@ -25,11 +25,10 @@ class StateService:
 
 
     def initialize_module(self, module_id: str):
-        """Set up initial stage and state for new module"""
+        """Set up initial state for new module"""
         with self._get_db() as db:
             status = AgentStatus(
                 module_id=module_id,
-                stage="INITIALIZE",
                 state=AgentState.STANDBY.value,
                 last_updated=datetime.now(UTC)
             )
@@ -37,7 +36,7 @@ class StateService:
             db.commit()
 
     def get_status(self, module_id: str) -> tuple[Any, AgentState]:
-        """Get current stage and state"""
+        """Get current state"""
         with self._get_db() as db:
             stmt = select(AgentStatus).where(AgentStatus.module_id == module_id)
             status = db.execute(stmt).scalar_one_or_none()
@@ -45,9 +44,9 @@ class StateService:
             if status is None:
                 # Initialize if not exists
                 self.initialize_module(module_id)
-                return "INITIALIZE", AgentState.STANDBY
+                return AgentState.STANDBY
 
-            return "INITIALIZE", AgentState(status.state)
+            return AgentState(status.state)
 
 
     def set_executing(self, module_id: str):

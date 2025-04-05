@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum, auto
+from functools import wraps
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, TypedDict, Union, final
 import json
@@ -24,7 +25,7 @@ from engine.services.execution.profile import (
     ActionInfo
 )
 from engine.services.agents.chat_history import ChatHistoryManager
-from engine.services.core.module import ModuleService, RelationType
+from engine.services.core.module import ModuleService
 from engine.services.execution.profile_store import ProfileStoreInfo, ProfileStoreRecord, ProfileStoreService
 from engine.services.storage.repository import RepoService
 from engine.services.agents.agent_utils import AgentUtils
@@ -130,7 +131,6 @@ class BaseAgent(ABC):
     async def set_context(
         self,
         agent_instructions: str = None,
-        internal_actions: Optional[Dict[str, Callable]] = None,
         include: IncludeOptions = IncludeOptions(
             provided_actions=False,
             elements="all",
@@ -161,6 +161,8 @@ class BaseAgent(ABC):
             self.context.profile,
             with_provided=include.provided_actions
         )
+
+        internal_actions = collect_actions(self)
 
         # Clear existing custom actions if we're passed new ones
         logger.info(f"Setting context with internal actions: {internal_actions}")
@@ -574,3 +576,54 @@ class BaseAgent(ABC):
     ) -> Dict[str, Any]:
         """Process a profile request"""
         pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def action(func):
+    """
+    Simple decorator to mark methods as agent actions.
+    The method name becomes the action name, and the docstring becomes the description.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    
+    # Just mark this method as an action
+    wrapper._is_action = True
+    return wrapper
+
+
+def collect_actions(instance) -> Dict[str, Callable]:
+    """
+    Collect all methods marked as actions from an instance
+    
+    Returns:
+        Dictionary mapping action names to method references
+    """
+    actions = {}
+    
+    # Iterate through all attributes of the instance
+    for attr_name in dir(instance):
+        if attr_name.startswith('__'):
+            continue
+            
+        attr = getattr(instance, attr_name)
+        
+        # Check if this is a marked action
+        if callable(attr) and hasattr(attr, '_is_action'):
+            # Use method name as action name
+            actions[attr_name] = attr
+    
+    return actions

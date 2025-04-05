@@ -82,27 +82,52 @@ class ActionService:
             # Read the source code
             with open(full_path, 'r') as f:
                 source = f.read()
+                logger.debug(f"Source code: {source}")
 
             # Parse using AST
             tree = ast.parse(source)
             parser = FunctionParser(function_name)
             parser.visit(tree)
 
-            if not parser.found:
-                raise ActionError(f"Function {function_name} not found in {file_path}")
-
-            return FunctionMetadata(
-                name=function_name,
-                description=parser.description,
-                parameters=parser.parameters,
-                is_async=parser.is_async
-            )
+            if parser.found:
+                # Function was found directly in this file
+                return FunctionMetadata(
+                    name=function_name,
+                    description=parser.description,
+                    parameters=parser.parameters,
+                    is_async=parser.is_async
+                )
+                
+            # Function not found, check for imports
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and any(name.name == function_name for name in node.names):
+                    # Found an import for our function
+                    module_name = node.module
+                    if module_name and module_name.startswith('.'):
+                        # Relative import, resolve the path
+                        current_dir = Path(file_path).parent
+                        # Remove the leading dots and convert to path
+                        rel_path = module_name.lstrip('.')
+                        if rel_path:
+                            # There's a module name after the dots
+                            target_file = current_dir / f"{rel_path}.py"
+                        else:
+                            # Just dots, referring to the package/directory
+                            target_file = current_dir / "__init__.py"
+                    else:
+                        # Absolute import, assuming it's within the folder_path
+                        target_file = Path(module_name.replace('.', '/') + '.py')
+                    
+                    logger.info(f"Function {function_name} imported from {target_file}")
+                    return self.get_function_metadata(folder_path, str(target_file), function_name)
+                    
+            # If we get here, the function wasn't found and wasn't imported
+            raise ActionError(f"Function {function_name} not found in {file_path}")
 
         except Exception as e:
             logger.error(f"Error analyzing function: {str(e)}")
             raise ActionError(f"Error analyzing function: {str(e)}")
-
-
+    
 
     def _get_cache_tag(self, base_image: str, requirements: List[str]) -> str:
         """Generate a unique tag for caching based on base image and requirements"""
@@ -391,6 +416,96 @@ except Exception as e:
         except Exception as e:
             raise ActionError(f"Error executing function: {str(e)}")
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def resolve_function_location(
+        self,
+        folder_path: str,
+        file_path: str,
+        function_name: str
+    ) -> str:
+        """
+        Resolve the actual file path where a function is defined.
+        
+        Args:
+            folder_path: Base folder path
+            file_path: Path to the file where the function is requested
+            function_name: Name of the function to resolve
+            
+        Returns:
+            str: Path to the file where the function is actually defined
+        """
+        logger.info(f"Resolving location for function {function_name} in {file_path}")
+        
+        try:
+            full_path = Path(folder_path) / file_path
+            logger.debug(f"Full path: {full_path}")
+
+            # Read the source code
+            with open(full_path, 'r') as f:
+                source = f.read()
+                logger.debug(f"Source code: {source}")
+
+            # Parse using AST
+            tree = ast.parse(source)
+            parser = FunctionParser(function_name)
+            parser.visit(tree)
+
+            if parser.found:
+                # Function was found directly in this file
+                logger.info(f"Function {function_name} defined directly in {file_path}")
+                return file_path
+                
+            # Function not found, check for imports
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and any(name.name == function_name for name in node.names):
+                    # Found an import for our function
+                    module_name = node.module
+                    if module_name and module_name.startswith('.'):
+                        # Relative import, resolve the path
+                        current_dir = Path(file_path).parent
+                        # Remove the leading dots and convert to path
+                        rel_path = module_name.lstrip('.')
+                        if rel_path:
+                            # There's a module name after the dots
+                            target_file = current_dir / f"{rel_path}.py"
+                        else:
+                            # Just dots, referring to the package/directory
+                            target_file = current_dir / "__init__.py"
+                    else:
+                        # Absolute import, assuming it's within the folder_path
+                        target_file = Path(module_name.replace('.', '/') + '.py')
+                    
+                    target_file_str = str(target_file)
+                    logger.info(f"Function {function_name} imported from {target_file_str}")
+                    # Recursively find the actual file
+                    return self.resolve_function_location(folder_path, target_file_str, function_name)
+                    
+            # If we get here, the function wasn't found and wasn't imported
+            raise ActionError(f"Function {function_name} not found in {file_path}")
+
+        except Exception as e:
+            logger.error(f"Error resolving function location: {str(e)}")
+            raise ActionError(f"Error resolving function location: {str(e)}")
+        
+
+
     def execute_function(
             self,
             folder_path: str,
@@ -407,7 +522,8 @@ except Exception as e:
         try:
             # Get or create cached image
             image_tag = self._prepare_image(base_image, requirements)
-            
+            file_path = self.resolve_function_location(folder_path, file_path, function_name)
+
             # Convert to absolute paths
             repo_path = Path(self.repo_service.get_repo_path(repo_name)).resolve()
             actions_path = Path(folder_path).resolve()

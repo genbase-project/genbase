@@ -55,16 +55,6 @@ class Module(Base):
         back_populates="module",
         cascade="all, delete-orphan"
     )
-    source_relations: Mapped[List["ModuleRelation"]] = relationship(
-        back_populates="source_module",
-        foreign_keys="ModuleRelation.source_id",
-        cascade="all, delete-orphan"
-    )
-    target_relations: Mapped[List["ModuleRelation"]] = relationship(
-        back_populates="target_module",
-        foreign_keys="ModuleRelation.target_id",
-        cascade="all, delete-orphan"
-    )
     # Add agent_status relationship with cascade
     agent_status: Mapped["AgentStatus"] = relationship(
         back_populates="module",
@@ -247,30 +237,6 @@ class ProjectModuleMapping(Base):
     module: Mapped[Module] = relationship(back_populates="project_mappings")
     project: Mapped["Project"] = relationship(back_populates="module_mappings")
 
-class ModuleRelation(Base):
-    __tablename__ = "module_relations"
-    
-    source_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id'), primary_key=True)
-    target_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id'), primary_key=True)
-    relation_type: Mapped[str] = mapped_column(String, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
-    # Explicitly define primary key constraint
-    __table_args__ = (
-        PrimaryKeyConstraint('source_id', 'target_id', 'relation_type', name='module_relations_pkey'),
-    )
-
-    
-    # Relationships
-    source_module: Mapped[Module] = relationship(
-        foreign_keys=[source_id],
-        back_populates="source_relations"
-    )
-    target_module: Mapped[Module] = relationship(
-        foreign_keys=[target_id],
-        back_populates="target_relations"
-    )
 
 # From projects table in project.py
 class Project(Base):
@@ -288,10 +254,6 @@ class AgentStatus(Base):
     __tablename__ = "agent_status"
     
     module_id: Mapped[str] = mapped_column(String, ForeignKey('modules.module_id', ondelete='CASCADE'), primary_key=True)
-    stage: Mapped[str] = mapped_column(
-        Enum('INITIALIZE', 'MAINTAIN', 'REMOVE', name='agent_stage'),
-        nullable=False
-    )
     state: Mapped[str] = mapped_column(
         Enum('STANDBY', 'EXECUTING', name='agent_state'),
         nullable=False

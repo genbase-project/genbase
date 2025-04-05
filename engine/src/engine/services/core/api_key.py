@@ -62,7 +62,7 @@ class ApiKeyService:
         with self._get_db() as db:
             query = select(ModuleApiKey).where(
                 ModuleApiKey.module_id == module_id,
-                ModuleApiKey.is_active == True
+                ModuleApiKey.is_active
             )
             result = db.execute(query)
             return result.scalars().first()

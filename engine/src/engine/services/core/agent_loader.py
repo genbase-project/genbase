@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Type, Optional, Union
 
 from engine.services.agents.base_agent import BaseAgent, AgentServices
-from engine.config.profile_config import ProfileConfig
+from engine.services.execution.profile_config import ProfileConfig
 from loguru import logger
 from engine.base.agents import __all__ as base_agents
 

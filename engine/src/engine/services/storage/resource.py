@@ -94,7 +94,7 @@ class ResourceService:
             raise ResourceError(str(e))
 
 
-    def get_provided_instruction_resources(self, module_id: str) -> List[Resource]:
+    def get_provided_instruction_resources(self, module_id: str, ) -> List[Resource]:
         """Get specification resources"""
         try:
             # Get kit config with full paths populated
@@ -120,28 +120,4 @@ class ResourceService:
 
         except (ModuleError, ResourceError) as e:
             raise ResourceError(str(e))
-            
-    def _get_recent_chat_history(self, module_id: str, db: Session, limit: int = 10) -> str:
-        """Get recent chat history across all profiles"""
-        try:
-            messages = (
-                db.query(ChatHistory)
-                .filter(ChatHistory.module_id == module_id)
-                .order_by(desc(ChatHistory.timestamp))
-                .limit(limit)
-                .all()
-            )
-            
-            # Format chat history
-            formatted_messages = []
-            for msg in reversed(messages):  # Show in chronological order
-                formatted_messages.append(
-                    f"[{msg.timestamp.strftime('%Y-%m-%d %H:%M:%S')} - {msg.profile}]\n"
-                    f"{msg.role}: {msg.content}\n"
-                )
-                
-            return "\n".join(formatted_messages)
-        except Exception as e:
-            logger.warning(f"Error getting chat history: {str(e)}")
-            return ""
-            
+   

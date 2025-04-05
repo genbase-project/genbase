@@ -1,3 +1,4 @@
+import os
 import uuid
 from typing import Optional
 
@@ -14,7 +15,7 @@ from engine.db.models import User
 from engine.db.session import get_db, get_user_db
 
 
-SECRET = "SECRET"
+SECRET = os.environ.get("AUTH_SECRET")
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):

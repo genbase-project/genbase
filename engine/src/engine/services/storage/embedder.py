@@ -216,22 +216,21 @@ class EmbeddingService:
         return bool(os.environ.get(config["env_var"]))
 
 # Example usage:
-"""
-embedding_service = EmbeddingService()
 
-# Check available models
-available_models = embedding_service.get_available_models()
-print("Available models:", available_models)
+# embedding_service = EmbeddingService()
 
-# Set a specific model
-embedding_service.set_model("text-embedding-3-small")
+# # Check available models
+# available_models = embedding_service.get_available_models()
+# print("Available models:", available_models)
 
-# Get embeddings
-async def get_embeddings():
-    response = await embedding_service.get_embedding(
-        input=["Hello world", "Another text"],
-        dimensions=1024,  # Optional for some models
-        user="user123"    # Optional
-    )
-    print(response)
-"""
+# # Set a specific model
+# embedding_service.set_model("text-embedding-3-small")
+
+# # Get embeddings
+# async def get_embeddings():
+#     response = await embedding_service.get_embedding(
+#         input=["Hello world", "Another text"],
+#         dimensions=1024,  # Optional for some models
+#         user="user123"    # Optional
+#     )
+#     print(response)

@@ -8,10 +8,10 @@ from engine.db.models import ProvideType
 from engine.services.storage.repository import RepoService
 from engine.utils.yaml import YAMLUtils
 from pydantic import BaseModel
-from engine.services.core.kit import KitConfig, KitService
+from engine.services.core.kit import InstructionItem, KitConfig, KitService
 
 from engine.services.execution.action import ActionError, ActionService, FunctionMetadata
-from engine.services.core.module import ModuleError, ModuleService, RelationType
+from engine.services.core.module import ModuleError, ModuleService
 from engine.services.storage.resource import ResourceService
 from loguru import logger
 from engine.services.core.kit import ProfileAction
@@ -38,7 +38,7 @@ class FullProfileAction(BaseModel):
 
 class ProfileMetadataResult(BaseModel):
     """Pydantic model for complete profile metadata response"""
-    instructions: str
+    instructions: List[InstructionItem]
     actions: List[FullProfileAction]
     requirements: List[str]
 
@@ -124,15 +124,24 @@ class ProfileService:
             actions_metadata: List[FullProfileAction] = []
             for action in profile_data.actions:
                 try:
+                    # Parse the path to determine file path and function name
+                    if ":" in action.path:
+                        # Traditional format: path:function
+                        module_name, function_name = action.path.split(":")
+                        file_path = f"{module_name}.py"
+                    else:
+                        # New format: just function name
+                        function_name = action.path
+                        file_path = "__init__.py"
+                    
                     # Extract file info from pre-resolved paths
                     actions_dir = str(Path(action.full_file_path).parent)
-                    file_path = Path(action.full_file_path).name
                     
                     # Get function metadata
                     metadata: FunctionMetadata = self.action_service.get_function_metadata(
                         folder_path=actions_dir,
                         file_path=file_path,
-                        function_name=action.function_name
+                        function_name=function_name
                     )
                     actions_metadata.append(FullProfileAction(
                         action=action,
@@ -141,12 +150,10 @@ class ProfileService:
                         metadata=metadata
                     ))
 
-
                 except (ActionError, ProfileError) as e:
                     logger.error(f"Failed to get metadata for action {action.name}: {str(e)}")
-                    # Add error information but continue processing other actions
-            final_instructions = profile_data.instruction_content
 
+            instructions = profile_data.instructions
             if with_provided:
                 # Get modules
                 modules = self.module_service.get_modules_providing_to(module_id, ProvideType.ACTION)
@@ -156,29 +163,42 @@ class ProfileService:
                     logger.info(f"Getting provided instructions for module {module.module_id}")
 
                     provided_instructions = self.resource_service.get_provided_instruction_resources(module.module_id)
-                    final_instructions += "\n\nProvided Instructions from Module: " + module.module_id + "\n"
+                    
                     for resource in provided_instructions:
-                        final_instructions += f"\n\n{resource.content}"
-
-
+                        instructions.append(InstructionItem(
+                            path=resource.path,
+                            name=resource.name,
+                            content=resource.content,
+                            description=resource.description,
+                            module_id=module.module_id,
+                        ))
 
                     # add actions
                     kit_config = self.module_service.get_module_kit_config(module.module_id)
                     for action in kit_config.provide.actions:
                         logger.info(f"Getting provided action {action.name} in module {module.module_id}")
                         try:
+                            # Parse the path to determine file path and function name
+                            if ":" in action.path:
+                                # Traditional format: path:function
+                                module_name, function_name = action.path.split(":")
+                                file_path = f"{module_name}.py"
+                            else:
+                                # New format: just function name
+                                function_name = action.path
+                                file_path = "__init__.py"
+                            
                             # Extract file info from pre-resolved paths
                             actions_dir = self.kit_service.get_kit_path(kit_config.owner, kit_config.id, kit_config.version) / "actions"
-                            file_path = str(Path(action.path.split(":")[0]+".py"))
 
                             # Get function metadata
                             metadata = self.action_service.get_function_metadata(
                                 folder_path=actions_dir,
                                 file_path=file_path,
-                                function_name=action.function_name
+                                function_name=function_name
                             )
 
-                            logger.info(f"Got metadata for provided action {action.function_name} in module {module.module_id}")
+                            logger.info(f"Got metadata for provided action {function_name} in module {module.module_id}")
 
                             actions_metadata.append(FullProfileAction(
                                 action=action,
@@ -190,10 +210,8 @@ class ProfileService:
                         except (ActionError, ProfileError) as e:
                             logger.error(f"Failed to get metadata for shared action {action.name} in module {module.module_id}: {str(e)}")
 
-
-
             result = ProfileMetadataResult(
-                instructions=profile_data.instruction_content,
+                instructions=profile_data.instructions,
                 actions=actions_metadata,
                 requirements=kit_config.dependencies
             )
@@ -205,7 +223,6 @@ class ProfileService:
         except Exception as e:
             logger.error(f"Unexpected error getting profile metadata: {str(e)}")
             raise ProfileError(f"Failed to get profile metadata: {str(e)}")
-
 
     def execute_profile_action(
         self,
@@ -229,7 +246,6 @@ class ProfileService:
                     None
                 )
             else:
-
                 if action_info.profile not in kit_config.profiles:
                     raise ProfileError(f"profile '{action_info.profile}' not found")
 
@@ -243,27 +259,31 @@ class ProfileService:
                     (a for a in profile_data.actions if a.name == action_info.name), 
                     None
                 )
-
-
-
-
             
             if not action:
                 raise ProfileError(
                     f"Action '{action_info.name}' not found in profile '{action_info.profile}'"
                 )
 
-            # Extract file info from pre-resolved paths
-            actions_dir = str(module_path / "actions")
-            file_path = str(Path(action.path.split(":")[0]+".py"))
+            # Extract file info
+            if ":" in action.path:
+                # Traditional format: path:function
+                module_name, function_name = action.path.split(":")
+                file_path = f"{module_name}.py"
+            else:
+                # New format: just function name
+                function_name = action.path
+                file_path = "__init__.py"
 
-            logger.info(f"Folder Path: {actions_dir}, File Path: {file_path}, Function Name: {action.function_name}, Parameters: {parameters}, Requirements: {kit_config.dependencies}, Env Vars: {module_metadata.env_vars}, Repo Name: {module_metadata.repo_name}")
+            actions_dir = str(module_path / "actions")
+
+            logger.info(f"Folder Path: {actions_dir}, File Path: {file_path}, Function Name: {function_name}, Parameters: {parameters}, Requirements: {kit_config.dependencies}, Env Vars: {module_metadata.env_vars}, Repo Name: {module_metadata.repo_name}")
 
             # Execute function using resolved paths
             result = self.action_service.execute_function(
                 folder_path=actions_dir,
                 file_path=file_path,
-                function_name=action.function_name,
+                function_name=function_name,
                 parameters=parameters,
                 requirements=kit_config.dependencies,
                 env_vars=module_metadata.env_vars,

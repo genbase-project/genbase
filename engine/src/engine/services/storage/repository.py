@@ -150,16 +150,17 @@ class RepoService:
         """List all repositories"""
         return [d.name for d in self.base_path.iterdir() if d.is_dir()]
 
+
     def list_files(self, repo_name: str) -> List[str]:
         """
-        List all files in a repository
-        
+        List all non-hidden files in a repository, excluding the .git directory.
+
         Args:
             repo_name: Repository name
-            
+
         Returns:
-            List[str]: List of file paths
-            
+            List[str]: List of file paths relative to the repository root
+
         Raises:
             RepoNotFoundError: If repository doesn't exist
         """
@@ -169,10 +170,16 @@ class RepoService:
             raise RepoNotFoundError(f"Repository {repo_name} not found")
 
         files = []
-        for file_path in repo_path.rglob("*"):
-            if file_path.is_file() and not file_path.name.startswith('.'):
-                files.append(str(file_path.relative_to(repo_path)))
-
+        # Iterate through items in the repo_path, skipping .git explicitly
+        for item in repo_path.rglob("*"):
+            try:
+                # Check if item is within .git directory
+                if '.git' == item.relative_to(repo_path).parts[0]:
+                    continue
+                if item.is_file(): # Keep it simple for now, list all non-.git files
+                    files.append(str(item.relative_to(repo_path)))
+            except ValueError:
+                continue
         return files
 
     def delete_repository(self, repo_name: str) -> None:

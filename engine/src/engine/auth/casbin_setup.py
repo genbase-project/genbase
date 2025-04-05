@@ -50,9 +50,6 @@ def check_permission(user_id: str, obj: str, act: str) -> bool:
     """Checks if a user has permission."""
     return enforcer.enforce(user_id, obj, act)
 
-# You might want to call enforcer.load_policy() explicitly if you
-# modify policies outside the enforcer instance (e.g., directly in DB)
-# However, the adapter generally handles keeping things in sync.
 
 print(f"Casbin Enforcer initialized with model: {MODEL_PATH} and SQLAlchemy adapter.")
 

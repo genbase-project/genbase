@@ -77,10 +77,17 @@ class TaskerAgent(BaseAgent):
 
 
 
-
+            
             # Add profile-specific instructions if available
             if profile_data.instructions:
-                instructions += f"\n\n##Agent Profile Instructions:\n{profile_data.instructions}"
+                instructions += f"\n\n##Agent Profile Instructions:\n"
+                for instruction in profile_data.instructions:
+                    instructions += f"- {instruction.name}\n"
+                    if instruction.module_id != context.module_id and instruction.module_id is not None:
+                        instructions += f"Module ID: {instruction.module_id}\n"
+                    instructions += f"Description:  {instruction.description}\n"
+                    instructions += f"Content: {instruction.content}\n\n"
+
 
             # Build context with combined instructions
             system_prompt, _ = await self.set_context(

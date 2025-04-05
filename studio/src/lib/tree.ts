@@ -57,7 +57,7 @@ export function buildTreeFromModules(modules: Module[]): TreeNode[] {
     // Create module node
     const moduleNode: TreeNode = {
       id: `module-${module.module_id}`,
-      name: `${module.module_name} (${module.version})`,
+      name: `${module.module_name}`,
       isFolder: false,
       module: module
     };

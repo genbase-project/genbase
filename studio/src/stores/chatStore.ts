@@ -75,10 +75,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  // WARNING: This function sends data in a specific GIML format ('<element><responses>...').
-  // This is likely incompatible with agents interacting via standard HTML or other mechanisms.
-  // This interaction flow needs to be redesigned based on how user input from rendered elements
-  // (like HTML forms within the sandbox) should be captured and sent back to the agent.
+
   sendResponse: async (id: string, value: string) => {
     console.warn("sendResponse functionality requires redesign for the current agent interaction model.");
     const { currentModuleId, currentProfile, currentSession } = get();

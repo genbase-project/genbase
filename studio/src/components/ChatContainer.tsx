@@ -137,7 +137,7 @@ const ChatContainer = ({ messages }: ChatContainerProps) => {
         const format = props.format?.toLowerCase();
 
         const getTextContent = (children: React.ReactNode): string => {
-          return React.Children.toArray(children).map((child: { props: { children: any; }; }) => {
+          return React.Children.toArray(children).map((child) => {
             if (typeof child === 'string') return child;
             if (React.isValidElement(child) && child.props.children) {
               return getTextContent(child.props.children);

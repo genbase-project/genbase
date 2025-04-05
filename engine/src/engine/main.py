@@ -3,7 +3,7 @@ import logging
 import time
 import traceback
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 import secrets
 from base64 import b64decode
 
@@ -14,10 +14,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from loguru import logger
+from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from engine.apis.action import ActionRouter
-# from engine.apis.agent import AgentRouter
 
 # Import routers
 from engine.apis.chat import ChatRouter
@@ -33,6 +33,8 @@ from engine.apis.profile import ProfileRouter
 from engine.auth.schemas import UserCreate, UserRead, UserUpdate
 from engine.auth.superuser import create_default_superuser
 from engine.const import BASE_DATA_DIR, KIT_BASE_DIR, REPO_BASE_DIR
+from engine.db.models import User
+from engine.db.session import SessionLocal
 from engine.services.agents.base_agent import AgentServices
 from engine.services.core.api_key import ApiKeyService
 from engine.services.execution.action import ActionService
@@ -116,30 +118,28 @@ Stack Trace:
 
 
 
-def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
-    correct_username = os.getenv("ADMIN_USER")
-    correct_password = os.getenv("ADMIN_PASSWORD")
-    
-    if not secrets.compare_digest(credentials.username, correct_username) or \
-       not secrets.compare_digest(credentials.password, correct_password):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
-
 # Create FastAPI app with exception handlers
 app = FastAPI(
     title="Genbase API",
     debug=True,  # Enable debug mode for detailed error responses
-    dependencies=[Depends(current_active_user)]  # Apply basic auth to all routes
 )
 app.add_middleware(LogMiddleware)
 
 
 
 
+@app.get("/users", response_model=List[UserRead], tags=["users"], dependencies=[Depends(current_active_user)])
+async def list_users(
+    user: User = Depends(current_active_user)
+):
+    with SessionLocal() as session:
+
+
+        stmt = select(User)
+        result = session.execute(stmt)
+        all_users = result.scalars().all()
+
+        return all_users
 
 
 
@@ -215,8 +215,6 @@ app.include_router(
 
 
 
-
-
 # Create necessary directories
 BASE_DATA_DIR.mkdir(exist_ok=True)
 REPO_BASE_DIR.mkdir(exist_ok=True)
@@ -241,7 +239,7 @@ module_service = ModuleService(
     workspace_base=str(KIT_BASE_DIR),
     module_base=str(KIT_BASE_DIR),
     repo_service=repo_service,
-    stage_state_service=state_service,
+    state_service=state_service,
     kit_service=kit_service
 )
 
@@ -272,7 +270,8 @@ profile_service = ProfileService(
 # Initialize routers
 kit_router = KitRouter(
    kit_service=kit_service,
-    prefix="/kit"
+    prefix="/kit",
+    
 )
 
 repo_router = RepositoryRouter(
@@ -329,15 +328,15 @@ llm_gateway_router = LLMGatewayRouter(
 
 
 # Include routers
-app.include_router(kit_router.router)
-app.include_router(module_router.router)
-app.include_router(repo_router.router)
-app.include_router(project_router.router)
-app.include_router(resource_router.router)  # Add resource router
-app.include_router(model_router.router)
-app.include_router(operation_router.router)
-app.include_router(profile_router.router)
-app.include_router(embedding_router.router)
+app.include_router(kit_router.router,     dependencies=[Depends(current_active_user)])
+app.include_router(module_router.router,     dependencies=[Depends(current_active_user)])
+app.include_router(repo_router.router,     dependencies=[Depends(current_active_user)])
+app.include_router(project_router.router,     dependencies=[Depends(current_active_user)])
+app.include_router(resource_router.router,     dependencies=[Depends(current_active_user)])  # Add resource router
+app.include_router(model_router.router,     dependencies=[Depends(current_active_user)])
+app.include_router(operation_router.router,     dependencies=[Depends(current_active_user)])
+app.include_router(profile_router.router,     dependencies=[Depends(current_active_user)])
+app.include_router(embedding_router.router,     dependencies=[Depends(current_active_user)])
 
 
 
@@ -362,7 +361,7 @@ chat_router = ChatRouter(
 )
 
 # Include the router
-app.include_router(chat_router.router)
+app.include_router(chat_router.router,    dependencies=[Depends(current_active_user)])
 
 # CORS middleware
 app.add_middleware(
@@ -419,7 +418,8 @@ if __name__ == "__main__":
         port=8000,
         log_level="debug",
         access_log=True,
-        reload=True
+        reload=True,
+        reload_dirs=["src"]
     )
 
     server = uvicorn.Server(uvicorn_config)

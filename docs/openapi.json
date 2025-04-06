@@ -1,0 +1,2679 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+      "title": "Genbase Engine API",
+      "version": "0.1.0",
+      "description": "API for managing and interacting with Genbase Kits, Modules, Projects, Agents, LLM Gateway, and related resources."
+    },
+    "servers": [
+      {
+        "url": "http://localhost:8000",
+        "description": "Local Development Server"
+      }
+    ],
+    "tags": [
+      {
+        "name": "action",
+        "description": "Operations related to executing Kit Actions."
+      },
+      {
+        "name": "agent",
+        "description": "Endpoints for interacting with Module Agents via Profiles."
+      },
+      {
+        "name": "embedding",
+        "description": "Operations for generating text embeddings."
+      },
+      {
+        "name": "kits",
+        "description": "Managing Kits (installation, deletion, listing, registry interaction)."
+      },
+      {
+        "name": "llm_gateway",
+        "description": "OpenAI-compatible endpoints for Modules to access LLMs (Requires Module API Key)."
+      },
+      {
+        "name": "model",
+        "description": "Managing the system's default LLM configuration."
+      },
+      {
+        "name": "module",
+        "description": "Creating, managing, and configuring Modules and their relationships/provisions."
+      },
+      {
+        "name": "profile",
+        "description": "Managing Profile interactions, sessions, and metadata."
+      },
+      {
+        "name": "project",
+        "description": "Managing Projects."
+      },
+      {
+        "name": "repository",
+        "description": "Managing Module workspace Git repositories."
+      },
+      {
+        "name": "resources",
+        "description": "Accessing specific declared resources within Modules."
+      },
+      {
+        "name": "auth",
+        "description": "User authentication operations (login, register, password management)."
+      },
+      {
+        "name": "users",
+        "description": "User management operations."
+      }
+    ],
+    "paths": {
+      "/action/metadata": {
+        "get": {
+          "tags": ["action"],
+          "summary": "Get function metadata in OpenAI schema format",
+          "operationId": "get_function_metadata_action_metadata_get",
+          "parameters": [
+            { "$ref": "#/components/parameters/FolderPath" },
+            { "$ref": "#/components/parameters/RelativeFilePath" },
+            { "$ref": "#/components/parameters/FunctionName" }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/OpenAIFunctionSchema" }
+                }
+              }
+            },
+            "400": { "$ref": "#/components/responses/BadRequestError" }
+          }
+        }
+      },
+      "/action/execute": {
+        "post": {
+          "tags": ["action"],
+          "summary": "Execute function with optional environment variables",
+          "operationId": "execute_function_action_execute_post",
+          "parameters": [
+             { "$ref": "#/components/parameters/FolderPath" },
+             { "$ref": "#/components/parameters/RelativeFilePath" },
+             { "$ref": "#/components/parameters/FunctionName" }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ExecuteFunctionRequest" }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "result": {}
+                    }
+                  }
+                }
+              }
+            },
+            "400": { "$ref": "#/components/responses/BadRequestError" }
+          }
+        }
+      },
+      "/chat/{module_id}/execute": {
+        "post": {
+          "tags": ["agent"],
+          "summary": "Execute Profile",
+          "operationId": "execute_profile_chat__module_id__execute_post",
+          "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProfileExecuteRequest" }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/ProfileResponse" }
+                }
+              }
+            },
+            "400": { "$ref": "#/components/responses/BadRequestError" },
+            "500": { "$ref": "#/components/responses/InternalServerError" }
+          }
+        }
+      },
+      "/chat/{module_id}/profile/{profile}/history": {
+        "get": {
+          "tags": ["agent"],
+          "summary": "Get Profile History",
+          "operationId": "get_profile_history_chat__module_id__profile__profile__history_get",
+          "parameters": [
+            { "$ref": "#/components/parameters/ModuleIdPath" },
+            { "$ref": "#/components/parameters/ProfilePath" },
+            { "$ref": "#/components/parameters/SessionIdQuery" }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/HistoryResponse" }
+                }
+              }
+            },
+            "400": { "$ref": "#/components/responses/BadRequestError" },
+            "500": { "$ref": "#/components/responses/InternalServerError" }
+          }
+        }
+      },
+      "/chat/{module_id}/status": {
+        "get": {
+          "tags": ["agent"],
+          "summary": "Get Module Status",
+          "operationId": "get_status_chat__module_id__status_get",
+          "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/StatusResponse" }
+                }
+              }
+            },
+            "400": { "$ref": "#/components/responses/BadRequestError" },
+            "500": { "$ref": "#/components/responses/InternalServerError" }
+          }
+        }
+      },
+       "/embedding/generate": {
+         "post": {
+           "tags": ["embedding"],
+           "summary": "Generate Embeddings",
+           "operationId": "get_embedding_embedding_generate_post",
+           "requestBody": {
+             "required": true,
+             "content": {
+               "application/json": {
+                 "schema": { "$ref": "#/components/schemas/EmbeddingRequest" }
+               }
+             }
+           },
+           "responses": {
+             "200": {
+               "description": "Successful Response",
+               "content": {
+                 "application/json": {
+                   "schema": { "$ref": "#/components/schemas/EmbeddingResponse" }
+                 }
+               }
+             },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+       },
+       "/embedding/set": {
+         "post": {
+           "tags": ["embedding"],
+           "summary": "Set Default Embedding Model",
+           "operationId": "set_model_embedding_set_post",
+           "requestBody": {
+             "required": true,
+             "content": {
+               "application/json": {
+                 "schema": { "$ref": "#/components/schemas/SetEmbeddingModelRequest" }
+               }
+             }
+           },
+           "responses": {
+             "200": { "$ref": "#/components/responses/ModelNameResponse" },
+             "400": { "$ref": "#/components/responses/BadRequestError" }
+           }
+         }
+       },
+       "/embedding/list": {
+         "get": {
+           "tags": ["embedding"],
+           "summary": "List Available Embedding Models",
+           "operationId": "list_models_embedding_list_get",
+           "responses": {
+             "200": { "$ref": "#/components/responses/AvailableModelsResponse" },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+       },
+       "/embedding/current": {
+         "get": {
+           "tags": ["embedding"],
+           "summary": "Get Current Default Embedding Model",
+           "operationId": "get_current_model_embedding_current_get",
+           "responses": {
+             "200": { "$ref": "#/components/responses/ModelNameResponse" },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+       },
+       "/embedding/verify": {
+         "post": {
+           "tags": ["embedding"],
+           "summary": "Verify Embedding Provider API Key",
+           "operationId": "verify_api_key_embedding_verify_post",
+           "requestBody": {
+             "required": true,
+             "content": {
+               "application/json": {
+                 "schema": { "$ref": "#/components/schemas/VerifyAPIKeyRequest" }
+               }
+             }
+           },
+           "responses": {
+             "200": {
+               "description": "Successful Response",
+               "content": {
+                 "application/json": {
+                   "schema": {"type": "object", "properties": {"is_valid": {"type": "boolean"}}}
+                 }
+               }
+             },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+       },
+      "/kit/": {
+        "post": {
+          "tags": ["kits"],
+          "summary": "Upload kit",
+          "operationId": "upload_kit_kit__post",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kit_file": {
+                      "type": "string",
+                      "format": "binary",
+                      "description": "The kit package (.tar.gz)"
+                    }
+                  },
+                   "required": ["kit_file"]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": { "$ref": "#/components/responses/KitUploadSuccessResponse" },
+            "400": { "$ref": "#/components/responses/BadRequestError" },
+            "500": { "$ref": "#/components/responses/InternalServerError" }
+          }
+        },
+         "get": {
+           "tags": ["kits"],
+           "summary": "List all kits",
+           "operationId": "list_kits_kit__get",
+           "responses": {
+             "200": {
+               "description": "Successful Response",
+               "content": {
+                 "application/json": {
+                   "schema": { "$ref": "#/components/schemas/KitListResponse" }
+                 }
+               }
+             },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+      },
+      "/kit/upload": {
+          "post": {
+              "tags": ["kits"],
+              "summary": "Upload and install kit from tar.gz file",
+              "operationId": "upload_install_kit_kit_upload_post",
+               "requestBody": {
+                  "required": true,
+                  "content": {
+                      "multipart/form-data": {
+                      "schema": {
+                          "type": "object",
+                          "properties": {
+                          "kit_file": {
+                              "type": "string",
+                              "format": "binary",
+                              "description": "The kit package (.tar.gz)"
+                          }
+                          },
+                          "required": ["kit_file"]
+                      }
+                      }
+                  }
+              },
+              "responses": {
+                "200": { "$ref": "#/components/responses/KitUploadSuccessResponse" },
+                "400": { "$ref": "#/components/responses/BadRequestError" },
+                "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/kit/install/{owner}/{kit_id}/{version}": {
+        "post": {
+          "tags": ["kits"],
+          "summary": "Install kit from registry with specific version",
+          "operationId": "install_kit_kit_install__owner___kit_id___version__post",
+          "parameters": [
+            { "$ref": "#/components/parameters/OwnerPath" },
+            { "$ref": "#/components/parameters/KitIdPath" },
+            { "$ref": "#/components/parameters/VersionPath" }
+          ],
+          "responses": {
+            "200": { "$ref": "#/components/responses/KitInstallSuccessResponse" },
+            "400": { "$ref": "#/components/responses/BadRequestError" },
+            "404": { "$ref": "#/components/responses/NotFoundError" },
+            "500": { "$ref": "#/components/responses/InternalServerError" }
+          }
+        }
+      },
+      "/kit/install/{owner}/{kit_id}": {
+        "post": {
+          "tags": ["kits"],
+          "summary": "Install kit from registry with latest version",
+          "operationId": "install_kit_latest_kit_install__owner___kit_id__post",
+          "parameters": [
+            { "$ref": "#/components/parameters/OwnerPath" },
+            { "$ref": "#/components/parameters/KitIdPath" }
+          ],
+          "responses": {
+            "200": { "$ref": "#/components/responses/KitInstallSuccessResponse" },
+            "400": { "$ref": "#/components/responses/BadRequestError" },
+            "404": { "$ref": "#/components/responses/NotFoundError" },
+            "500": { "$ref": "#/components/responses/InternalServerError" }
+          }
+        }
+      },
+      "/kit/{owner}/{kit_id}/versions": {
+        "get": {
+          "tags": ["kits"],
+          "summary": "List kit versions",
+          "operationId": "list_kit_versions_kit__owner___kit_id__versions_get",
+          "parameters": [
+            { "$ref": "#/components/parameters/OwnerPath" },
+            { "$ref": "#/components/parameters/KitIdPath" }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/KitVersionsResponse" }
+                }
+              }
+            },
+            "404": { "$ref": "#/components/responses/NotFoundError" },
+            "500": { "$ref": "#/components/responses/InternalServerError" }
+          }
+        }
+      },
+       "/kit/{owner}/{kit_id}/{version}": {
+         "delete": {
+           "tags": ["kits"],
+           "summary": "Delete kit version",
+           "operationId": "delete_kit_version_kit__owner___kit_id___version__delete",
+           "parameters": [
+             { "$ref": "#/components/parameters/OwnerPath" },
+             { "$ref": "#/components/parameters/KitIdPath" },
+             { "$ref": "#/components/parameters/VersionPath" }
+           ],
+           "responses": {
+             "200": { "$ref": "#/components/responses/SuccessMessageResponse" },
+             "400": { "$ref": "#/components/responses/BadRequestError" },
+             "404": { "$ref": "#/components/responses/NotFoundError" },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+       },
+       "/kit/{owner}/{kit_id}": {
+         "delete": {
+           "tags": ["kits"],
+           "summary": "Delete kit",
+           "operationId": "delete_kit_kit__owner___kit_id__delete",
+           "parameters": [
+             { "$ref": "#/components/parameters/OwnerPath" },
+             { "$ref": "#/components/parameters/KitIdPath" }
+           ],
+           "responses": {
+             "200": { "$ref": "#/components/responses/SuccessMessageResponse" },
+             "404": { "$ref": "#/components/responses/NotFoundError" },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+       },
+      "/kit/registry": {
+        "get": {
+          "tags": ["kits"],
+          "summary": "Get all kits from registry",
+          "operationId": "get_registry_kits_kit_registry_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/RegistryKitsResponse" }
+                }
+              }
+            },
+            "500": { "$ref": "#/components/responses/InternalServerError" },
+            "503": { "$ref": "#/components/responses/RegistryError" }
+          }
+        }
+      },
+       "/kit/registry/config/{owner}/{kit_id}/{version}": {
+         "get": {
+           "tags": ["kits"],
+           "summary": "Get kit configuration (kit.yaml contents)",
+           "operationId": "get_kit_config_kit_registry_config__owner___kit_id___version__get",
+           "parameters": [
+             { "$ref": "#/components/parameters/OwnerPath" },
+             { "$ref": "#/components/parameters/KitIdPath" },
+             { "$ref": "#/components/parameters/VersionPath" }
+           ],
+           "responses": {
+             "200": {
+               "description": "Successful Response - Kit Config YAML content as JSON",
+               "content": {
+                 "application/json": {
+                   "schema": { "type": "object" }
+                 }
+               }
+             },
+             "404": { "$ref": "#/components/responses/NotFoundError" },
+             "500": { "$ref": "#/components/responses/InternalServerError" },
+             "503": { "$ref": "#/components/responses/RegistryError" }
+           }
+         }
+       },
+       "/kit/registry/versions/{owner}/{kit_id}": {
+         "get": {
+           "tags": ["kits"],
+           "summary": "Get available versions of a kit from registry",
+           "operationId": "get_registry_kit_versions_kit_registry_versions__owner___kit_id__get",
+           "parameters": [
+             { "$ref": "#/components/parameters/OwnerPath" },
+             { "$ref": "#/components/parameters/KitIdPath" }
+           ],
+           "responses": {
+             "200": {
+               "description": "Successful Response",
+               "content": {
+                 "application/json": {
+                   "schema": {
+                     "type": "object",
+                     "properties": {
+                       "versions": {
+                         "type": "array",
+                         "items": { "type": "string" }
+                       }
+                     }
+                   }
+                 }
+               }
+             },
+             "404": { "$ref": "#/components/responses/NotFoundError" },
+             "500": { "$ref": "#/components/responses/InternalServerError" },
+             "503": { "$ref": "#/components/responses/RegistryError" }
+           }
+         }
+       },
+       "/gateway/chat/completions": {
+          "post": {
+              "tags": ["llm_gateway"],
+              "summary": "OpenAI Compatible Chat Completion",
+              "operationId": "handle_chat_completion_gateway_chat_completions_post",
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/OpenAIChatCompletionRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                  "200": {
+                      "description": "Successful Response (Streaming or JSON)",
+                      "content": {
+                          "application/json": {
+                               "schema": { "$ref": "#/components/schemas/OpenAIChatCompletionResponse" }
+                          },
+                           "text/event-stream": {
+                               "schema": {
+                                   "type": "string",
+                                   "description": "Server-Sent Events stream"
+                               }
+                           }
+                      }
+                  },
+                  "401": { "$ref": "#/components/responses/UnauthorizedError" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              },
+              "security": [ { "ModuleAPIKey": [] } ]
+          }
+      },
+      "/gateway/completions": {
+          "post": {
+              "tags": ["llm_gateway"],
+              "summary": "OpenAI Compatible Completion (Legacy)",
+              "operationId": "handle_completion_gateway_completions_post",
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/OpenAICompletionRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                   "200": {
+                      "description": "Successful Response (Streaming or JSON, mapped from Chat)",
+                       "content": {
+                          "application/json": {
+                               "schema": { "$ref": "#/components/schemas/OpenAIChatCompletionResponse" }
+                          },
+                           "text/event-stream": {
+                               "schema": {
+                                   "type": "string",
+                                   "description": "Server-Sent Events stream (from Chat)"
+                               }
+                           }
+                      }
+                  },
+                  "401": { "$ref": "#/components/responses/UnauthorizedError" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              },
+              "security": [ { "ModuleAPIKey": [] } ]
+          }
+      },
+      "/gateway/models": {
+          "get": {
+              "tags": ["llm_gateway"],
+              "summary": "OpenAI Compatible Model List",
+              "operationId": "list_models_gateway_models_get",
+              "responses": {
+                  "200": {
+                      "description": "Successful Response",
+                      "content": {
+                          "application/json": {
+                              "schema": { "$ref": "#/components/schemas/OpenAIModelList" }
+                          }
+                      }
+                  },
+                  "401": { "$ref": "#/components/responses/UnauthorizedError" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              },
+              "security": [ { "ModuleAPIKey": [] } ]
+          }
+      },
+       "/model/chat/completions": {
+         "post": {
+           "tags": ["model"],
+           "summary": "Internal Chat Completion",
+           "operationId": "chat_completion_model_chat_completions_post",
+           "requestBody": {
+             "required": true,
+             "content": {
+               "application/json": {
+                 "schema": {
+                   "type": "object",
+                   "properties": {
+                     "messages": {
+                       "type": "array",
+                       "items": { "$ref": "#/components/schemas/ChatMessage" }
+                     },
+                     "model": { "type": "string", "nullable": true },
+                     "stream": { "type": "boolean", "default": false },
+                     "tools": { "type": "array", "items": { "type": "object" }, "nullable": true},
+                     "tool_choice": { "oneOf": [ { "type": "string" }, { "type": "object" } ], "nullable": true}
+                   },
+                   "required": ["messages"]
+                 }
+               }
+             }
+           },
+           "responses": {
+             "200": { "$ref": "#/components/responses/LiteLLMChatCompletionResponse" },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+       },
+       "/model/set": {
+         "post": {
+           "tags": ["model"],
+           "summary": "Set Default LLM Model",
+           "operationId": "set_model_model_set_post",
+           "requestBody": {
+             "required": true,
+             "content": {
+               "application/json": {
+                 "schema": { "$ref": "#/components/schemas/SetModelRequest" }
+               }
+             }
+           },
+           "responses": {
+             "200": { "$ref": "#/components/responses/ModelNameResponse" },
+             "400": { "$ref": "#/components/responses/BadRequestError" }
+           }
+         }
+       },
+       "/model/list": {
+         "get": {
+           "tags": ["model"],
+           "summary": "List Available LLM Models",
+           "operationId": "list_models_model_list_get",
+           "responses": {
+             "200": { "$ref": "#/components/responses/AvailableModelsResponse" },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+       },
+       "/model/current": {
+         "get": {
+           "tags": ["model"],
+           "summary": "Get Current Default LLM Model",
+           "operationId": "get_current_model_model_current_get",
+           "responses": {
+             "200": { "$ref": "#/components/responses/ModelNameResponse" },
+             "500": { "$ref": "#/components/responses/InternalServerError" }
+           }
+         }
+       },
+       "/module/": {
+          "post": {
+              "tags": ["module"],
+              "summary": "Create module",
+              "operationId": "create_module_module__post",
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/CreateModuleRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                  "200": {
+                      "description": "Successful Response",
+                      "content": {
+                          "application/json": {
+                              "schema": { "$ref": "#/components/schemas/ModuleResponse" }
+                          }
+                      }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/module/{module_id}": {
+          "delete": {
+              "tags": ["module"],
+              "summary": "Delete module",
+              "operationId": "delete_module_module__module_id__delete",
+              "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+              "responses": {
+                  "200": { "$ref": "#/components/responses/SuccessMessageResponse" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/module/{module_id}/path": {
+          "put": {
+              "tags": ["module"],
+              "summary": "Update module path",
+              "operationId": "update_module_path_module__module_id__path_put",
+              "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/UpdateModulePathRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                  "200": { "$ref": "#/components/responses/SuccessMessageResponse" },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/module/project/{project_id}/list": {
+          "get": {
+              "tags": ["module"],
+              "summary": "Get all modules in a project",
+              "operationId": "get_project_modules_module_project__project_id__list_get",
+              "parameters": [ { "$ref": "#/components/parameters/ProjectIdPath" } ],
+              "responses": {
+                  "200": {
+                      "description": "Successful Response",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "type": "array",
+                                  "items": { "$ref": "#/components/schemas/ModuleResponse" }
+                              }
+                          }
+                      }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/module/graph": {
+          "get": {
+              "tags": ["module"],
+              "summary": "Get module graph",
+              "operationId": "get_module_graph_module_graph_get",
+              "responses": {
+                  "200": {
+                      "description": "Successful Response",
+                      "content": {
+                          "application/json": {
+                              "schema": { "$ref": "#/components/schemas/ModuleGraphResponse" }
+                          }
+                      }
+                  },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/module/{module_id}/name": {
+          "put": {
+              "tags": ["module"],
+              "summary": "Update module name",
+              "operationId": "update_module_name_module__module_id__name_put",
+              "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/UpdateModuleNameRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                  "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": { "$ref": "#/components/schemas/ModuleResponse" }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/module/{module_id}/env": {
+          "put": {
+              "tags": ["module"],
+              "summary": "Update module environment variable",
+              "operationId": "update_module_env_var_module__module_id__env_put",
+              "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/UpdateModuleEnvVarRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": { "$ref": "#/components/schemas/ModuleResponse" }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/module/{module_id}/api-key": {
+          "post": {
+              "tags": ["module"],
+              "summary": "Create or reset API key for a module",
+              "operationId": "create_or_reset_module_api_key_module__module_id__api_key_post",
+              "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+               "requestBody": {
+                   "required": false,
+                   "content": {
+                       "application/json": {
+                           "schema": { "$ref": "#/components/schemas/ApiKeyRequest" }
+                       }
+                   }
+              },
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": { "$ref": "#/components/schemas/ApiKeyResponse" }
+                         }
+                       }
+                  },
+                  "500": { "$ref": "#/components/responses/InternalServerError" },
+                  "501": { "$ref": "#/components/responses/NotImplemented" }
+              }
+          }
+      },
+      "/module/provide": {
+          "post": {
+              "tags": ["module"],
+              "summary": "Create a provide relationship between modules",
+              "operationId": "create_module_provide_module_provide_post",
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/CreateModuleProvideRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": { "$ref": "#/components/schemas/ModuleProvideResponse" }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/module/provide/{provider_id}/{receiver_id}/{resource_type}": {
+          "delete": {
+              "tags": ["module"],
+              "summary": "Delete a provide relationship",
+              "operationId": "delete_module_provide_module_provide__provider_id___receiver_id___resource_type__delete",
+              "parameters": [
+                  { "$ref": "#/components/parameters/ProviderIdPath" },
+                  { "$ref": "#/components/parameters/ReceiverIdPath" },
+                  { "$ref": "#/components/parameters/ResourceTypePath" }
+              ],
+              "responses": {
+                  "200": { "$ref": "#/components/responses/SuccessMessageResponse" },
+                  "400": { "$ref": "#/components/responses/BadRequestError" },
+                  "404": { "$ref": "#/components/responses/NotFoundError" }
+              }
+          }
+      },
+       "/module/provide/{provider_id}/{receiver_id}/{resource_type}/description": {
+          "put": {
+              "tags": ["module"],
+              "summary": "Update provide relationship description",
+              "operationId": "update_module_provide_description_module_provide__provider_id___receiver_id___resource_type__description_put",
+               "parameters": [
+                  { "$ref": "#/components/parameters/ProviderIdPath" },
+                  { "$ref": "#/components/parameters/ReceiverIdPath" },
+                  { "$ref": "#/components/parameters/ResourceTypePath" }
+              ],
+               "requestBody": {
+                   "required": true,
+                   "content": {
+                       "application/json": {
+                           "schema": { "$ref": "#/components/schemas/UpdateProvideDescriptionRequest" }
+                       }
+                   }
+               },
+              "responses": {
+                  "200": { "$ref": "#/components/responses/SuccessMessageResponse" },
+                  "400": { "$ref": "#/components/responses/BadRequestError" },
+                  "404": { "$ref": "#/components/responses/NotFoundError" }
+              }
+          }
+       },
+      "/module/{module_id}/providing": { "$ref": "#/paths/~1module~1{module_id}~1provide_query?which=providing" },
+      "/module/{module_id}/receiving": { "$ref": "#/paths/~1module~1{module_id}~1provide_query?which=receiving" },
+      "/module/{module_id}/providing/{resource_type}": { "$ref": "#/paths/~1module~1{module_id}~1provide_query_by_type?which=providing" },
+      "/module/{module_id}/receiving/{resource_type}": { "$ref": "#/paths/~1module~1{module_id}~1provide_query_by_type?which=receiving" },
+      "/module/{module_id}/with-access-to/{resource_type}": {
+          "get": {
+              "tags": ["module"],
+              "summary": "Get modules with access to this module's resources",
+              "operationId": "get_modules_with_access_to_module__module_id__with_access_to__resource_type__get",
+               "parameters": [
+                  { "$ref": "#/components/parameters/ModuleIdPath" },
+                  { "$ref": "#/components/parameters/ResourceTypePath" }
+              ],
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                            "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ModuleResponse" } }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/module/{module_id}/providers/{resource_type}": {
+          "get": {
+              "tags": ["module"],
+              "summary": "Get modules providing resources to this module",
+              "operationId": "get_modules_providing_to_module__module_id__providers__resource_type__get",
+               "parameters": [
+                  { "$ref": "#/components/parameters/ModuleIdPath" },
+                  { "$ref": "#/components/parameters/ResourceTypePath" }
+              ],
+              "responses": {
+                  "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                            "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ModuleResponse" } }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/profile/session/create": {
+          "post": {
+              "tags": ["profile"],
+              "summary": "Create a new chat session",
+              "operationId": "create_session_profile_session_create_post",
+              "parameters": [
+                  { "$ref": "#/components/parameters/ModuleIdQuery" },
+                  { "$ref": "#/components/parameters/ProfileQuery" }
+              ],
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": { "$ref": "#/components/schemas/CreateSessionResponse" }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/profile/metadata": {
+          "get": {
+              "tags": ["profile"],
+              "summary": "Get detailed metadata for a specific profile",
+              "operationId": "get_profile_metadata_profile_metadata_get",
+               "parameters": [
+                   { "$ref": "#/components/parameters/ModuleIdQuery" },
+                   { "$ref": "#/components/parameters/ProfileQuery" },
+                   { "$ref": "#/components/parameters/SessionIdQueryOptional" }
+              ],
+              "responses": {
+                   "200": {
+                       "description": "Successful Response - Profile Metadata",
+                       "content": {
+                         "application/json": {
+                           "schema": { "$ref": "#/components/schemas/ProfileMetadataResult" }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/profile/sessions": {
+          "get": {
+              "tags": ["profile"],
+              "summary": "Get all available sessions for a profile",
+              "operationId": "get_profile_sessions_profile_sessions_get",
+               "parameters": [
+                   { "$ref": "#/components/parameters/ModuleIdQuery" },
+                   { "$ref": "#/components/parameters/ProfileQuery" }
+              ],
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": {
+                             "type": "array",
+                             "items": { "$ref": "#/components/schemas/SessionInfo" }
+                           }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/profile/execute": {
+          "post": {
+              "tags": ["profile"],
+              "summary": "Execute a specific step/action in a profile",
+              "operationId": "execute_profile_action_profile_execute_post",
+               "parameters": [
+                   { "$ref": "#/components/parameters/ModuleIdQuery" },
+                   { "$ref": "#/components/parameters/ProfileQuery" },
+                   { "$ref": "#/components/parameters/StepNameQuery" },
+                   { "$ref": "#/components/parameters/SessionIdQueryOptional" }
+              ],
+               "requestBody": {
+                   "required": false,
+                   "content": {
+                       "application/json": {
+                           "schema": { "$ref": "#/components/schemas/ExecuteStepRequest" }
+                       }
+                   }
+              },
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": {
+                              "type": "object",
+                              "properties": { "result": {} }
+                           }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/profile/profiles": {
+          "get": {
+              "tags": ["profile"],
+              "summary": "Get all available profiles for a module",
+              "operationId": "get_profiles_profile_profiles_get",
+               "parameters": [ { "$ref": "#/components/parameters/ModuleIdQuery" } ],
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/ProfileDetail" }
+                           }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/project/": {
+          "post": {
+              "tags": ["project"],
+              "summary": "Create project",
+              "operationId": "create_project_project__post",
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/CreateProjectRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": { "$ref": "#/components/schemas/ProjectResponse" }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          },
+          "get": {
+              "tags": ["project"],
+              "summary": "Get all projects",
+              "operationId": "get_all_projects_project__get",
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": {
+                             "type": "array",
+                             "items": { "$ref": "#/components/schemas/ProjectResponse" }
+                           }
+                         }
+                       }
+                  },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/project/{project_id}": {
+          "get": {
+              "tags": ["project"],
+              "summary": "Get project by ID",
+              "operationId": "get_project_project__project_id__get",
+              "parameters": [ { "$ref": "#/components/parameters/ProjectIdPath" } ],
+              "responses": {
+                  "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": { "$ref": "#/components/schemas/ProjectResponse" }
+                         }
+                       }
+                  },
+                  "404": { "$ref": "#/components/responses/NotFoundError" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/repository/create": {
+          "post": {
+              "tags": ["repository"],
+              "summary": "Create new repository",
+              "operationId": "create_repo_repository_create_post",
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "multipart/form-data": {
+                          "schema": {
+                              "type": "object",
+                              "properties": {
+                                  "repo_file": {
+                                      "type": "string",
+                                      "format": "binary",
+                                      "description": "Zip file with initial repository content"
+                                  },
+                                  "repo_name": {
+                                      "type": "string"
+                                  }
+                              },
+                              "required": ["repo_file", "repo_name"]
+                          }
+                      }
+                  }
+              },
+              "responses": {
+                  "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": { "$ref": "#/components/schemas/RepoCreationResponse" }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/repository/list": {
+          "get": {
+              "tags": ["repository"],
+              "summary": "List all repositories",
+              "operationId": "list_repos_repository_list_get",
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": {
+                             "type": "object",
+                             "properties": {
+                               "repositories": { "type": "array", "items": { "type": "string" } }
+                             }
+                           }
+                         }
+                       }
+                  },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/repository/{repo_name}/files": {
+          "get": {
+              "tags": ["repository"],
+              "summary": "List repository files",
+              "operationId": "list_repo_files_repository__repo_name__files_get",
+              "parameters": [ { "$ref": "#/components/parameters/RepoNamePath" } ],
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                           "schema": {
+                              "type": "object",
+                              "properties": {
+                                "files": { "type": "array", "items": { "type": "string" } }
+                              }
+                           }
+                         }
+                       }
+                  },
+                  "404": { "$ref": "#/components/responses/NotFoundError" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/repository/{repo_name}": {
+          "delete": {
+              "tags": ["repository"],
+              "summary": "Delete repository",
+              "operationId": "delete_repo_repository__repo_name__delete",
+              "parameters": [ { "$ref": "#/components/parameters/RepoNamePath" } ],
+              "responses": {
+                  "200": { "$ref": "#/components/responses/SuccessMessageResponse" },
+                  "404": { "$ref": "#/components/responses/NotFoundError" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/repository/{repo_name}/commit": {
+          "post": {
+              "tags": ["repository"],
+              "summary": "Commit changes",
+              "operationId": "commit_changes_repository__repo_name__commit_post",
+              "parameters": [ { "$ref": "#/components/parameters/RepoNamePath" } ],
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/CommitRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                   "200": {
+                       "description": "Successful Response - Commit Details",
+                       "content": {
+                         "application/json": {
+                           "schema": {
+                             "type": "object",
+                             "properties": {
+                               "status": { "type": "string" },
+                               "message": { "type": "string" },
+                               "committed": { "type": "boolean" },
+                               "commit_hash": { "type": "string", "nullable": true },
+                               "commit_message": { "type": "string", "nullable": true },
+                               "files_changed": { "type": "array", "items": { "type": "string" }, "nullable": true }
+                             }
+                           }
+                         }
+                       }
+                  },
+                  "404": { "$ref": "#/components/responses/NotFoundError" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/repository/{repo_name}/file": {
+          "put": {
+              "tags": ["repository"],
+              "summary": "Update file",
+              "operationId": "update_file_repository__repo_name__file_put",
+              "parameters": [
+                  { "$ref": "#/components/parameters/RepoNamePath" },
+                  { "$ref": "#/components/parameters/FilePathQuery" }
+              ],
+               "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": { "$ref": "#/components/schemas/FileUpdateRequest" }
+                      }
+                  }
+              },
+              "responses": {
+                   "200": {
+                       "description": "Successful Response - Update Status",
+                       "content": {
+                         "application/json": {
+                           "schema": {
+                             "type": "object",
+                             "properties": {
+                               "status": { "type": "string" },
+                               "message": { "type": "string" },
+                               "file_path": { "type": "string" },
+                               "updated_at": { "type": "string", "format": "date-time" }
+                             }
+                           }
+                         }
+                       }
+                  },
+                  "404": { "$ref": "#/components/responses/NotFoundError" },
+                  "500": { "$ref": "#/components/responses/InternalServerError" }
+              }
+          }
+      },
+      "/resource/{module_id}/workspace": {
+          "get": {
+              "tags": ["resources"],
+              "summary": "Get workspace resources",
+              "operationId": "get_workspace_resources_resource__module_id__workspace_get",
+              "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                            "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Resource" } }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/resource/{module_id}/provide-instructions": {
+          "get": {
+              "tags": ["resources"],
+              "summary": "Get Provide Instructions resources",
+              "operationId": "get_provide_instruction_resources_resource__module_id__provide_instructions_get",
+              "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+               "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                            "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Resource" } }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+      },
+      "/auth/jwt/login": { "$ref": "#/paths/~1fastapi_users~1auth?method=post" },
+      "/auth/jwt/logout": { "$ref": "#/paths/~1fastapi_users~1auth?method=post" },
+      "/auth/register": { "$ref": "#/paths/~1fastapi_users~1register" },
+      "/auth/forgot-password": { "$ref": "#/paths/~1fastapi_users~1password?which=forgot" },
+      "/auth/reset-password": { "$ref": "#/paths/~1fastapi_users~1password?which=reset" },
+      "/auth/request-verify-token": { "$ref": "#/paths/~1fastapi_users~1verify?which=request" },
+      "/auth/verify": { "$ref": "#/paths/~1fastapi_users~1verify?which=verify" },
+      "/users/me": { "$ref": "#/paths/~1fastapi_users~1users~1me" },
+      "/users/{id}": { "$ref": "#/paths/~1fastapi_users~1users~1by_id" }
+  
+    },
+    "components": {
+      "schemas": {
+        "OpenAIFunctionSchema": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "default": "function" },
+            "function": { "$ref": "#/components/schemas/OpenAIFunctionDetail" }
+          },
+          "required": ["function"]
+        },
+        "OpenAIFunctionDetail": {
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "description": { "type": "string" },
+                "parameters": { "type": "object", "description": "JSON Schema object" },
+                "strict": { "type": "boolean", "default": true }
+            },
+            "required": ["name", "description", "parameters"]
+        },
+        "ExecuteFunctionRequest": {
+          "type": "object",
+          "properties": {
+            "parameters": { "type": "object", "additionalProperties": true, "default": {} },
+            "requirements": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "env_vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {} }
+          }
+        },
+        "ProfileExecuteRequest": {
+          "type": "object",
+          "properties": {
+            "profile": { "type": "string" },
+            "input": { "type": "string" },
+            "session_id": { "type": "string", "format": "uuid", "default": "00000000-0000-0000-0000-000000000000", "nullable": true }
+          },
+          "required": ["profile", "input"]
+        },
+        "ProfileResponse": {
+          "type": "object",
+          "properties": {
+            "response": { "type": "string" },
+            "results": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+          },
+          "required": ["response", "results"]
+        },
+        "HistoryResponse": {
+            "type": "object",
+            "properties": {
+                "history": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/ChatMessage" }
+                },
+                "profile": { "type": "string" },
+                "module_id": { "type": "string" }
+            },
+            "required": ["history", "profile", "module_id"]
+        },
+        "ChatMessage": {
+            "type": "object",
+            "properties": {
+                "role": { "type": "string", "enum": ["user", "assistant", "system", "tool"] },
+                "content": { "type": "string", "nullable": true },
+                "tool_calls": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/ToolCall" },
+                    "nullable": true
+                },
+                "tool_call_id": { "type": "string", "nullable": true },
+                "name": { "type": "string", "nullable": true }
+            },
+            "required": ["role"]
+        },
+        "ToolCall": {
+            "type": "object",
+            "properties": {
+                "id": { "type": "string" },
+                "type": { "type": "string", "default": "function" },
+                "function": { "$ref": "#/components/schemas/ToolCallFunction" }
+            },
+            "required": ["id", "function"]
+        },
+        "ToolCallFunction": {
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "arguments": { "type": "string", "description": "JSON string of arguments" }
+            },
+            "required": ["name", "arguments"]
+        },
+        "StatusResponse": {
+            "type": "object",
+            "properties": {
+                "module_id": { "type": "string" },
+                "state": { "type": "string", "enum": ["STANDBY", "EXECUTING"] },
+                "last_updated": { "type": "string", "format": "date-time" }
+            },
+            "required": ["module_id", "state", "last_updated"]
+        },
+        "EmbeddingRequest": {
+          "type": "object",
+          "properties": {
+              "input": { "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}] },
+              "dimensions": { "type": "integer", "nullable": true },
+              "user": { "type": "string", "nullable": true },
+              "encoding_format": { "type": "string", "nullable": true },
+              "model_kwargs": { "type": "object", "additionalProperties": true, "default": {} }
+          },
+          "required": ["input"]
+        },
+        "EmbeddingResponse": {
+            "type": "object",
+             "properties": {
+                  "object": {"type": "string"},
+                  "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/EmbeddingData" }
+                  },
+                  "model": {"type": "string"},
+                  "usage": { "$ref": "#/components/schemas/UsageStats" }
+             }
+        },
+        "EmbeddingData": {
+              "type": "object",
+              "properties": {
+                  "object": {"type": "string"},
+                  "embedding": {"type": "array", "items": {"type": "number"}},
+                  "index": {"type": "integer"}
+              }
+        },
+        "UsageStats": {
+              "type": "object",
+              "properties": {
+                  "prompt_tokens": {"type": "integer"},
+                  "total_tokens": {"type": "integer"}
+              }
+        },
+        "SetEmbeddingModelRequest": {
+            "type": "object",
+            "properties": { "model_name": { "type": "string" } },
+            "required": ["model_name"]
+        },
+        "VerifyAPIKeyRequest": {
+            "type": "object",
+            "properties": { "provider": { "type": "string" } },
+            "required": ["provider"]
+        },
+        "KitResponse": {
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "version": { "type": "string" },
+                "created_at": { "type": "string", "format": "date-time" },
+                "size": { "type": "integer" },
+                "owner": { "type": "string", "default": "default" },
+                "doc_version": { "type": "string", "default": "v1" },
+                "kit_id": { "type": "string", "default": "" },
+                "environment": {
+                    "type": "array",
+                    "items": { "type": "object" },
+                    "default": []
+                }
+            },
+            "required": ["name", "version", "created_at", "size"]
+        },
+        "KitListResponse": {
+            "type": "object",
+            "properties": {
+                "kits": { "type": "array", "items": { "$ref": "#/components/schemas/KitResponse" } }
+            },
+            "required": ["kits"]
+        },
+        "KitVersionsResponse": {
+            "type": "object",
+            "properties": {
+                "versions": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["versions"]
+        },
+        "RegistryKitResponse": {
+          "type": "object",
+          "properties": {
+            "fileName": { "type": "string" },
+            "downloadURL": { "type": "string", "format": "uri" },
+            "checksum": { "type": "string" },
+            "kitConfig": { "type": "object", "description": "Parsed content of kit.yaml" },
+            "uploadedAt": { "type": "string", "format": "date-time" }
+          },
+          "required": ["fileName", "downloadURL", "checksum", "kitConfig", "uploadedAt"]
+        },
+        "RegistryKitsResponse": {
+          "type": "object",
+          "properties": {
+            "kits": { "type": "array", "items": { "$ref": "#/components/schemas/RegistryKitResponse" } }
+          },
+          "required": ["kits"]
+        },
+         "OpenAIChatCompletionRequest": {
+              "type": "object",
+              "properties": {
+                  "model": { "type": "string", "nullable": true },
+                  "messages": { "type": "array", "items": { "$ref": "#/components/schemas/ChatMessage" } },
+                  "stream": { "type": "boolean", "default": false },
+                  "tools": { "type": "array", "items": {"type": "object"}, "nullable": true },
+                  "tool_choice": { "oneOf": [ { "type": "string" }, { "type": "object" } ], "nullable": true},
+                  "user": { "type": "string", "nullable": true },
+                  "temperature": { "type": "number", "format": "float", "nullable": true },
+                  "max_tokens": { "type": "integer", "nullable": true },
+                   "top_p": { "type": "number", "format": "float", "nullable": true },
+                   "n": { "type": "integer", "default": 1 },
+                   "stop": { "oneOf": [ { "type": "string" }, { "type": "array", "items": { "type": "string" } } ], "nullable": true },
+                   "presence_penalty": { "type": "number", "format": "float", "nullable": true },
+                   "frequency_penalty": { "type": "number", "format": "float", "nullable": true },
+                   "logit_bias": { "type": "object", "additionalProperties": { "type": "number", "format": "float" }, "nullable": true }
+              },
+              "required": ["messages"]
+         },
+         "OpenAIChatCompletionResponse": {
+             "type": "object",
+              "properties": {
+                  "id": { "type": "string" },
+                  "object": { "type": "string", "default": "chat.completion" },
+                  "created": { "type": "integer", "format": "int64" },
+                  "model": { "type": "string" },
+                  "choices": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/OpenAIChatChoice" }
+                  },
+                  "usage": { "$ref": "#/components/schemas/UsageStats" }
+              }
+         },
+         "OpenAIChatChoice": {
+             "type": "object",
+             "properties": {
+                 "index": { "type": "integer" },
+                 "message": { "$ref": "#/components/schemas/ChatMessage" },
+                 "finish_reason": { "type": "string", "nullable": true }
+             }
+         },
+         "OpenAICompletionRequest": {
+             "type": "object",
+              "properties": {
+                  "model": { "type": "string", "nullable": true },
+                  "prompt": { "oneOf": [ { "type": "string" }, { "type": "array", "items": { "type": "string" } } ] },
+                  "stream": { "type": "boolean", "default": false },
+                  "user": { "type": "string", "nullable": true },
+                  "temperature": { "type": "number", "format": "float", "nullable": true },
+                  "max_tokens": { "type": "integer", "nullable": true },
+                   "top_p": { "type": "number", "format": "float", "nullable": true },
+                   "n": { "type": "integer", "default": 1 },
+                   "stop": { "oneOf": [ { "type": "string" }, { "type": "array", "items": { "type": "string" } } ], "nullable": true },
+                   "presence_penalty": { "type": "number", "format": "float", "nullable": true },
+                   "frequency_penalty": { "type": "number", "format": "float", "nullable": true },
+                   "logit_bias": { "type": "object", "additionalProperties": { "type": "number", "format": "float" }, "nullable": true }
+              },
+              "required": ["prompt"]
+         },
+         "OpenAIModel": {
+             "type": "object",
+             "properties": {
+                 "id": { "type": "string" },
+                 "object": { "type": "string", "default": "model" },
+                 "created": { "type": "integer", "format": "int64" },
+                 "owned_by": { "type": "string" }
+             },
+             "required": ["id", "object", "created", "owned_by"]
+         },
+         "OpenAIModelList": {
+             "type": "object",
+             "properties": {
+                 "object": { "type": "string", "default": "list" },
+                 "data": { "type": "array", "items": { "$ref": "#/components/schemas/OpenAIModel" } }
+             },
+             "required": ["object", "data"]
+         },
+        "SetModelRequest": {
+            "type": "object",
+            "properties": { "model_name": { "type": "string" } },
+            "required": ["model_name"]
+        },
+         "LiteLLMChatCompletionResponse": { "$ref": "#/components/schemas/OpenAIChatCompletionResponse", "description": "Assuming LiteLLM completion response mirrors OpenAI structure." },
+         "ApiKeyResponse": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "module_id": { "type": "string" },
+              "api_key": { "type": "string", "description": "The generated API Key (only shown on creation/reset)" },
+              "description": { "type": "string", "nullable": true },
+              "is_active": { "type": "boolean" },
+              "created_at": { "type": "string", "format": "date-time" },
+              "last_used_at": { "type": "string", "format": "date-time", "nullable": true }
+            },
+            "required": ["id", "module_id", "api_key", "is_active", "created_at"]
+        },
+        "ApiKeyRequest": {
+            "type": "object",
+            "properties": {
+                "description": { "type": "string", "nullable": true }
+            }
+        },
+        "CreateModuleRequest": {
+          "type": "object",
+          "properties": {
+              "project_id": { "type": "string", "format": "uuid" },
+              "owner": { "type": "string" },
+              "kit_id": { "type": "string" },
+              "version": { "type": "string" },
+              "env_vars": { "type": "object", "additionalProperties": { "type": "string" } },
+              "path": { "type": "string", "pattern": "^[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*$" },
+              "module_name": { "type": "string", "nullable": true }
+          },
+          "required": ["project_id", "owner", "kit_id", "version", "env_vars", "path"]
+        },
+        "UpdateModulePathRequest": {
+          "type": "object",
+          "properties": {
+              "path": { "type": "string", "pattern": "^[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*$" },
+              "project_id": { "type": "string", "format": "uuid" }
+          },
+          "required": ["path", "project_id"]
+        },
+        "UpdateModuleEnvVarRequest": {
+          "type": "object",
+          "properties": {
+              "env_var_name": { "type": "string" },
+              "env_var_value": { "type": "string" }
+          },
+          "required": ["env_var_name", "env_var_value"]
+        },
+        "UpdateModuleNameRequest": {
+          "type": "object",
+          "properties": { "name": { "type": "string" } },
+          "required": ["name"]
+        },
+        "ModuleResponse": {
+            "type": "object",
+            "properties": {
+              "module_id": { "type": "string" },
+              "module_name": { "type": "string", "nullable": true },
+              "project_id": { "type": "string", "format": "uuid" },
+              "kit_id": { "type": "string" },
+              "owner": { "type": "string" },
+              "version": { "type": "string" },
+              "created_at": { "type": "string", "format": "date-time" },
+              "env_vars": { "type": "object", "additionalProperties": { "type": "string" } },
+              "repo_name": { "type": "string" },
+              "path": { "type": "string" }
+            },
+            "required": ["module_id", "project_id", "kit_id", "owner", "version", "created_at", "env_vars", "repo_name", "path"]
+        },
+        "ModuleGraphResponse": {
+          "type": "object",
+          "properties": {
+            "nodes": { "type": "array", "items": { "$ref": "#/components/schemas/ModuleResponse" } },
+            "edges": { "type": "array", "items": { "$ref": "#/components/schemas/GraphEdge" } }
+          },
+          "required": ["nodes", "edges"]
+        },
+        "GraphEdge": {
+            "type": "object",
+            "properties": {
+                "source": { "type": "string" },
+                "target": { "type": "string" },
+                "type": { "type": "string" },
+                "created_at": { "type": "string", "format": "date-time" },
+                "description": { "type": "string", "nullable": true }
+            },
+            "required": ["source", "target", "type", "created_at"]
+        },
+         "CreateModuleProvideRequest": {
+            "type": "object",
+            "properties": {
+                "provider_id": { "type": "string" },
+                "receiver_id": { "type": "string" },
+                "resource_type": { "$ref": "#/components/schemas/ProvideType" },
+                "description": { "type": "string", "nullable": true }
+            },
+            "required": ["provider_id", "receiver_id", "resource_type"]
+        },
+         "UpdateProvideDescriptionRequest": {
+             "type": "object",
+             "properties": { "description": { "type": "string" } },
+             "required": ["description"]
+         },
+         "ModuleProvideResponse": {
+             "type": "object",
+             "properties": {
+                 "provider_id": { "type": "string" },
+                 "receiver_id": { "type": "string" },
+                 "resource_type": { "$ref": "#/components/schemas/ProvideType" },
+                 "description": { "type": "string", "nullable": true },
+                 "created_at": { "type": "string", "format": "date-time" },
+                 "updated_at": { "type": "string", "format": "date-time" }
+             },
+             "required": ["provider_id", "receiver_id", "resource_type", "created_at", "updated_at"]
+         },
+         "ProvideType": {
+             "type": "string",
+             "enum": ["workspace", "action"]
+         },
+        "ExecuteStepRequest": {
+          "type": "object",
+          "properties": {
+              "parameters": { "type": "object", "additionalProperties": true, "default": {} }
+          }
+        },
+        "CreateSessionResponse": {
+          "type": "object",
+          "properties": {
+              "session_id": { "type": "string", "format": "uuid" },
+              "timestamp": { "type": "string", "format": "date-time" }
+          },
+          "required": ["session_id", "timestamp"]
+        },
+        "FullProfileAction": {
+            "type": "object",
+            "properties": {
+                "action": { "$ref": "#/components/schemas/ProfileAction" },
+                "module_id": { "type": "string" },
+                "profile": { "type": "string", "nullable": true },
+                "metadata": { "$ref": "#/components/schemas/FunctionMetadata", "nullable": true },
+                "error": { "type": "string", "nullable": true },
+                "is_provided": { "type": "boolean", "default": false }
+            },
+            "required": ["action", "module_id"]
+        },
+        "ProfileAction": {
+             "type": "object",
+             "properties": {
+                 "path": { "type": "string" },
+                 "name": { "type": "string" },
+                 "description": { "type": "string", "nullable": true },
+                 "full_file_path": { "type": "string" },
+                 "function_name": { "type": "string" }
+             },
+             "required": ["path", "name", "full_file_path", "function_name"]
+        },
+        "FunctionMetadata": {
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "description": { "type": "string" },
+                "parameters": { "type": "object", "description": "JSON Schema object" },
+                "is_async": { "type": "boolean" }
+            },
+            "required": ["name", "description", "parameters", "is_async"]
+        },
+        "InstructionItem": {
+            "type": "object",
+            "properties": {
+                 "name": { "type": "string" },
+                 "path": { "type": "string" },
+                 "description": { "type": "string", "nullable": true },
+                 "full_path": { "type": "string" },
+                 "module_id": { "type": "string", "nullable": true },
+                 "content": { "type": "string" }
+            },
+            "required": ["name", "path", "full_path", "content"]
+        },
+        "ProfileMetadataResult": {
+            "type": "object",
+            "properties": {
+                "instructions": { "type": "array", "items": { "$ref": "#/components/schemas/InstructionItem" } },
+                "actions": { "type": "array", "items": { "$ref": "#/components/schemas/FullProfileAction" } },
+                "requirements": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["instructions", "actions", "requirements"]
+        },
+        "SessionInfo": {
+             "type": "object",
+             "properties": {
+                 "session_id": { "type": "string", "format": "uuid" },
+                 "last_message": { "type": "string", "nullable": true },
+                 "last_updated": { "type": "string", "format": "date-time" },
+                 "is_default": { "type": "boolean" }
+             },
+             "required": ["session_id", "last_updated", "is_default"]
+        },
+        "ProfileDetail": {
+             "type": "object",
+              "properties": {
+                  "profile_type": { "type": "string" },
+                  "agent_type": { "type": "string" },
+                  "module_id": { "type": "string" },
+                  "metadata": { "$ref": "#/components/schemas/ProfileMetadataResult" },
+                  "kit_config": { "type": "object", "description": "Subset of kit.yaml relevant to this profile" },
+                  "is_completed": { "type": "boolean" },
+                  "allow_multiple": { "type": "boolean" },
+                   "instructions": { "type": "array", "items": { "$ref": "#/components/schemas/InstructionItem" } }
+              },
+              "required": ["profile_type", "agent_type", "module_id", "metadata", "is_completed", "allow_multiple"]
+        },
+        "CreateProjectRequest": {
+            "type": "object",
+            "properties": { "name": { "type": "string" } },
+            "required": ["name"]
+        },
+        "ProjectResponse": {
+          "type": "object",
+          "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "name": { "type": "string" },
+              "created_at": { "type": "string", "format": "date-time" }
+          },
+          "required": ["id", "name", "created_at"]
+        },
+        "FileUpdateRequest": {
+          "type": "object",
+          "properties": { "content": { "type": "string" } },
+          "required": ["content"]
+        },
+        "CommitRequest": {
+          "type": "object",
+          "properties": {
+              "commit_message": { "type": "string" },
+              "author_name": { "type": "string", "nullable": true },
+              "author_email": { "type": "string", "format": "email", "nullable": true }
+          },
+          "required": ["commit_message"]
+        },
+        "RepoCreationResponse": {
+          "type": "object",
+          "properties": {
+              "repo_name": { "type": "string" },
+              "created_at": { "type": "string", "format": "date-time" },
+              "status": { "type": "string" }
+          },
+          "required": ["repo_name", "created_at", "status"]
+        },
+         "Resource": {
+             "type": "object",
+             "properties": {
+                 "path": { "type": "string", "description": "Full path including folders relative to source (workspace or instructions dir)" },
+                 "name": { "type": "string", "description": "Filename" },
+                 "content": { "type": "string" },
+                 "description": { "type": "string", "nullable": true }
+             },
+             "required": ["path", "name", "content"]
+         },
+         "UserRead": {
+           "title": "UserRead",
+           "required": [ "id", "email", "is_active", "is_superuser", "is_verified" ],
+           "type": "object",
+           "properties": {
+             "id": { "title": "Id", "type": "string", "format": "uuid" },
+             "email": { "title": "Email", "type": "string", "format": "email" },
+             "is_active": { "title": "Is Active", "type": "boolean" },
+             "is_superuser": { "title": "Is Superuser", "type": "boolean" },
+             "is_verified": { "title": "Is Verified", "type": "boolean" }
+           }
+         },
+         "UserCreate": {
+           "title": "UserCreate",
+           "required": [ "email", "password" ],
+           "type": "object",
+           "properties": {
+             "email": { "title": "Email", "type": "string", "format": "email" },
+             "password": { "title": "Password", "type": "string" }
+           }
+         },
+         "UserUpdate": {
+           "title": "UserUpdate",
+           "type": "object",
+           "properties": {
+             "password": { "title": "Password", "type": "string", "nullable": true },
+             "email": { "title": "Email", "type": "string", "format": "email", "nullable": true },
+             "is_active": { "title": "Is Active", "type": "boolean", "nullable": true },
+             "is_superuser": { "title": "Is Superuser", "type": "boolean", "nullable": true },
+             "is_verified": { "title": "Is Verified", "type": "boolean", "nullable": true }
+           }
+         },
+         "HTTPValidationError": {
+           "title": "HTTPValidationError",
+           "type": "object",
+           "properties": {
+             "detail": {
+               "title": "Detail",
+               "type": "array",
+               "items": { "$ref": "#/components/schemas/ValidationError" }
+             }
+           }
+         },
+         "ValidationError": {
+           "title": "ValidationError",
+           "required": [ "loc", "msg", "type" ],
+           "type": "object",
+           "properties": {
+             "loc": {
+               "title": "Location",
+               "type": "array",
+               "items": { "anyOf": [ { "type": "string" }, { "type": "integer" } ] }
+             },
+             "msg": { "title": "Message", "type": "string" },
+             "type": { "title": "Error Type", "type": "string" }
+           }
+         },
+         "DetailSchema": {
+            "title": "DetailSchema",
+            "type": "object",
+            "properties": { "detail": { "type": "string" } }
+         }
+      },
+      "parameters": {
+          "FolderPath": {
+              "name": "folder_path",
+              "in": "query",
+              "required": true,
+              "schema": { "type": "string" },
+              "description": "Path to folder containing Python files"
+          },
+          "RelativeFilePath": {
+              "name": "file_path",
+              "in": "query",
+              "required": true,
+              "schema": { "type": "string" },
+              "description": "Path to Python file (relative to folder_path)"
+          },
+          "FunctionName": {
+              "name": "function_name",
+              "in": "query",
+              "required": true,
+              "schema": { "type": "string" },
+              "description": "Name of the function"
+          },
+           "ModuleIdPath": {
+               "name": "module_id",
+               "in": "path",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "Module ID"
+           },
+           "ProfilePath": {
+               "name": "profile",
+               "in": "path",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "Profile name (e.g., initialize, maintain)"
+           },
+           "SessionIdQuery": {
+               "name": "session_id",
+               "in": "query",
+               "required": false,
+               "schema": { "type": "string", "format": "uuid", "default": "00000000-0000-0000-0000-000000000000"},
+               "description": "Optional session ID"
+           },
+          "SessionIdQueryOptional": {
+               "name": "session_id",
+               "in": "query",
+               "required": false,
+               "schema": { "type": "string", "format": "uuid", "nullable": true },
+               "description": "Optional session ID"
+           },
+           "OwnerPath": {
+               "name": "owner",
+               "in": "path",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "Kit owner identifier"
+           },
+           "KitIdPath": {
+               "name": "kit_id",
+               "in": "path",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "Kit identifier"
+           },
+           "VersionPath": {
+               "name": "version",
+               "in": "path",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "Kit version (semantic)"
+           },
+           "ProjectIdPath": {
+               "name": "project_id",
+               "in": "path",
+               "required": true,
+               "schema": { "type": "string", "format": "uuid" },
+               "description": "Project ID"
+           },
+           "ProviderIdPath": {
+               "name": "provider_id",
+               "in": "path",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "ID of the providing module"
+           },
+            "ReceiverIdPath": {
+               "name": "receiver_id",
+               "in": "path",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "ID of the receiving module"
+           },
+            "ResourceTypePath": {
+               "name": "resource_type",
+               "in": "path",
+               "required": true,
+               "schema": { "$ref": "#/components/schemas/ProvideType" },
+               "description": "Type of the resource being provided"
+           },
+           "ModuleIdQuery": {
+               "name": "module_id",
+               "in": "query",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "Module ID"
+           },
+           "ProfileQuery": {
+               "name": "profile",
+               "in": "query",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "Profile name"
+           },
+           "StepNameQuery": {
+               "name": "step_name",
+               "in": "query",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "Name of the profile step/action to execute"
+           },
+           "RepoNamePath": {
+               "name": "repo_name",
+               "in": "path",
+               "required": true,
+               "schema": { "type": "string" },
+               "description": "Repository name (usually the module_id)"
+           },
+           "FilePathQuery": {
+              "name": "file_path",
+              "in": "query",
+              "required": true,
+              "schema": { "type": "string" },
+              "description": "Relative path to the file within the repository"
+           },
+           "UserIdPath": {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": { "type": "string", "format": "uuid" },
+              "description": "User ID"
+           }
+      },
+      "responses": {
+        "SuccessMessageResponse": {
+            "description": "Generic success response",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "status": { "type": "string", "example": "success" },
+                            "message": { "type": "string" }
+                        }
+                    }
+                }
+            }
+        },
+         "ModelNameResponse": {
+             "description": "Response containing a model name",
+             "content": {
+                 "application/json": {
+                     "schema": {
+                         "type": "object",
+                         "properties": { "model_name": { "type": "string" } }
+                     }
+                 }
+             }
+         },
+          "AvailableModelsResponse": {
+              "description": "Response listing available models grouped by provider",
+               "content": {
+                 "application/json": {
+                   "schema": {
+                     "type": "object",
+                      "additionalProperties": {
+                          "type": "array",
+                          "items": {
+                              "type": "object",
+                              "properties": {
+                                  "name": { "type": "string" },
+                                  "identifier": { "type": "string" },
+                                  "label": { "type": "string" }
+                              }
+                          }
+                      }
+                   }
+                 }
+               }
+          },
+         "KitUploadSuccessResponse": {
+             "description": "Response after successful Kit upload/install",
+              "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "status": { "type": "string", "example": "success" },
+                            "message": { "type": "string" },
+                            "kit_info": { "$ref": "#/components/schemas/KitResponse" }
+                        }
+                    }
+                }
+              }
+         },
+         "KitInstallSuccessResponse": {
+             "description": "Response after successful Kit installation from registry",
+             "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "status": { "type": "string", "example": "success" },
+                            "message": { "type": "string" },
+                            "kit_info": { "$ref": "#/components/schemas/KitResponse" }
+                        }
+                    }
+                }
+              }
+         },
+         "LiteLLMChatCompletionResponse": {
+             "description": "Standard chat completion response structure (LiteLLM/OpenAI format)",
+             "content": {
+                 "application/json": {
+                     "schema": { "$ref": "#/components/schemas/OpenAIChatCompletionResponse" }
+                 }
+             }
+         },
+        "BadRequestError": {
+            "description": "Bad Request - Invalid input or parameters",
+            "content": {
+                "application/json": {
+                    "schema": { "$ref": "#/components/schemas/DetailSchema" }
+                }
+            }
+        },
+         "UnauthorizedError": {
+             "description": "Unauthorized - Authentication required or invalid credentials/token/key",
+             "content": {
+                 "application/json": {
+                     "schema": { "$ref": "#/components/schemas/DetailSchema" }
+                 }
+             }
+         },
+         "ForbiddenError": {
+             "description": "Forbidden - User does not have permission for this action",
+              "content": {
+                 "application/json": {
+                     "schema": { "$ref": "#/components/schemas/DetailSchema" }
+                 }
+             }
+         },
+        "NotFoundError": {
+            "description": "Not Found - The requested resource does not exist",
+             "content": {
+                 "application/json": {
+                     "schema": { "$ref": "#/components/schemas/DetailSchema" }
+                 }
+             }
+        },
+         "ValidationErrorResponse": {
+             "description": "Validation Error - Input data failed validation",
+             "content": {
+                 "application/json": {
+                     "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+                 }
+             }
+         },
+         "RegistryError": {
+              "description": "Service Unavailable - Error communicating with the Kit Registry",
+              "content": {
+                 "application/json": {
+                     "schema": { "$ref": "#/components/schemas/DetailSchema" }
+                 }
+             }
+         },
+          "NotImplemented": {
+              "description": "Not Implemented - Feature not available or configured",
+              "content": {
+                 "application/json": {
+                     "schema": { "$ref": "#/components/schemas/DetailSchema" }
+                 }
+             }
+         },
+        "InternalServerError": {
+            "description": "Internal Server Error - An unexpected error occurred",
+             "content": {
+                 "application/json": {
+                     "schema": { "$ref": "#/components/schemas/DetailSchema" }
+                 }
+             }
+        }
+      },
+      "securitySchemes": {
+        "UserJWTBearer": {
+          "type": "http",
+          "scheme": "bearer",
+          "bearerFormat": "JWT",
+          "description": "JWT Token for authenticated users (obtained via /auth/jwt/login)."
+        },
+        "ModuleAPIKey": {
+          "type": "http",
+          "scheme": "bearer",
+          "description": "Module-specific API Key (Bearer token format, starting with 'mk_') for accessing the LLM Gateway (/gateway)."
+        }
+      }
+    },
+    "security": [
+      {
+        "UserJWTBearer": []
+      }
+    ],
+    "#paths": {
+       "/module/{module_id}/providing": {
+          "get": {
+              "tags": ["module"],
+              "summary": "Get resources this module provides",
+              "operationId": "get_providing_module__module_id__providing_get",
+               "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+              "responses": {
+                   "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                            "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ModuleProvideResponse" } }
+                         }
+                       }
+                  },
+                  "400": { "$ref": "#/components/responses/BadRequestError" }
+              }
+          }
+       },
+        "/module/{module_id}/receiving": {
+            "get": {
+                "tags": ["module"],
+                "summary": "Get resources this module receives",
+                "operationId": "get_receiving_module__module_id__receiving_get",
+                 "parameters": [ { "$ref": "#/components/parameters/ModuleIdPath" } ],
+                "responses": {
+                     "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                            "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ModuleProvideResponse" } }
+                         }
+                       }
+                    },
+                    "400": { "$ref": "#/components/responses/BadRequestError" }
+                }
+            }
+        },
+        "/module/{module_id}/providing/{resource_type}": {
+            "get": {
+                "tags": ["module"],
+                "summary": "Get specific resources this module provides",
+                "operationId": "get_providing_by_type_module__module_id__providing__resource_type__get",
+                 "parameters": [
+                    { "$ref": "#/components/parameters/ModuleIdPath" },
+                    { "$ref": "#/components/parameters/ResourceTypePath" }
+                ],
+                "responses": {
+                     "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                            "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ModuleProvideResponse" } }
+                         }
+                       }
+                    },
+                    "400": { "$ref": "#/components/responses/BadRequestError" }
+                }
+            }
+        },
+         "/module/{module_id}/receiving/{resource_type}": {
+            "get": {
+                "tags": ["module"],
+                "summary": "Get specific resources this module receives",
+                "operationId": "get_receiving_by_type_module__module_id__receiving__resource_type__get",
+                "parameters": [
+                    { "$ref": "#/components/parameters/ModuleIdPath" },
+                    { "$ref": "#/components/parameters/ResourceTypePath" }
+                ],
+                "responses": {
+                     "200": {
+                       "description": "Successful Response",
+                       "content": {
+                         "application/json": {
+                            "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ModuleProvideResponse" } }
+                         }
+                       }
+                    },
+                    "400": { "$ref": "#/components/responses/BadRequestError" }
+                }
+            }
+         },
+        "/auth/jwt/login": {
+            "post": {
+                "tags": ["auth"],
+                "summary": "Login for User JWT Token",
+                "operationId": "login_for_access_token_auth_jwt_login_post",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "username": { "type": "string", "description": "User's email address" },
+                                    "password": { "type": "string", "format": "password" }
+                                },
+                                "required": ["username", "password"]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Login",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "access_token": { "type": "string" },
+                                        "token_type": { "type": "string", "default": "bearer" }
+                                    },
+                                    "required": ["access_token", "token_type"]
+                                }
+                            }
+                        }
+                    },
+                    "400": { "description": "Incorrect username or password" },
+                    "422": { "$ref": "#/components/responses/ValidationErrorResponse" }
+                },
+                "security": [] 
+            }
+        },
+         "/auth/jwt/logout": {
+             "post": {
+                 "tags": ["auth"],
+                 "summary": "Logout User",
+                 "operationId": "logout_auth_jwt_logout_post",
+                 "responses": {
+                     "204": { "description": "Logout successful (No Content)" },
+                     "401": { "$ref": "#/components/responses/UnauthorizedError" }
+                 },
+                  "security": [ { "UserJWTBearer": [] } ] 
+             }
+         },
+         "/auth/register": {
+              "post": {
+                  "tags": ["auth"],
+                  "summary": "Register New User",
+                  "operationId": "register_auth_register_post",
+                  "requestBody": {
+                      "required": true,
+                      "content": {
+                          "application/json": {
+                              "schema": { "$ref": "#/components/schemas/UserCreate" }
+                          }
+                      }
+                  },
+                  "responses": {
+                      "201": {
+                          "description": "Successful Registration",
+                          "content": {
+                              "application/json": {
+                                  "schema": { "$ref": "#/components/schemas/UserRead" }
+                              }
+                          }
+                      },
+                      "400": { "description": "User already exists or invalid input" }
+                  },
+                   "security": [] 
+              }
+          },
+          "/auth/forgot-password": {
+              "post": {
+                  "tags": ["auth"],
+                  "summary": "Request Password Reset Token",
+                  "operationId": "forgot_password_auth_forgot_password_post",
+                   "requestBody": {
+                      "required": true,
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "type": "object",
+                                  "properties": { "email": { "type": "string", "format": "email" } },
+                                  "required": ["email"]
+                              }
+                          }
+                      }
+                  },
+                  "responses": { "200": { "description": "Password reset email sent (if user exists)" } },
+                   "security": [] 
+              }
+          },
+          "/auth/reset-password": {
+              "post": {
+                  "tags": ["auth"],
+                  "summary": "Reset Password using Token",
+                  "operationId": "reset_password_auth_reset_password_post",
+                  "requestBody": {
+                      "required": true,
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "type": "object",
+                                  "properties": {
+                                      "token": { "type": "string" },
+                                      "password": { "type": "string", "format": "password" }
+                                  },
+                                  "required": ["token", "password"]
+                              }
+                          }
+                      }
+                  },
+                  "responses": {
+                      "200": { "description": "Password reset successful" },
+                      "400": { "description": "Invalid or expired token" }
+                   },
+                   "security": [] 
+              }
+          },
+           "/auth/request-verify-token": {
+              "post": {
+                  "tags": ["auth"],
+                  "summary": "Request Email Verification Token",
+                  "operationId": "request_verify_token_auth_request_verify_token_post",
+                   "requestBody": {
+                      "required": true,
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "type": "object",
+                                  "properties": { "email": { "type": "string", "format": "email" } },
+                                  "required": ["email"]
+                              }
+                          }
+                      }
+                  },
+                  "responses": { "200": { "description": "Verification email sent (if user exists and not verified)" } },
+                   "security": [] 
+              }
+          },
+          "/auth/verify": {
+               "post": {
+                   "tags": ["auth"],
+                   "summary": "Verify Email using Token",
+                   "operationId": "verify_auth_verify_post",
+                   "requestBody": {
+                      "required": true,
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "type": "object",
+                                  "properties": { "token": { "type": "string" } },
+                                  "required": ["token"]
+                              }
+                          }
+                      }
+                  },
+                   "responses": {
+                       "200": {
+                           "description": "Email verified successfully",
+                           "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserRead" } } }
+                       },
+                       "400": { "description": "Invalid or expired token, or user already verified" }
+                   },
+                    "security": [] 
+              }
+          },
+          "/users/me": {
+              "get": {
+                  "tags": ["users"],
+                  "summary": "Get Current User",
+                  "operationId": "get_current_user_users_me_get",
+                  "responses": {
+                       "200": {
+                          "description": "Successful Response",
+                          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserRead" } } }
+                       },
+                       "401": { "$ref": "#/components/responses/UnauthorizedError" }
+                  }
+                
+              },
+              "patch": {
+                  "tags": ["users"],
+                  "summary": "Update Current User",
+                  "operationId": "update_current_user_users_me_patch",
+                   "requestBody": {
+                      "required": true,
+                      "content": {
+                          "application/json": {
+                              "schema": { "$ref": "#/components/schemas/UserUpdate" }
+                          }
+                      }
+                  },
+                  "responses": {
+                      "200": {
+                          "description": "Successful Response",
+                          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserRead" } } }
+                      },
+                      "400": { "description": "Invalid password or email already exists" },
+                      "401": { "$ref": "#/components/responses/UnauthorizedError" }
+                  }
+               
+              }
+          },
+          "/users/{id}": {
+              "get": {
+                   "tags": ["users"],
+                   "summary": "Get User by ID (Superuser)",
+                   "operationId": "get_user_by_id_users__id__get",
+                   "parameters": [ { "$ref": "#/components/parameters/UserIdPath" } ],
+                   "responses": {
+                       "200": {
+                          "description": "Successful Response",
+                          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserRead" } } }
+                       },
+                       "401": { "$ref": "#/components/responses/UnauthorizedError" },
+                       "403": { "$ref": "#/components/responses/ForbiddenError" },
+                       "404": { "$ref": "#/components/responses/NotFoundError" }
+                   }
+                 
+              },
+              "patch": {
+                   "tags": ["users"],
+                   "summary": "Update User by ID (Superuser)",
+                   "operationId": "update_user_by_id_users__id__patch",
+                   "parameters": [ { "$ref": "#/components/parameters/UserIdPath" } ],
+                   "requestBody": {
+                      "required": true,
+                      "content": {
+                          "application/json": {
+                              "schema": { "$ref": "#/components/schemas/UserUpdate" }
+                          }
+                      }
+                   },
+                   "responses": {
+                       "200": {
+                          "description": "Successful Response",
+                          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserRead" } } }
+                       },
+                       "400": { "description": "Invalid password or email already exists" },
+                       "401": { "$ref": "#/components/responses/UnauthorizedError" },
+                       "403": { "$ref": "#/components/responses/ForbiddenError" },
+                       "404": { "$ref": "#/components/responses/NotFoundError" }
+                   }
+                   
+              },
+              "delete": {
+                   "tags": ["users"],
+                   "summary": "Delete User by ID (Superuser)",
+                   "operationId": "delete_user_by_id_users__id__delete",
+                   "parameters": [ { "$ref": "#/components/parameters/UserIdPath" } ],
+                   "responses": {
+                       "204": { "description": "User deleted successfully" },
+                       "401": { "$ref": "#/components/responses/UnauthorizedError" },
+                       "403": { "$ref": "#/components/responses/ForbiddenError" },
+                       "404": { "$ref": "#/components/responses/NotFoundError" }
+                   }
+                    
+              }
+          }
+    }
+  }
+  

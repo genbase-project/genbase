@@ -1,0 +1,87 @@
+---
+title: Kit Directory Structure
+description: Learn the standard folder and file layout for organizing your Genbase Kit.
+---
+
+import { FolderTreeIcon } from 'lucide-react';
+import { Folder, File, Files } from 'fumadocs-ui/components/files'; // Corrected import
+
+# Kit Directory Structure <FolderTreeIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+A well-structured Kit is easier to understand, maintain, and share. Genbase expects Kits to follow a standard directory layout. When you package your Kit (typically as a `.tar.gz` file), this structure should be preserved within the archive.
+
+## Standard Layout
+
+Here is the recommended sample directory structure for a Genbase Kit:
+
+<Files>
+  <Folder name="your-kit-root-directory" defaultOpen>
+    <File name="kit.yaml" />
+    <Folder name="actions" defaultOpen>
+      <File name="__init__.py" />
+      <File name="some_action_module.py" />
+      <File name="another_module.py" />
+      {/* Other action files... */}
+    </Folder>
+    <Folder name="agents" defaultOpen>
+       <File name="__init__.py" />
+       <File name="custom_agent.py" />
+       {/* Other agent files... */}
+    </Folder>
+    <Folder name="instructions" defaultOpen>
+       <File name="profile_guide.md" />
+       <File name="provided_overview.txt" />
+       {/* Other instruction files... */}
+    </Folder>
+    <Folder name="workspace" defaultOpen>
+       <File name="some_file" />
+       <Folder name="some_folder">
+         <File name="some_other_file" />
+       </Folder>
+       {/* Other initial workspace files/dirs... */}
+    </Folder>
+    <File name="README.md" />
+     {/*  Other supporting files/dirs */}
+  </Folder>
+</Files>
+
+## Directory and File Descriptions
+
+*   **`kit.yaml` (Required):**
+    *   The **manifest file** for your Kit.
+    *   Defines metadata (ID, version, owner), dependencies, environment variables, agents, profiles, actions, provided resources, initial workspace files, etc.
+    *   This is the central configuration file Genbase reads to understand your Kit.
+    *   See the [kit.yaml Reference](/kit-development/kit-yaml) for full details.
+
+*   **`actions/` (Required if Actions are defined):**
+    *   Contains the Python code for the executable **[Actions](/concepts/actions-execution)** your Kit provides.
+    *   Organize code into multiple `.py` files (modules).
+    *   An `__init__.py` file is recommended (can contain actions referenced by function name).
+    *   Actions in other files are referenced as `filename:function_name` in `kit.yaml`.
+    *   See [Writing Actions](/kit-development/actions).
+
+*   **`agents/` :**
+    *   Contains Python code for custom **[Agents](/concepts/profiles-agents)** specific to this Kit.
+    *   Omit if only using built-in agents.
+    *   Agents are referenced by class name in `kit.yaml`.
+    *   See [Developing Agents](/kit-development/agents).
+
+*   **`instructions/` :**
+    *   Holds text files (Markdown `.md`, `.txt`, etc.) providing context for Profiles or provided resources.
+    *   Referenced by relative path in `kit.yaml`.
+    *   See [Using Instructions](/kit-development/instructions).
+
+*   **`workspace/` :**
+    *   Contains initial files/directories to populate a **[Module's Workspace](/concepts/workspace-resources)** upon creation.
+    *   Useful for templates, default configs, initial data. Structure is preserved.
+    *   See [Defining Workspace Content](/kit-development/workspace).
+
+*   **`requirements.txt` (Required if Actions have dependencies):**
+    *   Standard Python requirements file for Action dependencies.
+    *   Installed automatically in the secure Docker execution environment.
+
+*   **`README.md` (Recommended):**
+    *   Standard README providing a human-readable overview, usage, configuration, etc.
+    *   May be displayed in the Studio Registry view.
+
+Adhering to this structure ensures Genbase can correctly parse, install, and utilize your Kit.

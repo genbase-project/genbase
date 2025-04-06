@@ -1,0 +1,88 @@
+---
+title: Packaging and Publishing Kits
+description: Learn how to package your Genbase Kit for distribution and publish it to a registry like registry.genbase.io.
+---
+
+import { ArchiveIcon, UploadCloudIcon, UserCheckIcon, PackageSearchIcon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps } from 'fumadocs-ui/components/steps';
+
+# Packaging and Publishing Kits
+
+After developing your Kit, you need to package it correctly before you can install it locally or share it by publishing it to a Kit Registry.
+
+## 1. Packaging Your Kit <ArchiveIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Genbase expects Kits to be distributed as **gzipped tar archives (`.tar.gz`)**. This archive must contain all your Kit's files and directories directly at the root of the archive (not nested inside an extra folder).
+
+<Steps>
+
+### Create the Archive
+
+Ensure all your Kit's files (`kit.yaml`, `actions/`, `workspace/`, `requirements.txt`, etc.) are in a single root directory (e.g., `my-awesome-kit`). Open your terminal, navigate to the directory *containing* your Kit's root folder, and run the `tar` command:
+
+```bash
+# Example: Kit files are in './my-awesome-kit'
+# Output filename format suggestion: owner-kit_id-version.tar.gz
+
+tar czvf your_owner-my_awesome_kit-1.0.0.tar.gz -C my-awesome-kit .
+```
+
+*   `c`: Create archive.
+*   `z`: Use gzip compression.
+*   `v`: Verbose (optional).
+*   `f <filename>`: Specify the output archive name.
+*   `-C <directory>`: **Crucial:** Change to this directory (`my-awesome-kit` in the example) before adding files.
+*   `.`: Add all contents of the current directory (which `-C` changed to) to the archive root.
+
+### Verify the Structure (Optional)
+
+Check the contents to ensure files are at the root:
+
+```bash
+tar tzvf your_owner-my_awesome_kit-1.0.0.tar.gz
+```
+
+You should see entries like `./kit.yaml`, `./actions/some_action.py`, etc., *without* a leading directory like `my-awesome-kit/`.
+
+</Steps>
+
+## 2. Local Installation / Upload
+
+You can test your packaged Kit by installing it directly into your local Genbase Studio:
+
+1.  Go to the **Registry** section (<PackageSearchIcon className="inline-block h-3 w-3" />).
+2.  Find and click the **"Upload Kit"** button.
+3.  Select your created `.tar.gz` file.
+
+Genbase will validate and install the Kit locally.
+
+## 3. Publishing to a Registry <UploadCloudIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+To share your Kit with others, publish it to a Kit Registry.
+
+### Public Registry (`registry.genbase.io`)
+
+The default public registry offers a manual upload process:
+
+1.  **Navigate:** Go to [`https://registry.genbase.io`](https://registry.genbase.io) in your web browser.
+2.  **Account:** Register for an account or Log in.
+    <Callout title="Owner Matching" intent="warn" icon={<UserCheckIcon />}>
+    Your username on `registry.genbase.io` **must** exactly match the `owner` field specified in your Kit's `kit.yaml` file. Ensure they are identical (case-sensitive).
+    </Callout>
+3.  **Publish Page:** Navigate to the `/publish` page on the registry website.
+4.  **Upload:** Use the interface provided on the `/publish` page to select and upload your packaged `.tar.gz` Kit file.
+5.  **Verification:** The registry will likely perform validations on your `kit.yaml` and package structure. Follow any instructions provided by the registry interface.
+
+<Callout title="Programmatic Publishing (Future)">
+Currently, publishing to `registry.genbase.io` is a manual web upload process. Programmatic publishing via API keys might become available in the future. Check the registry's documentation for updates.
+</Callout>
+
+### Private or Alternative Registries
+
+If you are using a different registry (e.g., self-hosted or third-party):
+
+*   Ensure your Genbase Engine's `REGISTRY_URL` environment variable points to the correct registry base URL.
+*   Follow the specific publishing procedures provided by that registry's documentation. The registry must expose an API compatible with Genbase's `KitService` for discovery and downloading.
+
+Publishing your Kit makes your specialized AI capabilities available for others to discover, install, and integrate into their own Genbase projects.

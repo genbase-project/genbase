@@ -1,0 +1,165 @@
+---
+title: Managing and Using Modules
+description: Learn how to explore, create, interact with, configure, and manage Modules in Genbase Studio.
+---
+import { 
+    BlocksIcon, 
+    MessageSquareIcon, 
+    FolderGitIcon, 
+    LinkIcon, 
+    SettingsIcon, 
+    PlusCircleIcon, 
+    InfoIcon, 
+    Trash2Icon, 
+    AlertTriangle,
+    Box,
+    Eye,
+    Code, 
+    RefreshCw,
+    Network,
+    MoreVertical
+} from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Managing and Using Modules
+
+**[Modules](/concepts/projects-modules)** are the heart of Genbase – they are the running instances of **[Kits](/concepts/kits-registry)** that perform tasks. This guide covers how to manage and interact with Modules using the Genbase Studio interface.
+
+## 1. Exploring Modules <BlocksIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+The **Module Explorer**, typically located in the left sidebar when the "Modules" navigation tab is active, displays all Modules within the currently selected **[Project](/user-guide/projects)**.
+
+![Module Explorer Tree]( /images/studio-module-explorer-tree.png)
+
+
+
+*(Image: Screenshot of the Module Explorer tree view, showing folders and module instances.)*
+
+*   **Navigation:** Modules are organized hierarchically based on their **[Path](/concepts/projects-modules)**. Click folders (represented by chevrons) to expand or collapse them.
+*   **Selection:** Click directly on a Module's name (next to the box icon <Box className="inline-block h-3 w-3" />) to select it. The Main Content Area and Bottom Panel will update to reflect the selected Module.
+*   **Search:** Use the search bar above the tree to filter Modules by name or path.
+
+## 2. Creating a New Module <PlusCircleIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+You instantiate Kits to create runnable Modules within your active Project.
+
+1.  **Open Dialog:** Click the "Create Module" button usually found at the top of the Module Explorer, or potentially via a context menu on a folder.
+2.  **Select Kit & Version:** Choose the base Kit and the specific version you want to instantiate from the dropdown list. This list shows Kits installed locally in your Genbase environment (you might need to [install Kits from the Registry](/user-guide/registry) first).
+3.  **Name Your Module:** Provide a clear, descriptive `module_name`. This is how the Module will appear in the UI.
+4.  **Set Module Path (Optional):** Define the hierarchical path (`segment1.segment2`) where this Module should reside within the Project structure. If left blank, a default path might be assigned. Ensure the path uses only letters, numbers, and dots.
+5.  **Configure Environment Variables:** If the selected Kit defines required or optional environment variables, input fields will appear. Provide necessary values. Defaults might be pre-filled.
+6.  **Confirm Creation:** Click the "Create" button.
+
+<img 
+  src="/images/studio-create-module-dialog.png" 
+  alt="Create Module Dialog" 
+  style={{ maxHeight: '350px', width: 'auto', display: 'block', margin: '1em auto' }} 
+/>
+
+*(Image: Screenshot of the "Create Module" dialog showing Kit selection, name, path, and environment variable inputs.)*
+
+Genbase will initialize the Module, create its dedicated Workspace (Git repository) based on the Kit's workspace content, and set its initial state. The new Module will appear in the Explorer tree.
+
+## 3. Interacting via Chat & Profiles <MessageSquareIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+The primary way to interact with a Module's capabilities is through its **[Profiles](/concepts/profiles-agents)** using the chat interface in the **Bottom Panel**.
+
+![Bottom Chat Panel]( /images/studio-bottom-panel-chat.png)
+*(Image: Screenshot of the Bottom Panel showing Profile tabs, Session tabs, the chat message history area, and the input box.)*
+
+1.  **Select Module:** Click the desired Module in the Module Explorer.
+2.  **Select Profile:** The Bottom Panel will show tabs for the Profiles defined by the Module's Kit (e.g., `initialize`, `maintain`, `edit`). Click the tab corresponding to the task you want to perform.
+3.  **Select/Start Session:**
+    *   If the Profile allows multiple sessions (`allow_multiple: true`), you'll see session tabs (often showing timestamps or the last message). Click a tab to resume a session.
+    *   Click the "+" or "New Session" tab/button to start a fresh conversation within that Profile.
+    *   If `allow_multiple: false`, you'll likely just have the default session.
+4.  **Send Messages:** Type your request or instruction into the input box at the bottom and press Enter (or click the Send button).
+5.  **View Responses:** The Agent's responses will appear in the chat history area. This can include:
+    *   **Text:** Formatted text, potentially using Markdown.
+    *   **Tool Calls:** Indications that the agent executed an **[Action](/concepts/actions-execution)** (often collapsible to view parameters).
+    *   **Tool Results:** The output returned by an Action (often collapsible).
+    *   **Generative Elements:** Rich content like Mermaid diagrams or sandboxed HTML rendered directly in the chat.
+6.  **Continue Conversation:** Respond to the agent's messages or provide further instructions. The chat history is maintained per session.
+
+<Callout title="Agent Interaction">
+Remember you are interacting with an Agent specific to the selected Profile. Its capabilities and context are defined by the Kit and the Profile configuration. Refer to the Profile details (often accessible via an info button near the Profile selector) to understand its purpose and available Actions.
+</Callout>
+
+## 4. Managing the Workspace <FolderGitIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+When a Module is selected, the **Main Content Area** often defaults to showing its **[Workspace](/concepts/workspace-resources)**.
+
+![Main Content Workspace View]( /images/studio-main-content-workspace.png)
+*(Image: Screenshot of the Main Content area showing the file tree for the 'workspace' resource type and the code editor/preview pane.)*
+
+*   **Resource Type:** Ensure "workspace" is selected in the dropdown (usually near the top of the Main Content area) to view the Module's repository files.
+*   **File Tree:** Navigate the Module's file structure on the left side of the Main Content area. Click files to view their content.
+*   **Content Viewer:** The right pane displays the content of the selected file.
+    *   **Code Editor:** For most file types, a code editor (like Monaco) is shown for viewing. *(Note: Direct editing and saving capabilities might depend on the specific Genbase Studio version and configuration. The underlying API supports file updates.)*
+    *   **Markdown Preview:** For Markdown files (`.md`), toggle buttons (<Eye className="inline-block h-3 w-3" />, <Code className="inline-block h-3 w-3" />) usually allow switching between the raw code view and a rendered preview.
+*   **Refreshing:** Use the Refresh button (<RefreshCw className="inline-block h-3 w-3" />) to reload the file tree and content, reflecting any changes made by Actions.
+
+## 5. Managing Resource Sharing (Provide) <LinkIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Modules can share resources (`WORKSPACE` or `ACTION`) with each other using the **Provide** mechanism. You manage these provisions via the **Provide Sidebar**, which can usually be toggled open on the right side of the Main Content area.
+<img 
+  src="/images/studio-provide-sidebar.png" 
+  alt="Provide Sidebar" 
+  style={{ maxHeight: '300px', width: 'auto', display: 'block', margin: '1em auto' }} 
+/>
+*(Image: Screenshot of the right-hand sidebar showing "Providing" and "Receiving" tabs with cards representing resource provisions.)*
+
+1.  **Toggle Sidebar:** Click the "Provide" or "Relationships" button (often with a <Network className="inline-block h-3 w-3" /> icon) usually located in the header of the Main Content area.
+2.  **View Provisions:**
+    *   **Providing Tab:** Shows resources *this* Module is granting access to *other* Modules.
+    *   **Receiving Tab:** Shows resources *this* Module has been granted access *from* other Modules.
+    *   Each card typically shows the resource type (Workspace/Action), the target/source module, and a description.
+3.  **Add Provision:**
+    *   Click the "Provide Resource" or "+" button within the sidebar.
+    *   A dialog appears ([Screenshot](/images/studio-add-provide-dialog.png)).
+    *   Select the **Resource Type** (`WORKSPACE` or `ACTION`) you want to share *from the current module*.
+    *   (Optional) Add a **Description** explaining the purpose of this provision.
+    *   Select the **Target Module** (the Receiver) from the list of available modules in the current project.
+    *   Confirm the action.
+4.  **Edit/Remove Provision (Providing Tab):**
+    *   Find the provision card under the "Providing" tab.
+    *   Click the options menu (e.g., <MoreVertical className="inline-block h-3 w-3" />) on the card.
+    *   You can typically **Edit Description** or **Remove** the provision entirely. Removing a `WORKSPACE` provision will also attempt to remove the corresponding Git submodule from the receiver's workspace.
+
+## 6. Module Settings & Deletion <SettingsIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+You can view and manage specific settings for the selected Module.
+
+1.  **Access Settings:** Click the Info icon (<InfoIcon className="inline-block h-3 w-3" />) often located near the Module's name in the Main Content header.
+2.  **View Information:** A dialog or tabbed view appears showing:
+    *   **Module Info:** ID, Name, Kit origin (ID, Owner, Version), Path, Creation date.
+    *   **Kit Info:** Details about the underlying Kit.
+    *   **Environment Variables:** View currently set variables.
+    *   **Destroy/Danger Zone:** Options for deleting the module.
+
+    ![Module Info/Settings Dialog]( /images/studio-module-info-dialog.png)
+    *(Image: Screenshot of the Module Information dialog showing various tabs like Info, Env Vars, Destroy.)*
+
+3.  **Manage Environment Variables:**
+    *   Navigate to the "Environment" tab/section.
+    *   **View:** See existing key-value pairs.
+    *   **Edit:** Click an "Edit" button next to a variable to change its value. Save the changes.
+    *   **Add:** Click "Add Variable". You might be able to select from variables defined in the Kit (`kit.yaml`'s `environment` section) or add custom ones. Enter the name and value, then save.
+
+    ![Environment Variable Management]( /images/studio-env-var-management.png)
+    *(Image: Screenshot showing the Environment Variable management UI with options to view, edit, and add variables.)*
+
+4.  **Delete Module (Danger Zone):** <Trash2Icon className="inline-block h-5 w-5 align-text-bottom text-destructive" />
+    *   Navigate to the "Destroy" or "Danger Zone" tab.
+    *   Read the warnings carefully. Deleting a module is **irreversible**.
+    *   Click the "Force Delete Module" button.
+    *   A confirmation dialog will appear, often requiring you to type the module's name to confirm.
+
+    ![Delete Module Confirmation]( /images/studio-delete-module-dialog.png)
+    *(Image: Screenshot of the confirmation dialog for deleting a module, emphasizing the destructive nature.)*
+
+    <Callout title="Warning: Deletion is Permanent" intent="danger">
+    Deleting a module removes its workspace repository, all chat history, stored state, and database records permanently. Associated resource provisions will also be affected. Proceed with extreme caution.
+    </Callout>
+
+This guide covers the core functionalities for working with Modules in Genbase Studio. Refer to the specific concept pages for deeper understanding of the underlying mechanisms.

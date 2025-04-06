@@ -1,0 +1,81 @@
+---
+title: Database Setup & Migrations
+description: Guide to setting up the PostgreSQL database and managing schema migrations for Genbase.
+---
+
+import { DatabaseIcon, Settings2Icon, CheckCircleIcon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { CodeBlock } from 'fumadocs-ui/components/codeblock';
+
+# Database Setup & Migrations <DatabaseIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Genbase uses a PostgreSQL database to store all its persistent data, including project configurations, module details, kit metadata (implicitly via module records), user accounts, chat history, API keys, and various statuses. Proper database setup and schema management are crucial for Genbase operation.
+
+## Database Setup
+
+You need a running PostgreSQL instance accessible by the Genbase Engine service.
+
+1.  **Install PostgreSQL:** If you don't have one, install PostgreSQL server. ([PostgreSQL Downloads](https://www.postgresql.org/download/)). For local development, package managers (like Homebrew on macOS, apt on Debian/Ubuntu) often provide easy installation. For Docker deployments, the provided `docker-compose.yml` handles this automatically using the official `postgres` image.
+2.  **Create Database and User:** Create a dedicated database and a user with privileges to connect, create tables, and perform CRUD operations on that database.
+    *   *Example SQL commands (run as PostgreSQL superuser, e.g., `postgres`):*
+        ```sql
+        CREATE DATABASE genbase_db;
+        CREATE USER genbase_user WITH PASSWORD 'your_strong_password';
+        GRANT ALL PRIVILEGES ON DATABASE genbase_db TO genbase_user;
+        -- Optional: If using schemas other than public, grant usage
+        -- GRANT USAGE ON SCHEMA public TO genbase_user;
+        -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO genbase_user;
+        -- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO genbase_user;
+        ```
+        Replace `genbase_db`, `genbase_user`, and `your_strong_password` with your desired values.
+3.  **Configure Connection:** Set the `DATABASE_URL` environment variable for the Genbase Engine service. It should point to the database you just created.
+    *   **Format:** `postgresql://<user>:<password>@<host>:<port>/<database_name>`
+    *   **Docker Example:** `DATABASE_URL=postgresql://user:password@postgres:5432/genbase` (Uses Compose service name `postgres`). Set user/password via `POSTGRES_USER`/`POSTGRES_PASSWORD` in the root `.env`.
+    *   **Local Example:** `DATABASE_URL=postgresql://genbase_user:your_strong_password@localhost:5432/genbase_db`
+
+## Schema Migrations (Alembic) <Settings2Icon className="inline-block h-5 w-5 align-text-bottom" />
+
+Genbase uses [Alembic](https://alembic.sqlalchemy.org/) to manage database schema changes over time. Migrations ensure that your database schema matches what the current version of the Genbase Engine code expects.
+
+*   **Automatic Migrations on Startup:** By default, the Genbase Engine (`main.py`'s `startup_event`) attempts to automatically apply any pending migrations when the application starts. It effectively runs `alembic upgrade head`. This ensures the database schema is up-to-date before the application begins serving requests.
+
+    ```python
+    # main.py snippet
+    @app.on_event("startup")
+    async def startup_event():
+        # ...
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"], # Command to apply migrations
+            # ...
+        )
+        if result.returncode != 0:
+            logger.error("Migration failed...")
+            sys.exit(1)
+        # ...
+    ```
+
+*   **Migration Files:** Migration scripts are located within the `engine/db/migrations/versions/` directory. Each file represents a specific schema change.
+*   **Alembic Configuration:** The `engine/alembic.ini` file configures Alembic, including the database connection string (it usually reads the `DATABASE_URL` from the environment).
+
+### Manual Migration (Optional)
+
+While migrations run automatically on startup, you might occasionally need to manage them manually, especially during development or troubleshooting.
+
+1.  **Navigate:** Open a terminal *inside the `engine/` directory*.
+2.  **Ensure Environment:** Make sure the terminal session has the correct `DATABASE_URL` environment variable set, pointing to your target database. If using PDM locally, PDM might handle this if configured.
+3.  **Alembic Commands (using PDM):**
+    *   **Check Current Revision:** `pdm run alembic current`
+    *   **Check History:** `pdm run alembic history`
+    *   **Upgrade to Latest:** `pdm run alembic upgrade head` (This is what runs on startup)
+    *   **Downgrade (Use with Caution!):** `pdm run alembic downgrade -1` (Downgrade one revision)
+    *   **Generate New Migration (Development):** After changing SQLAlchemy models in `engine/db/models.py`, generate a new migration script: `pdm run alembic revision --autogenerate -m "Your description of changes"` Review the generated script carefully before applying.
+
+<Callout title="Database Backups" intent="warn">
+Always back up your database before applying significant schema migrations, especially in production environments. While Alembic handles upgrades, rollbacks can sometimes be complex.
+</Callout>
+
+<Callout title="Migration Errors on Startup" intent="danger">
+If the automatic migration fails during Engine startup (check the logs), the application will likely exit. This usually indicates an issue with the database connection, permissions, or an error in a migration script itself. Resolve the underlying database issue or migration script error before restarting the Engine.
+</Callout>
+
+Proper database setup and letting Alembic manage migrations automatically on startup is typically sufficient for most deployments. Manual intervention is generally only needed for development or troubleshooting.

@@ -1,0 +1,47 @@
+---
+title: User Guide
+description: Learn how to navigate and use the Genbase Studio web interface.
+---
+
+import { LayoutDashboardIcon, HandIcon } from 'lucide-react';
+
+# Genbase Studio User Guide
+
+Welcome to the Genbase Studio! This guide will help you understand the different parts of the user interface and how to perform common tasks like managing your projects, modules, and interacting with AI agents.
+
+## Overview <LayoutDashboardIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Genbase Studio provides a visual interface for interacting with the Genbase Engine backend. It allows you to:
+
+*   Organize your work into **Projects**.
+*   Browse and manage reusable **Kits** via the **Registry**.
+*   Create and configure **Modules** (instances of Kits).
+*   Interact with Modules via **Profiles** using a **Chat** interface.
+*   View and manage Module **Workspaces** and **Resources**.
+*   Define **Relationships** and **Resource Sharing** between Modules.
+*   Configure system **Settings** (like the default LLM).
+*   **(Admins Only)** Manage **Users** and access control.
+
+## Main Interface Layout
+
+The Studio interface is typically divided into several key areas:
+
+![Genbase Studio Layout]( /images/studio-layout-overview.png)
+*(Image: Screenshot of the main Studio interface with key areas highlighted: 1. Sidebar Navigation, 2. Explorer Panel (Modules/Registry/Settings), 3. Main Content Area, 4. Bottom Chat/Interaction Panel)*
+
+1.  **Sidebar Navigation (Far Left):** Allows switching between major sections like Modules, Registry, Users (Admin), and Settings.
+2.  **Explorer Panel (Left):** Context-sensitive sidebar showing relevant items for the selected section (e.g., Module tree, Registry Kits, Settings options). This panel can usually be collapsed/expanded.
+3.  **Main Content Area (Center):** Displays detailed information or interfaces based on selections in the Explorer Panel (e.g., Module workspace files, Kit details, Settings forms).
+4.  **Bottom Panel (Bottom/Chat):** Primarily used for interacting with selected Modules via their Profiles through a chat interface. This panel can often be resized or maximized.
+
+## Getting Around <HandIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+This user guide is structured similarly to the Studio's sections:
+
+*   **[Projects](/docs/user-guide/projects):** Learn how to select and create projects.
+*   **[Modules](/docs/user-guide/modules):** Detailed guides on exploring, creating, interacting with, and configuring modules.
+*   **[Registry](/docs/user-guide/registry):** How to browse and install Kits.
+*   **(Admin) [User Management](/docs/administration/user-management):** Guide for managing users (linked from Admin section but relevant for UI).
+*   **[Settings](/docs/administration/llm-embedding):** How to configure system settings like the default LLM (linked from Admin section but relevant for UI).
+
+Use the navigation menu to explore these topics and learn how to make the most of Genbase Studio.

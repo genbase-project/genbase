@@ -1,0 +1,45 @@
+---
+title: Managing Projects
+description: Learn how to select, view, and create Projects in Genbase Studio.
+---
+
+import { FolderGit2Icon, PlusCircleIcon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Managing Projects
+
+**[Projects](/concepts/projects-modules)** are the top-level containers for organizing your work in Genbase. All **[Modules](/concepts/projects-modules)** belong to a specific Project. Genbase Studio provides a simple way to switch between existing projects and create new ones.
+
+## Selecting the Active Project <FolderGit2Icon className="inline-block h-5 w-5 align-text-bottom" />
+
+The currently active project determines which set of Modules are displayed in the Module Explorer. You can select the active project using the **Project Selector** dropdown located near the top of the Module Explorer sidebar.
+
+![Selecting a Project in Studio](/images/studio-project-selector.png)
+*(Image: Screenshot of the Project Selector dropdown in the Studio sidebar, highlighting an active project.)*
+
+1.  **Locate the Selector:** Find the dropdown menu labeled "Project:" in the sidebar (usually visible when the "Modules" tab is selected in the far-left navigation).
+2.  **Click the Dropdown:** Click on the selector to reveal the list of available projects.
+3.  **Choose a Project:** Select the desired project name from the list.
+4.  **View Updates:** The Module Explorer tree will automatically update to show the Modules belonging to the selected project.
+
+<Callout title="Default Project">
+If you haven't created any projects yet, you'll likely only see the `default` project (ID: `0000...`). Modules created without specifying a project are typically assigned here.
+</Callout>
+
+## Creating a New Project <PlusCircleIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+You can easily create new projects directly from the Project Selector.
+
+1.  **Open the Selector:** Click the Project Selector dropdown in the sidebar.
+2.  **Choose "Create New Project":** Select the option typically found at the bottom of the project list, often marked with a plus icon.
+3.  **Enter Name:** A dialog box will appear prompting you to enter a name for your new project. Choose a descriptive name.
+
+<div style={{ textAlign: 'center' }}>
+    <img src="/images/studio-create-project-dialog.png" alt="Create Project Dialog" style={{ maxWidth: '80%' }} />
+    <p>*(Image: Screenshot of the "Create New Project" dialog box asking for the project name.)*</p>
+</div>
+
+4.  **Confirm:** Click the "Create Project" (or similar) button in the dialog.
+5.  **Auto-Select:** Genbase will create the project, and it will usually become the newly selected active project automatically. The Module Explorer will be empty initially for this new project.
+
+You can now start [creating Modules](/user-guide/modules/creating) within your newly created project.

@@ -1,0 +1,58 @@
+---
+title: Core Concepts
+description: Understand the fundamental building blocks of the Genbase platform.
+---
+
+import { Cards, Card } from 'fumadocs-ui/components/card';
+import { BlocksIcon, FolderGit2Icon, BotIcon, ZapIcon, LinkIcon, CombineIcon } from 'lucide-react';
+
+# Core Concepts
+
+Welcome to the conceptual overview of Genbase. Understanding these core ideas is essential for effectively using the platform, whether you're operating modules, developing kits, or administering the system.
+
+Genbase is built around a modular architecture designed for creating, managing, and orchestrating complex AI agent systems. Each concept represents a key building block in this architecture.
+
+## Key Building Blocks
+
+Explore these concepts to grasp how Genbase structures AI development and collaboration:
+
+<Cards>
+  <Card
+    href="/docs/concepts/projects-modules"
+    icon={<FolderGit2Icon />}
+    title="Projects & Modules"
+    description="Learn how work is organized into Projects and how Kits are instantiated into runnable Modules with unique paths."
+  />
+  <Card
+    href="/concepts/kits-registry"
+    icon={<BlocksIcon />}
+    title="Kits & Registry"
+    description="Discover Kits as reusable blueprints for AI capabilities and the role of the Registry in sharing them."
+  />
+  <Card
+    href="/docs/concepts/profiles-agents"
+    icon={<BotIcon />}
+    title="Profiles & Agents"
+    description="Understand how Profiles define interaction modes and how Agents act as the intelligent controllers."
+  />
+  <Card
+    href="/docs/concepts/actions-execution"
+    icon={<ZapIcon />}
+    title="Actions & Secure Execution"
+    description="Explore how executable code (Actions) is packaged within Kits and run securely in isolated environments."
+  />
+  <Card
+    href="/docs/concepts/relationships-provide"
+    icon={<LinkIcon />}
+    title="Relationships & Resource Sharing"
+    description="Learn how Modules connect and share resources like Workspaces and Actions using the Provide mechanism."
+  />
+   <Card
+    href="/docs/concepts/workspace-resources"
+    icon={<CombineIcon />}
+    title="Workspaces & Resources"
+    description="Understand Module Workspaces (Git repos) and how specific Resources (files, instructions) are managed."
+  />
+</Cards>
+
+By understanding these components and how they interact, you'll be well-equipped to build powerful and maintainable AI systems with Genbase. We recommend reading through each concept page for a deeper understanding.

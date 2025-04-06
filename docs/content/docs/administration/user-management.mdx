@@ -1,0 +1,87 @@
+---
+title: User Management
+description: Guide for Administrators (Superusers) on managing user accounts in Genbase Studio.
+---
+
+import { UsersIcon, PlusCircleIcon, EditIcon, Trash2Icon, ShieldCheckIcon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# User Management <UsersIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Genbase includes a user management system allowing administrators (Superusers) to create, view, modify, and delete user accounts directly within the Genbase Studio interface.
+
+<Callout title="Permissions Required" intent="warn" icon={<ShieldCheckIcon />}>
+    Accessing the User Management page and performing user administration tasks requires **Superuser** privileges. Regular users will not see the "Users & Access" section in the navigation sidebar.
+</Callout>
+
+## Accessing User Management
+
+1.  **Navigate:** As a logged-in Superuser, click the "Users & Access" icon (<UsersIcon className="inline-block h-4 w-4" />) in the far-left navigation sidebar.
+2.  **Select Users:** In the Explorer panel that appears, click on "Users".
+3.  **View:** The Main Content Area will display the User Management page, listing all registered users.
+
+![User Management Page]( /images/studio-user-management-page.png)
+*(Image: Screenshot of the User Management page in Studio, showing the table of users, status/role badges, and action buttons.)*
+
+## Viewing Users
+
+The main table displays key information about each user:
+
+*   **Email:** The user's login email address.
+*   **Status:** Indicates if the account is `Active` (can log in) or `Inactive` (cannot log in).
+*   **Role:** Shows whether the user is a regular `User` or a `Superuser`.
+*   **Actions:** Buttons to edit or delete the user.
+
+## Creating a New User <PlusCircleIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+1.  **Open Dialog:** Click the "Create User" button located at the top-right of the user table header.
+2.  **Fill Details:** A dialog box will appear.
+    *   Enter the new user's **Email** address.
+    *   Enter a strong initial **Password**. The user should change this upon first login if possible (or use the password reset feature).
+    *   **(Optional)** Use the checkboxes to set the initial **Active** status and **Superuser** role. By default, users are created as Active and non-Superuser.
+
+    ![Create User Dialog]( /images/studio-create-user-dialog.png)
+    *(Image: Screenshot of the "Create New User" dialog with fields for email, password, and checkboxes for active/superuser status.)*
+
+3.  **Confirm:** Click the "Create User" button in the dialog.
+4.  **Feedback:** A notification will confirm success or failure. The user list will update automatically.
+
+<Callout title="Password Security" >
+It's recommended to use a strong, randomly generated initial password and instruct the new user to change it immediately using the [Password & Security](/docs/administration/security) settings page after they log in.
+</Callout>
+
+## Editing a User <EditIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Superusers can modify existing user accounts.
+
+1.  **Locate User:** Find the user you want to edit in the user table.
+2.  **Open Dialog:** Click the Edit icon (<EditIcon className="inline-block h-4 w-4" />) in the "Actions" column for that user.
+3.  **Modify Details:** An "Edit User" dialog will appear. You can typically change:
+    *   **Email:** Update the user's email address.
+    *   **New Password (Optional):** Enter a new password *only if you want to reset it*. Leave blank to keep the current password unchanged.
+    *   **Active Status:** Use the switch/checkbox to activate or deactivate the account.
+    *   **Superuser Role:** Use the switch/checkbox to grant or revoke Superuser privileges.
+
+    ![Edit User Dialog]( /images/studio-edit-user-dialog.png)
+    *(Image: Screenshot of the "Edit User" dialog showing fields for email, optional new password, and switches/checkboxes for active/superuser status.)*
+
+4.  **Save Changes:** Click the "Save Changes" button.
+5.  **Feedback:** A notification will confirm the update. The user list will refresh.
+
+## Deleting a User <Trash2Icon className="inline-block h-5 w-5 align-text-bottom text-destructive" />
+
+Deleting a user permanently removes their account and access.
+
+1.  **Locate User:** Find the user you want to delete in the table.
+2.  **Initiate Deletion:** Click the Delete icon (<Trash2Icon className="inline-block h-4 w-4" />) in the "Actions" column.
+3.  **Confirm:** An alert dialog will appear, warning you that the action is irreversible. Read the warning carefully.
+4.  **Confirm Action:** Click the "Delete User" (or similarly labeled confirmation) button, often styled distinctively (e.g., red).
+
+    ![Delete User Confirmation Dialog]( /images/studio-delete-user-confirm-dialog.png)
+    *(Image: Screenshot of the confirmation dialog shown before deleting a user, emphasizing the permanent nature of the action.)*
+
+5.  **Feedback:** A notification will confirm the deletion. The user will be removed from the list.
+
+<Callout title="Caution: Deletion" intent="danger">
+Deleting a user is permanent and cannot be undone. Ensure you are deleting the correct account. You typically cannot delete your own superuser account while logged in with it.
+</Callout>

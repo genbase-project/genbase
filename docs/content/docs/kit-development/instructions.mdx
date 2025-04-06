@@ -1,0 +1,113 @@
+---
+title: Using Instructions Files
+description: Learn how to add contextual information and guidance to your Kit's Profiles and Provided resources using instruction files.
+---
+
+import { FileTextIcon, InfoIcon } from 'lucide-react';
+import { CodeBlock } from 'fumadocs-ui/components/codeblock';
+
+# Using Instructions Files <FileTextIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Instructions provide a way to embed static, contextual information directly into your Kit definition. This text content is made available to **[Agents](/concepts/profiles-agents)** at runtime, helping guide their behavior within a specific **[Profile](/concepts/profiles-agents)** or providing context about **[Provided Resources](/concepts/relationships-provide)**.
+
+## Purpose of Instructions
+
+*   **Agent Guidance:** Provide specific directives, constraints, or background information to the Agent handling a Profile (e.g., "Always ask for confirmation before deleting data," "Format your output as a JSON object with keys 'summary' and 'keywords'").
+*   **User Context (Indirect):** While primarily for the Agent, well-written instructions can help the Agent formulate better prompts or explanations for the end-user.
+*   **Context for Provided Resources:** Explain the purpose or usage guidelines for Actions or Workspaces shared via the `provide` section in `kit.yaml`.
+
+## Creating Instruction Files
+
+1.  **Location:** Create your instruction files inside the `instructions/` directory at the root of your Kit.
+2.  **Format:** You can use plain text (`.txt`) or Markdown (`.md`). Markdown is generally preferred as it allows for better formatting if the content needs to be displayed directly (though current primary use is agent context). Genbase reads the raw content of the file.
+3.  **Content:** Write clear, concise text relevant to the Profile or Provided Resource it will be associated with. Focus on information the Agent needs to perform its task effectively.
+
+**Example (`instructions/maintenance_guide.md`):**
+
+```markdown
+# Database Maintenance Overview
+
+You are assisting with PostgreSQL database maintenance.
+
+**Available Actions:**
+- `vacuum`: Reclaims storage and updates statistics. Use regularly, especially on frequently updated tables. Avoid `full=true` during peak hours.
+- `analyze_db`: Updates query planner statistics. Run after significant data changes or VACUUM operations.
+- `custom_query`: Executes **read-only** SELECT queries. Verify user intent before running potentially expensive queries.
+
+**Workflow:**
+1. Assess current status (e.g., using `get_table_stats` - if available in profile).
+2. Recommend appropriate maintenance actions (VACUUM, ANALYZE) based on stats or user request.
+3. If running `custom_query`, ensure it's a SELECT statement.
+4. Report results clearly to the user.
+```
+
+## Referencing Instructions in `kit.yaml`
+
+You link instruction files to Profiles or Provided Resources within your `kit.yaml` using the `instructions` list:
+
+```yaml
+# kit.yaml (snippet)
+
+profiles:
+  maintain:
+    agent: "tasker"
+    instructions: # Instructions for the 'maintain' profile
+      - name: "maint_overview" # A logical name for this instruction
+        path: "maintenance_guide.md" # Path relative to instructions/ directory
+        description: "Guidelines for performing database maintenance tasks." # Optional description
+    actions:
+      # ... actions for maintain profile
+      - name: "vacuum"
+        path: "db_maint:vacuum_db"
+        description: "Run VACUUM."
+
+# ...
+
+provide:
+  actions:
+    - name: "get_db_summary"
+      path: "db_maint:summarize_stats"
+      description: "Provides a quick summary of database health."
+  instructions: # Instructions explaining the provided resources
+    - name: "provider_usage"
+      path: "guides/how_to_use_provider.md"
+      description: "Explains how consuming modules should use the provided actions."
+```
+
+*   **`instructions` List:** Appears under a `profiles.<profile_name>` key or the top-level `provide` key.
+*   **`name`:** (Required) A unique identifier for the instruction within its list.
+*   **`path`:** (Required) The filename (and path relative to the `instructions/` directory) of the instruction file.
+*   **`description`:** (Optional) A brief description shown potentially in UI or used for context.
+
+## How Agents Access Instructions <InfoIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+When an Agent's `process_request` method is called, the `profile_data` argument (of type `ProfileMetadataResult`) contains a list of `instructions` relevant to the current context.
+
+*   **For Profile Interactions:** The `profile_data.instructions` list will contain all instructions defined under the *current Profile* in `kit.yaml`.
+*   **For Interactions Using Provided Resources:** If the interaction context involves resources provided by other modules, the `profile_data.instructions` list might *also* include instructions defined in the `provide.instructions` section of the *providing* Kit(s). *(Note: The exact mechanism for including provided instructions might depend on the specific Agent implementation and how context is aggregated).*
+
+**Accessing Content in Agent Code:**
+
+Each item in the `profile_data.instructions` list is an `InstructionItem` object (from `engine.services.core.kit`) which includes the `name`, `path`, `description`, and crucially, the pre-loaded file `content`.
+
+```python
+# Example inside an Agent's process_request method
+async def process_request(self, context, profile_data):
+    # ...
+    instruction_texts = []
+    for instruction in profile_data.instructions:
+        logger.info(f"Loading instruction '{instruction.name}' from path '{instruction.path}'")
+        instruction_texts.append(f"--- Instruction: {instruction.name} ---\n{instruction.content}\n--- End Instruction ---")
+
+    combined_instructions = "\n\n".join(instruction_texts)
+
+    # Include combined_instructions in the system prompt for the LLM
+    system_prompt, _ = await self.set_context(
+        agent_instructions=f"Base instructions...\n\n{combined_instructions}"
+        # ... other context settings
+    )
+
+    # ... proceed with LLM call etc.
+```
+
+By using instruction files, you can keep detailed guidance and context separate from your core Agent logic and `kit.yaml` configuration, making your Kit easier to manage and update.

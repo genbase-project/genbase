@@ -1,0 +1,129 @@
+---
+title: Running Locally (for Development)
+description: Instructions for setting up and running Genbase Engine and Studio directly on your machine for development purposes.
+---
+
+import { LaptopIcon, TerminalIcon, AlertTriangleIcon, DatabaseIcon } from 'lucide-react';
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { CodeBlock } from 'fumadocs-ui/components/codeblock';
+
+# Running Locally (for Development) <LaptopIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+This guide explains how to run the Genbase Engine (backend) and Studio (frontend) directly on your local machine without using Docker containers. This setup is primarily intended for **active development and debugging** of the Genbase codebase itself.
+
+<Callout title="Recommendation" intent="warn" icon={<AlertTriangleIcon />}>
+For general use, evaluation, or production, deploying with **[Docker Compose](/docs/administration/deployment/docker)** is strongly recommended due to its consistency and simplified dependency management. Only use this local setup if you need to directly modify and test the Engine or Studio source code.
+</Callout>
+
+## Prerequisites
+
+You'll need to install and configure several tools manually:
+
+1.  **Python & PDM:**
+    *   Install Python (version 3.9+ recommended, check Engine's `pyproject.toml` for specifics).
+    *   Install [PDM](https://pdm-project.org/latest/), the Python dependency manager used by the Engine. Follow their official installation instructions.
+2.  **Node.js & npm/yarn:**
+    *   Install Node.js (LTS version recommended). [Node.js Downloads](https://nodejs.org/).
+    *   `npm` is included with Node.js. `yarn` can be installed if preferred (`npm install -g yarn`). The Studio project uses `npm` by default (`package.json`).
+3.  **PostgreSQL Server:** <DatabaseIcon className="inline-block h-4 w-4 align-text-bottom" />
+    *   Install and run a PostgreSQL server locally or have access to one. ([PostgreSQL Downloads](https://www.postgresql.org/download/)).
+    *   You need to create a database, user, and password for Genbase.
+4.  **Git:** To clone the repository.
+
+## Setup and Configuration
+
+<Steps>
+
+### 1. Clone the Repository
+
+If you haven't already, clone the Genbase monorepo:
+
+```bash {{ title: "Terminal" }}
+git clone <your-genbase-repo-url>
+cd genbase
+```
+
+### 2. Configure Environment Files
+
+You need to configure `.env` files for the database connection and API keys.
+
+*   **Engine `.env` File (`engine/.env`):**
+    *   Navigate to the `engine/` directory.
+    *   Copy the template: `cp .env.template .env` (if it exists).
+    *   **Edit `engine/.env`:**
+        *   **`DATABASE_URL`:** Set this to connect to your *local* or accessible PostgreSQL server. Example: `DATABASE_URL=postgresql://your_db_user:your_db_password@localhost:5432/genbase_db_name` (Replace placeholders).
+        *   **LLM/Embedding Keys:** Add necessary `*_API_KEY` values.
+        *   **`AUTH_SECRET`:** Set a strong, unique secret.
+        *   **`ADMIN_USERNAME`, `ADMIN_PASSWORD`:** Credentials for the initial superuser.
+        *   `REGISTRY_URL`, `DATA_DIR`: Set as needed, `.data` is a reasonable default for local `DATA_DIR`.
+
+*   **Studio `.env` File (`studio/.env`):**
+    *   Navigate to the `studio/` directory.
+    *   Copy the template: `cp .env.template .env` (if it exists).
+    *   **Edit `studio/.env`:**
+        *   **`VITE_ENGINE_URL`:** This *must* point to the URL where your locally running Engine API will be accessible from your browser. Usually, this is `http://localhost:8000`.
+
+### 3. Install Dependencies
+
+*   **Engine (Python):**
+    ```bash {{ title: "Terminal - inside engine/ directory" }}
+    cd ../engine # Make sure you are in the engine directory
+    pdm install
+    ```
+    *This installs all Python dependencies listed in `pyproject.toml` into a virtual environment managed by PDM.*
+
+*   **Studio (Node.js):**
+    ```bash {{ title: "Terminal - inside studio/ directory" }}
+    cd ../studio # Make sure you are in the studio directory
+    npm install
+    ```
+    *This installs all Node.js dependencies listed in `package.json`.*
+
+### 4. Initialize Database & Run Migrations
+
+Before starting the Engine for the first time, ensure your PostgreSQL server is running and the database/user specified in `engine/.env` exist. Then, run the database migrations:
+
+```bash {{ title: "Terminal - inside engine/ directory" }}
+cd ../engine # Make sure you are in the engine directory
+pdm run migrate # This typically executes 'alembic upgrade head'
+```
+*This command uses PDM to run the `migrate` script defined in `pyproject.toml`, which should apply all necessary database schema changes.*
+
+</Steps>
+
+## Running the Services
+
+You need to run the Engine and Studio in separate terminal windows.
+
+1.  **Start the Engine (Backend):**
+    *   Open a terminal window.
+    *   Navigate to the `engine/` directory.
+    *   Run the start command using PDM:
+        ```bash {{ title: "Terminal - inside engine/ directory" }}
+        pdm run start # Executes 'uvicorn main:app --host 0.0.0.0 --port 8000 --reload' defined in pyproject.toml
+        ```
+    *   The Engine API should now be running, typically at `http://localhost:8000`.
+
+2.  **Start the Studio (Frontend):**
+    *   Open a *second* terminal window.
+    *   Navigate to the `studio/` directory.
+    *   Run the development server command:
+        ```bash {{ title: "Terminal - inside studio/ directory" }}
+        npm run dev
+        ```
+    *   The Studio development server should now be running, typically at `http://localhost:5173`.
+
+## Accessing Genbase
+
+*   Open your web browser and navigate to the Studio URL (usually [`http://localhost:5173`](http://localhost:5173)).
+*   Log in using the `ADMIN_USERNAME` and `ADMIN_PASSWORD` configured in `engine/.env`.
+
+## Stopping the Services
+
+*   Go to each terminal window where a service is running.
+*   Press `Ctrl+C` to stop the process.
+
+<Callout title="Using run-local.sh">
+The `scripts/run-local.sh` script attempts to automate the startup process described above (steps 3 & 4 of "Running the Services") in a single command and manages background processes. Review the script to understand how it works before using it. You still need to perform the prerequisite installations and configuration steps manually.
+</Callout>

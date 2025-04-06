@@ -1,0 +1,67 @@
+---
+title: Kit Development
+description: Understand the philosophy and goals behind creating reusable Genbase Kits.
+---
+
+import { PuzzleIcon, RocketIcon, BookOpenCheckIcon } from 'lucide-react';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Welcome to the Kit Developer Guide! This section provides the information you need to create your own reusable AI capabilities as Genbase **[Kits](/concepts/kits-registry)**.
+
+## The Power of Kits <PuzzleIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Kits are the cornerstone of Genbase's modularity. By packaging specific functionalities, expertise, and workflows into a standardized format, Kits enable:
+
+*   **Reusability:** Build a capability once (like managing a specific database or interacting with an external API) and reuse it across multiple projects and modules.
+*   **Specialization:** Focus a Kit on solving one problem domain exceptionally well, incorporating best practices and tailored logic.
+*   **Collaboration:** Share your Kits via a **[Registry](/concepts/kits-registry)**, allowing others to benefit from your work and build upon it.
+*   **Composition:** Construct complex AI systems by assembling and connecting Modules instantiated from different specialized Kits.
+*   **Standardization:** Provide a common structure (`kit.yaml`, standard directories) for defining and understanding AI capabilities.
+
+## What Makes a Good Kit?
+
+When designing a Kit, consider these principles:
+
+1.  **Clear Purpose:** Define a specific problem or capability the Kit addresses (e.g., "PostgreSQL Schema Management," "React Component Generation," "Web Content Summarization").
+2.  **Well-Defined Interface:** Expose functionality through clear **[Profiles](/concepts/profiles-agents)** and well-documented **[Actions](/concepts/actions-execution)**. Think about how other modules or users will interact with it.
+3.  **Encapsulation:** Keep internal logic hidden where possible. Expose necessary functionality via Actions and manage internal state within the Module's **[Workspace](/concepts/workspace-resources)** or Profile Store.
+4.  **Configuration:** Use environment variables (defined in `kit.yaml`) for necessary external configurations (API keys, connection strings). Provide sensible defaults where possible.
+5.  **Reusability:** Design Actions and logic to be generally applicable within the Kit's domain, avoiding hardcoding project-specific details.
+6.  **Resource Sharing (Provide):** Clearly define what the Kit *provides* (`provide` section in `kit.yaml`) if it's intended to share functionality (Actions) or data (Workspace) with other Modules.
+7.  **Documentation:** Include clear descriptions in `kit.yaml` and potentially a `README.md` within the Kit explaining its purpose, usage, and configuration.
+
+<Callout title="Think Modularly">
+Avoid creating monolithic Kits that try to do everything. Instead, break down complex problems into smaller, composable Kits that can work together through defined interfaces (Profiles, Actions, Provide).
+</Callout>
+
+## Development Workflow Overview <RocketIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Developing a Kit typically involves:
+
+1.  **Planning:** Define the Kit's purpose, inputs, outputs, actions, and configuration.
+2.  **Structuring:** Set up the standard Kit directory structure. ([See Structure](/kit-development/structure))
+3.  **Defining the Manifest:** Create and populate the `kit.yaml` file. ([See kit.yaml Reference](/kit-development/kit-yaml))
+4.  **Implementing Actions:** Write the core Python logic in the `actions/` directory. ([See Actions](/kit-development/actions))
+5.  **(Optional) Implementing Agents:** Create custom agent logic if needed. ([See Agents](/kit-development/agents))
+6.  **Defining Profiles:** Link agents and actions for specific interaction modes in `kit.yaml`. ([See Profiles](/kit-development/profiles))
+7.  **Adding Instructions:** Write relevant Markdown guides. ([See Instructions](/kit-development/instructions))
+8.  **Configuring Workspace:** Add necessary initial files to the `workspace/` directory. ([See Workspace](/kit-development/workspace))
+9.  **Defining Provisions:** Specify shared resources in the `provide` section. ([See Providing Resources](/kit-development/providing-resources))
+10. **Packaging:** Create the `.tar.gz` archive. ([See Packaging](/kit-development/packaging-publishing))
+11. **Testing:** Install the Kit locally, create a Module, and test its Profiles and Actions thoroughly.
+12. **Publishing (Optional):** Upload the Kit package to a registry.
+
+## Where to Go Next <BookOpenCheckIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Use the following guides to dive deeper into specific aspects of Kit development:
+
+<Cards>
+  <Card href="/docs/kit-development/structure" title="Kit Directory Structure" />
+  <Card href="/docs/kit-development/kit-yaml" title="kit.yaml Reference" />
+  <Card href="/docs/kit-development/actions" title="Writing Actions" />
+  <Card href="/docs/kit-development/agents" title="Developing Agents" />
+  <Card href="/docs/kit-development/profiles" title="Defining Profiles" />
+  <Card href="/docs/kit-development/providing-resources" title="Providing Resources" />
+  <Card href="/docs/kit-development/packaging-publishing" title="Packaging & Publishing" />
+</Cards>

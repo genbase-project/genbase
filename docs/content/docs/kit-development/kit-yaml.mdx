@@ -1,0 +1,198 @@
+---
+title: kit.yaml Reference
+description: Detailed specification for the kit.yaml manifest file used to define Genbase Kits.
+---
+
+import { FileTextIcon } from 'lucide-react';
+import { Accordions, Accordion } from 'fumadocs-ui/components/accordion';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+# kit.yaml Reference <FileTextIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+The `kit.yaml` file is the manifest for your Genbase Kit. It's a YAML file located at the root of your Kit's directory structure that defines metadata, configuration, capabilities, and resources. Genbase parses this file to understand how to install, configure, and utilize your Kit.
+
+## Top-Level Fields
+
+These fields define the fundamental identity and characteristics of the Kit.
+
+```yaml
+# --- Required Metadata ---
+docVersion: v1           # Specification version (currently only "v1" is supported)
+id: "my-unique-kit-id"   # Unique identifier for the kit within the owner's scope (lowercase, kebab-case recommended)
+version: "1.0.0"         # Semantic Version (MAJOR.MINOR.PATCH)
+name: "My Awesome Kit"   # Human-readable name for display
+owner: "my-org"          # Namespace/Owner identifier (lowercase, kebab-case recommended)
+
+# --- Optional Metadata ---
+description: "A brief description of what this kit does." # Optional description for UI/Registry
+
+# --- Dependencies & Environment ---
+dependencies:            # Optional: List of Python packages required by actions
+  - requests
+  - beautifulsoup4
+environment:             # Optional: List of environment variables the kit expects
+  - name: "API_KEY"
+    description: "API Key for the external service"
+    required: true         # Default: false
+  - name: "SERVICE_URL"
+    description: "URL of the service endpoint"
+    required: false
+    default: "https://api.example.com" # Optional default value
+
+# --- Runtime & Execution ---
+image: "python:3.11-slim" # Optional: Base Docker image for action execution (default: python:3.11-slim)
+ports:                   # Optional: Ports to map from the action container to the host
+  - name: "WEB_UI"         # Name used for environment variable (PORT_WEB_UI)
+    port: 8080             # Port inside the container
+
+# --- Core Components (Detailed Below) ---
+agents: [ ... ]          # Optional: Definitions for custom agents
+profiles: { ... }        # Optional: Definitions for interaction profiles/workflows
+provide: { ... }         # Optional: Definitions for resources provided to other modules
+workspace: { ... }       # Optional: Definitions for initial workspace files & ignores
+```
+
+---
+
+## Detailed Sections
+
+<Accordions>
+  <Accordion title="Metadata & Dependencies">
+    *   `docVersion` (Required, String): Must be `"v1"`. Specifies the version of the `kit.yaml` specification itself.
+    *   `id` (Required, String): A unique identifier for this Kit within the `owner`'s namespace. Use lowercase letters, numbers, and hyphens (kebab-case). Example: `postgres-manager`, `web-scraper-basic`.
+    *   `version` (Required, String): The [Semantic Version](https://semver.org/) (`MAJOR.MINOR.PATCH`) of this specific Kit release. Example: `1.2.3`.
+    *   `name` (Required, String): A human-friendly name displayed in the UI. Example: "PostgreSQL Administrator".
+    *   `owner` (Required, String): The namespace for the Kit, usually your organization or username. Use lowercase letters, numbers, and hyphens. Example: `genbase`, `mycompany`.
+    *   `description` (Optional, String): A brief, one-sentence description of the Kit's purpose.
+    *   `dependencies` (Optional, List of Strings): A list of Python package names required by the Kit's **[Actions](/kit-development/actions)**. These will be installed via `pip` in the Action execution container. Format should match `requirements.txt` entries. Example: `['requests', 'psycopg2-binary>=2.9']`.
+    *   `environment` (Optional, List of Objects): Defines environment variables expected by the Kit's Actions or Agents. Users will be prompted to provide values when creating a Module from this Kit.
+        *   `name` (Required, String): The environment variable name (e.g., `API_KEY`).
+        *   `description` (Required, String): Explanation of what the variable is for.
+        *   `required` (Optional, Boolean): If `true`, the user *must* provide a value when creating a module. Default: `false`.
+        *   `default` (Optional, String): A default value if the user doesn't provide one (only applies if `required` is `false`).
+    *   `image` (Optional, String): Specifies the base Docker image used for running the Kit's **[Actions](/concepts/actions-execution)**. Defaults to `python:3.11-slim`. Choose an image that meets your Action's runtime needs.
+    *   `ports` (Optional, List of Objects): Defines network ports that should be mapped from the Action execution container to the host machine.
+        *   `name` (Required, String): A logical name for the port (e.g., `API`, `DEBUGGER`). This name will be used to create an environment variable `PORT_{NAME}` inside the container, holding the *host* port number it was mapped to (e.g., `PORT_API=34567`).
+        *   `port` (Required, Integer): The port number *inside* the container that your Action listens on. Genbase will find an available port on the host and map it to this container port.
+  </Accordion>
+
+  <Accordion title="Agents">
+    Defines custom **[Agent](/concepts/profiles-agents)** classes implemented within this Kit's `agents/` directory. If you only use built-in agents (like `TaskerAgent`), this section can be omitted.
+
+    ```yaml
+    agents:
+      - name: "my_custom_agent"  # Unique name used to reference this agent in profiles
+        class: "MyCustomAgent"    # The Python class name within your agents code
+        description: "Agent specialized for processing financial data."
+      - name: "another_agent"
+        class: "HelperAgent"
+        description: "A simpler agent for auxiliary tasks."
+    ```
+    *   `name` (Required, String): A unique identifier for this agent definition within the Kit. This name is used in the `agent` field of `profiles`.
+    *   `class` (Required, String): The exact name of the Python class (inheriting from `BaseAgent`) found within your Kit's `agents/` directory.
+    *   `description` (Optional, String): A brief description of the agent's purpose.
+  </Accordion>
+
+  <Accordion title="Profiles">
+    Defines the different interaction modes or workflows (**[Profiles](/concepts/profiles-agents)**) that Modules created from this Kit will offer.
+
+    ```yaml
+    profiles:
+      # Profile names are keys (e.g., 'initialize', 'maintain')
+      initialize:
+        agent: "my_custom_agent"  # Reference agent defined in the 'agents' section or a built-in one
+        allow_multiple: false   # Optional: Allow multiple chat sessions? Default: false
+        instructions:           # Optional: List of instructions for this profile
+          - name: "init_guide"
+            path: "initialization_steps.md" # Path relative to 'instructions/' dir
+            description: "Step-by-step setup guide."
+        actions:                # Optional: List of actions available in this profile
+          - name: "check_system"
+            path: "setup:check_system_status" # Path format: 'module_name:function_name' or just 'function_name'
+            description: "Verify system prerequisites."
+          - name: "apply_config"
+            path: "configure" # Assumes 'configure()' function in 'actions/__init__.py'
+            description: "Apply initial configuration."
+
+      maintain:
+        agent: "tasker"           # Using a built-in agent
+        allow_multiple: true
+        instructions:
+          - name: "maint_overview"
+            path: "maintenance_guide.md"
+            description: "Overview of maintenance tasks."
+        actions:
+          - name: "get_status"
+            path: "monitoring:get_current_status"
+            description: "Retrieve the current operational status."
+          # ... more actions specific to maintenance
+    ```
+    *   `profile_name` (Key, String): The unique name for this profile (e.g., `initialize`, `query`, `generate_report`).
+    *   `agent` (Required, String): The `name` of the agent (from the `agents:` section or a built-in agent like `tasker`) that will handle this profile.
+    *   `allow_multiple` (Optional, Boolean): If `true`, users can have multiple concurrent chat sessions for this profile within the same module. Default: `false`.
+    *   `instructions` (Optional, List of Objects): Provides contextual information to the agent.
+        *   `name` (Required, String): A reference name for the instruction.
+        *   `path` (Required, String): Path to the instruction file relative to the Kit's `instructions/` directory.
+        *   `description` (Optional, String): Brief description of the instruction content.
+    *   `actions` (Optional, List of Objects): Defines which **[Kit Actions](/concepts/actions-execution)** are available to the `agent` when operating under this specific `profile`.
+        *   `name` (Required, String): The name the agent will use to refer to this action (e.g., in tool calls).
+        *   `path` (Required, String): Specifies the action function. Format: `filename:function_name` (e.g., `utils:parse_data`) or just `function_name` (implies the function is in `actions/__init__.py`).
+        *   `description` (Required, String): A clear description for the LLM explaining what the action does and potentially how/when to use it.
+  </Accordion>
+
+  <Accordion title="Provide">
+    Defines resources that Modules created from this Kit can share with *other* Modules via the **[Provide mechanism](/concepts/relationships-provide)**.
+
+    ```yaml
+    provide:
+      actions:          # Optional: Actions this kit offers for others to use
+        - name: "get_summary"
+          path: "summarizer:create_summary"
+          description: "Generates a text summary for the given content."
+        - name: "lookup_entity"
+          path: "knowledge_base:find_entity"
+          description: "Looks up information about a specific entity."
+
+      instructions:     # Optional: Instructions provided as context to consumers
+        - name: "api_usage_guide"
+          path: "provider_api_guide.md"
+          description: "How to effectively use the provided actions."
+
+      workspace:        # Optional: Allow sharing the module's workspace
+        description: "Provides access to the processed data files."
+    ```
+    *   `actions` (Optional, List of Objects): Actions made available to consuming modules. Structure is identical to actions within `profiles`. When a consuming module calls a provided action, it executes in the *provider's* context.
+    *   `instructions` (Optional, List of Objects): Instructions made available to consuming modules' agents for context. Structure is identical to instructions within `profiles`.
+    *   `workspace` (Optional, Object): If present, allows this Module's **[Workspace](/concepts/workspace-resources)** to be provided to other modules (mounted read-only as a Git submodule).
+        *   `description` (Optional, String): Describes the content or purpose of the shared workspace.
+  </Accordion>
+
+  <Accordion title="Workspace">
+    Defines the initial contents of the Module's **[Workspace](/concepts/workspace-resources)** repository and files to ignore.
+
+    ```yaml
+    workspace:
+      files:          # Optional: List of files/dirs from the kit's 'workspace/' dir
+        - path: "config/default.json" # Path relative to 'workspace/' dir
+          description: "Default configuration template."
+        - path: "scripts/init.py"
+          description: "Initial setup script (can be run by an action)."
+        - path: "data_schemas/" # Can include directories
+          description: "Directory containing data schema definitions."
+
+      ignore:         # Optional: List of gitignore patterns for the module repo
+        - "*.log"
+        - ".cache/"
+        - "temp_*"
+    ```
+    *   `files` (Optional, List of Objects): Specifies files and directories from the Kit's local `workspace/` directory that should be included in the initial commit when a Module is created.
+        *   `path` (Required, String): The path to the file or directory relative to the Kit's `workspace/` folder.
+        *   `description` (Optional, String): A description of the file/directory's purpose.
+    *   `ignore` (Optional, List of Strings): A list of patterns (following `.gitignore` syntax) to be added to the Module's `.gitignore` file upon creation. Helps keep the Module's repository clean.
+  </Accordion>
+</Accordions>
+
+<Callout title="Validation">
+Genbase validates the `kit.yaml` file when a Kit is installed or uploaded. Ensure your YAML is well-formed and adheres to this specification. Referencing non-existent files (in `instructions`, `workspace.files`, `actions`) will likely cause errors during Module creation or Action execution.
+</Callout>

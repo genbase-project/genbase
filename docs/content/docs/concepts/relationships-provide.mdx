@@ -1,0 +1,94 @@
+---
+title: Module Resource Sharing
+description: Learn how Genbase Modules connect and share capabilities or data using the Provide mechanism.
+---
+
+import { LinkIcon, PackageIcon, FolderGitIcon, Share2Icon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Module Resource Sharing (Provide)
+
+For **[Modules](/concepts/projects-modules)** to collaborate and build complex systems, they need ways to interact and share resources. Genbase primarily facilitates this through the **Provide** mechanism.
+
+## The Provide Mechanism <Share2Icon className="inline-block h-5 w-5 align-text-bottom" />
+
+The **Provide** system allows one Module (the *Provider*) to explicitly grant access to specific resources or capabilities to another Module (the *Receiver*). This creates a directed link and enables controlled sharing.
+
+*   **Purpose:** To establish clear dependencies and enable secure, controlled sharing of functionality or data between Modules without tightly coupling their internal implementations.
+*   **Definition:**
+    *   What a Kit *can* provide is defined in the `provide` section of its `kit.yaml` file ([Kit YAML Reference](/kit-development/kit-yaml)). This declares the potential Actions, Instructions, or Workspace access it's willing to share.
+    *   The *actual* link between two running Module instances is created via the API or the Studio UI ([Managing Provisions](/user-guide/modules/providing)). This creates a `ModuleProvide` record in the database.
+*   **Granularity:** Sharing is defined per resource type (`ProvideType`).
+
+
+## Resource Types <PackageIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Modules can provide the following types of resources:
+
+1.  **`ACTION`**
+    *   **What it shares:** Specific executable functions (Kit Actions) defined in the *Provider* Kit's `provide.actions` section.
+    *   **How it works:** When Module A provides an `ACTION` to Module B, the specified actions from Module A become available within the **[Agent](/concepts/profiles-agents)** context of Module B when it runs. Module B's agent can then invoke these actions as if they were its own.
+    *   **Execution:** Importantly, when Module B invokes a provided Action, the Action code still executes securely within an isolated Docker container configured with the *Provider* Module's (Module A's) environment, dependencies, and workspace context. The Receiver (Module B) only gets the *result*.
+    *   **Use Case:** Allowing one Module to leverage the specialized capabilities of another (e.g., a `WebSearch` Module providing a `search(query)` action to a `ResearchAssistant` Module).
+
+2.  **`WORKSPACE`** <FolderGitIcon className="inline-block h-5 w-5 align-text-bottom" />
+    *   **What it shares:** Read-only access to the entire Git repository (Workspace) of the *Provider* Module.
+    *   **How it works:** When Module A provides its `WORKSPACE` to Module B, Genbase automatically configures Module A's repository as a **Git submodule** within Module B's repository. It's typically mounted under a specific path like `workspaces/{provider_module_id}/` within Module B's workspace.
+    *   **Access:** Actions executed by Module B can then *read* files from this mounted submodule path (`/repo/workspaces/{provider_module_id}/...`). They cannot directly write back to the provider's workspace.
+    *   **Use Case:** Allowing one Module to analyze, read configuration from, or process data contained within another Module's workspace (e.g., a `CodeAnalyzer` Module reading code from a `WebAppBackend` Module's workspace; a `DocumentationGenerator` reading multiple provided workspaces).
+
+```mermaid
+flowchart TB
+    %% Define core modules only
+    ModuleA["Module A\n(Provider)"]:::moduleA
+    ModuleB["Module B\n(Receiver)"]:::moduleB
+    
+    %% Provision between modules
+    ModuleA -->|"Provide ACTION 'do_thing'"| ModuleB
+    
+    %% Workspace section
+    subgraph Workspace["File system"]
+        direction TB
+        ModuleAWS["Module A Workspace"]:::wsA
+        ModuleBWS["Module B Workspace"]:::wsB
+        Submodule["/workspaces/module_a_id\n(submodule)"]:::submodule
+        
+        ModuleAWS -->|"Provide WORKSPACE"| ModuleBWS
+        ModuleBWS --> Submodule
+    end
+    
+    %% Connect modules to their workspaces
+    ModuleA --> ModuleAWS
+    ModuleB --> ModuleBWS
+    
+    %% Styling to match original theme
+    classDef moduleA fill:#4e72f1,color:white,stroke:#4e72f1
+    classDef moduleB fill:#4e72f1,color:white,stroke:#4e72f1
+    classDef wsA fill:#ffb2b2,color:black,stroke:#ffb2b2
+    classDef wsB fill:#ffb2b2,color:black,stroke:#ffb2b2
+    classDef submodule fill:#ffcd29,color:black,stroke:#ffcd29,stroke-dasharray: 5 5
+
+    %% Setting subgraph style
+    style Workspace fill:#ffffff,stroke:#ffffff
+```
+*Diagram: Module A provides an Action and its Workspace to Module B. Module B's Agent can call `do_thing` (executed in A's context), and its Actions can read from `/repo/workspaces/module_a_id`.*
+
+## Managing Provisions
+
+*   **Creation:** Links are established explicitly, usually via the Studio UI ([Managing Provisions](/user-guide/modules/providing)) or API. You select the Provider, Receiver, and Resource Type.
+*   **Visibility:** The Studio UI allows viewing which resources a Module is providing and which it is receiving.
+*   **Deletion:** Provisions can be removed. If a `WORKSPACE` provision is removed, the corresponding Git submodule should also be removed from the receiver's repository.
+
+
+
+
+
+
+![Provide Section for Module](/images/provide-section.png)
+![Provide Access DIalog](/images/provide-dialog.png)
+
+<Callout title="Security and Control">
+The Provide mechanism ensures controlled sharing. A Module only gains access to what another Module explicitly provides, and the execution context (for Actions) remains tied to the Provider, enhancing security and encapsulation.
+</Callout>
+
+By defining what Kits *can* provide and then explicitly linking Module instances, Genbase enables the construction of complex, collaborative systems from independent, reusable components.

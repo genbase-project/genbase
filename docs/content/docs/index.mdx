@@ -1,51 +1,170 @@
 ---
 title: Introduction
-description: Introduction to Genbase
+description: The Modular AI Orchestration Platform
 ---
 
+import { Cards, Card } from 'fumadocs-ui/components/card';
+import { FileIcon, BlocksIcon, FolderGit2Icon, BotIcon, ZapIcon, LinkIcon, CombineIcon } from 'lucide-react';
 
-# Introduction to Genbase
+# Welcome to Genbase
 
-Genbase is an open platform that enables developers to create, share, and combine intelligent agent-powered workflows through specialized modules. The name "Genbase" combines "Gen" (for generation and agents) and "Base" (a foundation to build upon) - reflecting its purpose as a platform where AI agents can collaborate to solve complex problems.
+**Build, Orchestrate, and Share Powerful AI Agent Systems**
 
-## What is Genbase?
+Genbase is a platform designed to help you create sophisticated, collaborative AI systems in a modular, reusable, and manageable way. Think of it as an operating system where specialized AI capabilities, packaged as "Kits," can be instantiated, connected, and orchestrated to tackle complex problems.
 
-At its core, Genbase allows domain experts to package their knowledge into modules with specialized agents that can work together on shared repositories. Unlike general-purpose AI assistants that try to know everything but often lack depth, Genbase embraces specialization and collaboration.
+## Why Genbase?
 
-For example, a web development project might leverage:
-- A Next.js developer module that handles frontend code
-- A PostgreSQL administrator module that manages the database
-- A Docker module that handles deployment
+Developing advanced AI applications often involves wrestling with complexity, integrating disparate components, managing dependencies, and ensuring secure execution. Genbase addresses these challenges by providing:
 
-Each module brings deep expertise to its domain, and modules can share capabilities through well-defined relationships. This means you can have specialized agents working together seamlessly, each operating in their area of strength.
+*   **Modularity & Reusability:** Package specific AI expertise, tools, and workflows into versioned **Kits** that can be shared and reused across projects.
+*   **Structured Orchestration:** Instantiate Kits as **Modules** within organized **Projects**, defining clear relationships and controlled resource sharing between them.
+*   **Secure & Isolated Execution:** Run Kit-defined **Actions** in sandboxed environments (Docker containers) with managed dependencies and configurations.
+*   **Agentic Interaction:** Interact with Modules through defined **Profiles** managed by intelligent **Agents** capable of using LLMs and executing Actions.
+*   **Human-in-the-Loop Focus:** Designed for human operators to manage, direct, and collaborate with AI agents via intuitive interfaces like the **Genbase Studio**.
+*   **Ecosystem Potential:** Discover and leverage Kits from a central **Registry** (future) or share your own, fostering a collaborative development environment.
 
-## How Does It Work?
+## Core Concepts
 
-Genbase organizes interactions through workflows - guided conversations with purpose-built agents for specific tasks. When you need to develop a web application, you don't just get a generic coding assistant - you get a specialized Next.js developer with deep knowledge of that framework.
+Understanding these fundamental building blocks is key to leveraging Genbase effectively.
 
-Behind the scenes, these agents operate on Git repositories (workspaces) with full control over their environment. They can:
-
-- Generate and modify code
-- Run commands and scripts
-- Access and update files
-- Collaborate with other specialized modules
-
-The power of Genbase comes from how these modules can work together. A database module might expose actions that a web development module can call, allowing the web developer agent to work with databases without needing to understand all the database intricacies.
-
-## Why Use Genbase?
-
-Genbase solves several key problems:
-
-- **Depth vs. Breadth**: Rather than building one agent that knows a little about everything, Genbase lets you combine agents that each have deep expertise in their domains.
-
-- **Collaboration**: Domain knowledge from different teams can be packaged, shared, and composed into comprehensive solutions.
-
-- **Flexibility**: As needs change, new modules can be added or existing ones updated without rebuilding the entire system.
-
-- **Practical Workflows**: Instead of generic chat interfaces, Genbase provides purpose-built workflows for specific tasks that guide users through complex processes.
+<Cards>
+  <Card
+    href="/concepts/kits-registry"
+    icon={<BlocksIcon />}
+    title="Kits & Registry"
+    description="Reusable blueprints containing AI capabilities, configurations, and code."
+  />
+  <Card
+    href="/concepts/projects-modules"
+    icon={<FolderGit2Icon />}
+    title="Projects & Modules"
+    description="Organize work into Projects and run Kit instances as stateful Modules."
+  />
+  <Card
+    href="/concepts/profiles-agents"
+    icon={<BotIcon />}
+    title="Profiles & Agents"
+    description="Define interaction modes (Profiles) handled by intelligent Agents."
+  />
+  <Card
+    href="/concepts/actions-execution"
+    icon={<ZapIcon />}
+    title="Actions & Execution"
+    description="Package and run executable code securely within isolated environments."
+  />
+  <Card
+    href="/concepts/relationships-provide"
+    icon={<LinkIcon />}
+    title="Relationships & Provide"
+    description="Connect Modules and enable controlled sharing of resources like Workspaces and Actions."
+  />
+    <Card
+    href="/concepts/workspace-resources"
+    icon={<CombineIcon />}
+    title="Workspaces & Resources"
+    description="Manage the file state (Workspace) and specific content items (Resources) of Modules."
+  />
+</Cards>
 
 ## Get Started
 
-Whether you're looking to use existing modules for your projects or develop new ones to share specialized knowledge, Genbase provides the infrastructure to make intelligent agents more practical and powerful for real-world development.
+Ready to dive in?
 
-Check out our [Getting Started](/docs/getting-started) guide to begin working with Genbase, or dive into the [Core Concepts](/docs/concepts) to understand the platform in more depth.
+<Cards>
+  <Card
+    href="/quick-start"
+    icon={<FileIcon />}
+    title="Quick Start"
+    description="Get Genbase running locally using Docker in minutes."
+  />
+  <Card
+    href="/user-guide"
+    icon={<FileIcon />}
+    title="User Guide"
+    description="Learn how to use the Genbase Studio interface."
+  />
+   <Card
+    href="/kit-development"
+    icon={<FileIcon />}
+    title="Kit Development"
+    description="Learn how to create your own reusable Kits."
+  />
+</Cards>
+
+---
+
+*High-level Architecture:*
+
+```mermaid
+flowchart TD
+    subgraph Genbase["Genbase Platform"]
+        direction TB
+        
+        subgraph UI["User Interface Layer"]
+            direction LR
+            Studio["Genbase Studio"]
+            API["API Gateway"]
+        end
+        
+        UI --> Core
+        
+        subgraph Core["Engine Core"]
+            direction TB
+            
+            subgraph Services["Service Layer"]
+                direction LR
+                KitSvc["Kit Service"]
+                ModuleSvc["Module Service"]
+                ProjectSvc["Project Service"]
+                ProfileSvc["Profile Service"]
+                ActionSvc["Action Service"]
+            end
+            
+            Services --> Execution
+            
+            subgraph Execution["Execution Layer"]
+                direction LR
+                Agents["Agent Logic"]
+                Models["LLM Integration"]
+                Docker["Docker Runtime"]
+            end
+        end
+        
+        Core --> Data
+        
+        subgraph Data["Persistence Layer"]
+            direction LR
+            DB[("Database")]
+            KitStore["Kit Storage"]
+            FileSystem["File System"]
+        end
+    end
+    
+    %% Straight line connections for key relationships
+    ProfileSvc --- Agents
+    ProfileSvc --- Models
+    ActionSvc --- Docker
+    
+    %% Styling based on Miro example with larger blocks
+    classDef platform fill:#FFFFFF,color:#000000,stroke:#E6E6E6,stroke-width:1px
+    classDef uiLayer fill:#4262FF,color:#FFFFFF,stroke:#4262FF
+    classDef coreLayer fill:#FFCB00,color:#000000,stroke:#FFCB00
+    classDef serviceLayer fill:#FFCB00,color:#000000,stroke:#FFCB00
+    classDef execLayer fill:#FFCB00,color:#000000,stroke:#FFCB00
+    classDef dataLayer fill:#FF9D48,color:#000000,stroke:#FF9D48
+    classDef component fill:#000000,color:#FFFFFF,stroke:#000000
+    classDef evalComponent fill:#FF5D5D,color:#FFFFFF,stroke:#FF5D5D
+    
+    class Genbase platform
+    class UI uiLayer
+    class Core,Services,Execution coreLayer
+    class Data dataLayer
+    class Studio,API component
+    class KitSvc,ModuleSvc,ProjectSvc,ProfileSvc,ActionSvc component
+    class Agents,Models,Docker component
+    class DB evalComponent
+    class KitStore,FileSystem component
+
+    linkStyle default stroke:#333333,stroke-width:2px
+```
+

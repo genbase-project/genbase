@@ -1,0 +1,141 @@
+---
+title: Developing Agents
+description: Learn how to implement custom Agent logic for your Genbase Kits by extending the BaseAgent class.
+---
+
+import { BotIcon, CogIcon, WorkflowIcon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { CodeBlock } from 'fumadocs-ui/components/codeblock';
+
+
+While Genbase provides built-in agents like `TaskerAgent`, you can create custom **[Agents](/concepts/profiles-agents)** within your Kit to implement specialized logic, control conversation flow more precisely, or manage unique internal states for your **[Profiles](/concepts/profiles-agents)**.
+
+## When to Create a Custom Agent
+
+Consider creating a custom agent when:
+
+*   You need fine-grained control over the interaction flow beyond what built-in agents offer.
+*   The agent needs to maintain specific internal state or memory across multiple turns within a Profile session.
+*   You require complex decision-making logic about when to call LLMs versus **[Actions](/concepts/actions-execution)**.
+*   You want to implement custom parsing of user input or formatting of outputs.
+*   You need specialized **[Internal Actions](/concepts/actions-execution#2-internal-actions)** specific to the agent's logic.
+
+If your Profile primarily involves straightforward task execution based on user requests (like running a sequence of predefined Actions), a built-in agent like `TaskerAgent` might be sufficient.
+
+## Implementation Basics
+
+1.  **Location:** Place your custom agent Python code within the `agents/` directory of your Kit.
+2.  **Inheritance:** Your custom agent class *must* inherit from `engine.services.agents.base_agent.BaseAgent`.
+3.  **Core Methods:**
+    *   Implement the `@property def agent_type(self) -> str:` method. This **must** return the unique `name` you assign to this agent definition in your `kit.yaml`'s `agents:` section.
+    *   Implement the `async def process_request(self, context: AgentContext, profile_data: ProfileMetadataResult) -> Dict[str, Any]:` method. This is the main entry point where your agent receives user input and orchestrates the response.
+4.  **Registration:** Declare your custom agent in the `agents:` section of your `kit.yaml` file, providing a unique `name` and the `class` name. Link it to one or more Profiles using the `agent:` field within the `profiles:` section. ([See kit.yaml Reference](/kit-development/kit-yaml)).
+
+**Example (`agents/my_custom_agent.py`):**
+
+```python
+# agents/my_custom_agent.py
+from typing import Dict, Any, Optional, List
+from engine.services.agents.base_agent import BaseAgent, AgentContext, IncludeOptions
+from engine.services.execution.profile import ProfileMetadataResult # Corrected import
+from loguru import logger
+
+class MyCustomAgent(BaseAgent):
+
+    @property
+    def agent_type(self) -> str:
+        # This MUST match the 'name' in kit.yaml's agents section
+        return "my_custom_agent"
+
+    async def process_request(
+        self,
+        context: AgentContext,
+        profile_data: ProfileMetadataResult # Corrected type hint
+        # responses: Optional[List[GimlResponse]] = None # If handling structured responses
+    ) -> Dict[str, Any]:
+        """
+        Main handler for processing user input within this agent's profile context.
+        """
+        logger.info(f"MyCustomAgent processing request for module {context.module_id}, profile {context.profile}")
+        logger.info(f"User Input: {context.user_input}")
+        logger.info(f"Available Actions: {[a.action.name for a in profile_data.actions]}")
+
+        # 1. Set up context (system prompt, available tools)
+        #    We can customize which actions are available if needed
+        system_prompt, tools = await self.set_context(
+            agent_instructions="You are a helpful custom agent. Your goal is to...",
+            include=IncludeOptions(actions="all") # Or filter specific actions
+        )
+
+        # 2. Add user message to history (optional, BaseAgent.create does this by default if save_messages=True)
+        # self.add_message(role="user", content=context.user_input) # If create() save_messages=False
+
+        # 3. Core Logic: Decide what to do based on input, history, state
+        #    - Call LLM?
+        #    - Run an action directly?
+        #    - Ask for clarification?
+
+        # Example: Simple LLM call
+        llm_response = await self.create(
+            messages=[{"role": "user", "content": context.user_input}],
+            # save_messages=True, # Default
+            # run_actions=True, # Default: automatically run tool calls if LLM requests them
+        )
+
+        # 4. Process LLM response / Action results
+        #    BaseAgent.create handles tool calls/results if run_actions=True.
+        #    If run_actions=False, you'd need to handle llm_response.choices[0].message.tool_calls manually here.
+
+        assistant_message = llm_response.choices[0].message
+
+        # 5. Format and return the final response to the user
+        final_response_text = "Default response if LLM didn't provide content."
+        if assistant_message and assistant_message.content:
+            final_response_text = assistant_message.content
+
+        # The 'results' key is optional, used for structured data if needed by the UI
+        return {
+            "response": final_response_text,
+            "results": []
+        }
+
+```
+
+**Corresponding `kit.yaml` Snippet:**
+
+```yaml
+# kit.yaml
+agents:
+  - name: "my_custom_agent" # Must match agent_type property
+    class: "MyCustomAgent"   # Must match Python class name
+    description: "Agent specialized for processing financial data."
+
+profiles:
+  process_finance_data:
+    agent: "my_custom_agent" # Link profile to this agent
+    actions:
+      - name: "fetch_stock_price"
+        path: "finance:get_price"
+        description: "Gets the latest stock price."
+      # ... other relevant actions
+```
+
+## Using `BaseAgent` Capabilities
+
+Your custom agent inherits useful methods and properties from `BaseAgent`:
+
+*   **`self.set_context(...)`:** Define the system prompt and which actions (Kit-defined, Provided, Internal) are available as tools for the LLM. Use `IncludeOptions` for fine-grained control.
+*   **`self.create(...)`:** Make calls to the configured LLM. Handles message history automatically. Can execute tool calls requested by the LLM if `run_actions=True`.
+*   **`self.create_structured(...)`:** Call the LLM expecting a Pydantic model as output.
+*   **`self.run_action(name, params)`:** Manually execute a specific Kit Action or Provided Action.
+*   **`self.add_message(...)`:** Manually add messages (user, assistant, tool) to the chat history for the current session.
+*   **`self.get_messages()`:** Retrieve the current chat history list.
+*   **`self.utils`:** Access `AgentUtils` for file operations within the Module's workspace (`read_file`, `write_file`, `list_files`, etc.).
+*   **`self.get_store(collection_name)`:** Get a `ProfileStoreService` instance to store/retrieve key-value data specific to this module, profile, and a named collection.
+*   **`self.action_manager`:** (Advanced) Interact with the manager for **[Internal Actions](/concepts/actions-execution#2-internal-actions)** defined on the agent class itself.
+
+<Callout title="State Management">
+For simple state within a single `process_request` call, use local variables. For state that needs to persist *across* multiple turns within the *same chat session*, use agent instance variables (`self.my_state`). For state that needs to persist across *different sessions* or *different profiles* within the same Module, use the `ProfileStoreService` (`self.get_store(...)`).
+</Callout>
+
+Developing custom agents gives you maximum flexibility in defining how users interact with your Kit's capabilities. Remember to clearly define the agent's purpose and link it correctly in your `kit.yaml`.

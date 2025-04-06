@@ -1,0 +1,67 @@
+---
+title: Administration Guide
+description: Learn how to deploy, configure, manage, and secure your Genbase instance.
+---
+
+import { SettingsIcon, ServerIcon, DatabaseIcon, UsersIcon, ShieldCheckIcon, KeyIcon, BotIcon } from 'lucide-react';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+# Administration Guide <SettingsIcon className="inline-block h-6 w-6 align-text-bottom" />
+
+This guide provides essential information for administrators responsible for deploying, configuring, managing, and securing a Genbase instance (Engine backend and Studio frontend).
+
+## Overview
+
+Administering Genbase involves several key areas:
+
+*   **Deployment:** Setting up and running the necessary services (Engine, Studio, Database).
+*   **Configuration:** Managing environment variables for database connections, LLM/Embedding API keys, authentication secrets, and other settings.
+*   **User Management:** Creating and managing user accounts and roles (Superuser vs. Regular User).
+*   **System Settings:** Configuring operational parameters like the default LLM.
+*   **Database Management:** Ensuring the database is set up correctly and handling migrations.
+*   **Security:** Managing authentication, authorization, and API keys.
+
+## Key Administration Tasks
+
+Explore the following sections for detailed guidance on specific administrative tasks:
+
+<Cards>
+  <Card
+    href="/docs/administration/deployment"
+    icon={<ServerIcon />}
+    title="Deployment"
+    description="Instructions for deploying Genbase using Docker (recommended) or running locally."
+  />
+  <Card
+    href="/docs/administration/configuration"
+    icon={<KeyIcon />}
+    title="Configuration"
+    description="Reference for all essential environment variables required by Engine and Studio."
+  />
+  <Card
+    href="/docs/administration/user-management"
+    icon={<UsersIcon />}
+    title="User Management"
+    description="Guide to managing user accounts and roles via the Studio UI (requires Superuser privileges)."
+  />
+  <Card
+    href="/docs/administration/llm-embedding"
+    icon={<BotIcon />}
+    title="LLM & Embedding Configuration"
+    description="How to configure API keys to enable different LLM/Embedding providers and set the system default model."
+  />
+  <Card
+    href="/docs/administration/database"
+    icon={<DatabaseIcon />}
+    title="Database Setup & Migrations"
+    description="Information on setting up the PostgreSQL database and managing schema migrations with Alembic."
+  />
+  <Card
+    href="/docs/administration/security"
+    icon={<ShieldCheckIcon />}
+    title="Security Considerations"
+    description="Details on authentication (JWT), authorization (RBAC/Casbin), and Module API Keys for the LLM Gateway."
+  />
+</Cards>
+
+Proper administration is crucial for a stable, secure, and efficient Genbase deployment.

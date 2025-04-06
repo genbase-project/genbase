@@ -7,6 +7,9 @@ import {
 } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { ImageZoom } from 'fumadocs-ui/components/image-zoom';
+import { openapi } from '@/lib/source';
+
 
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
@@ -22,7 +25,7 @@ export default async function Page(props: {
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
-        <MDX components={{ ...defaultMdxComponents }} />
+        <MDX components={{ ...defaultMdxComponents, img: (props) => <ImageZoom {...(props as any)} />, APIPage: openapi.APIPage, }}  />
       </DocsBody>
     </DocsPage>
   );
@@ -44,3 +47,13 @@ export async function generateMetadata(props: {
     description: page.data.description,
   };
 }
+
+
+
+
+
+
+
+
+
+

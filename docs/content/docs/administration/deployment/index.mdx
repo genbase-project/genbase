@@ -1,0 +1,47 @@
+---
+title: Deployment Options
+description: Overview of methods for deploying and running the Genbase platform.
+---
+
+import { ContainerIcon, LaptopIcon, CheckCircleIcon } from 'lucide-react';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Deployment Options
+
+This section outlines the different ways you can deploy and run the Genbase platform, consisting of the **Engine** (FastAPI backend) and the **Studio** (React frontend), along with its required **PostgreSQL** database.
+
+## Recommended Method: Docker Compose
+
+Using Docker and Docker Compose is the **highly recommended** method for deploying Genbase, especially for development, testing, and production environments.
+
+*   **Consistency:** Provides a consistent environment across different machines.
+*   **Isolation:** Services run in isolated containers, preventing dependency conflicts.
+*   **Simplified Setup:** Manages the database, backend, and frontend services with simple commands.
+*   **Scalability Foundation:** Easier to scale components independently later if needed.
+
+<Card
+    href="/docs/administration/deployment/docker"
+    icon={<ContainerIcon />}
+    title="Deploying with Docker"
+    description="Step-by-step guide using the provided docker-compose.yml and helper scripts."
+/>
+
+## Alternative Method: Local Development Setup
+
+Running the services directly on your local machine is primarily intended for **active development and debugging** of the Engine or Studio codebases.
+
+*   **Prerequisites:** Requires manual installation of Python (with PDM), Node.js (with npm/yarn), and a running PostgreSQL server on your host machine.
+*   **Complexity:** Managing dependencies, environment variables, and service startup order is more complex than using Docker.
+*   **Potential Conflicts:** Higher chance of conflicts with other software or libraries on your system.
+
+<Card
+    href="/docs/administration/deployment/local"
+    icon={<LaptopIcon />}
+    title="Running Locally"
+    description="Instructions for setting up and running Engine and Studio directly on your machine (for development)."
+/>
+
+<Callout title="Choosing the Right Method" intent="info" icon={<CheckCircleIcon />}>
+For most users wanting to *use* or *evaluate* Genbase, **Docker Compose is the easiest and most reliable way to get started.** Choose the local setup only if you intend to actively modify the core Engine or Studio source code.
+</Callout>

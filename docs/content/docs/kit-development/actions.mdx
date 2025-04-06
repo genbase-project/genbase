@@ -1,0 +1,139 @@
+---
+title: Writing Actions
+description: Learn how to implement executable Python functions (Actions) within your Genbase Kit.
+---
+
+import { ZapIcon, CodeIcon, BoxIcon, DatabaseIcon, WorkflowIcon, TerminalIcon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+
+**[Actions](/concepts/actions-execution)** are the core executable logic units within a Genbase Kit. They are Python functions that **[Agents](/concepts/profiles-agents)** can invoke to perform tasks beyond simple LLM interaction, such as interacting with databases, calling external APIs, or manipulating files in the Module's **[Workspace](/concepts/workspace-resources)**.
+
+## Defining Actions
+
+1.  **Location:** Place your Python code within the `actions/` directory at the root of your Kit.
+2.  **Organization:** You can organize your code into multiple `.py` files (modules). An `actions/__init__.py` file is common for simple or central actions.
+3.  **Function Definition:** Write standard Python functions. They can be synchronous (`def`) or asynchronous (`async def`).
+4.  **Parameters & Return Values:**
+    *   Functions receive parameters as standard Python keyword arguments.
+    *   Use type hints for parameters and return types. These hints, along with the docstring, are used by Genbase to generate the schema that the LLM uses to call your action correctly.
+    *   Return values should be JSON-serializable (or serializable via `cloudpickle`, which handles more complex Python objects) as they are passed back from the Docker container to the Agent.
+5.  **Docstrings:** Write clear docstrings for your functions. The first line/paragraph is used as the action's `description` in `kit.yaml` (unless explicitly overridden there). Use standard docstring formats (like Google or NumPy style) to document parameters (`:param name: description`) so Genbase can potentially extract parameter descriptions for the schema.
+
+## Declaring Actions in `kit.yaml`
+
+For an action function to be usable, it must be declared in your `kit.yaml` file, either within a `profiles` section or the `provide.actions` section.
+
+```yaml
+# kit.yaml (snippet)
+profiles:
+  some_profile:
+    agent: tasker
+    actions:
+      - name: "run_query" # Name used by Agent/LLM
+        path: "db_tools:execute_select" # Corresponds to execute_select() in actions/db_tools.py
+        description: "Executes a read-only SQL SELECT query against the database."
+      - name: "simple_task"
+        path: "perform_simple_task" # Assumes perform_simple_task() in actions/__init__.py
+        description: "Performs a basic task defined directly in __init__.py."
+
+provide:
+  actions:
+    - name: "get_data_summary"
+      path: "data_processor:summarize" # summarize() in actions/data_processor.py
+      description: "Provides a summary of data found in the workspace."
+```
+
+*   `name`: The identifier the Agent/LLM will use. Keep it descriptive and concise.
+*   `path`: Locates the function.
+    *   `filename:function_name`: For functions in specific modules (e.g., `db_tools.py`).
+    *   `function_name`: For functions defined directly in `actions/__init__.py`.
+*   `description`: Essential for the LLM to understand *what* the action does and *when* to use it. Be clear and specific.
+
+## Execution Environment <TerminalIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Remember that Kit Actions run inside isolated Docker containers. Your code needs to operate within this context:
+
+*   **Dependencies:** List all required Python packages in your Kit's root `requirements.txt`. They will be `pip install`ed into the container image.
+*   **Environment Variables:** Access configuration (API keys, URLs, etc.) using `os.getenv("YOUR_ENV_VAR_NAME")`. These variables are injected from the **[Module's](/concepts/projects-modules)** specific environment settings.
+*   **Workspace Access:** The Module's Git repository (its Workspace) is mounted read-write at `/repo`. Use standard Python file operations (`pathlib`, `open()`) relative to this path (e.g., `Path("/repo/data/output.json")`).
+*   **Action Code Access:** The Kit's `actions/` directory is mounted read-only at `/actions`. You can import helper functions or modules from within this directory using relative imports if structured correctly as a Python package (using `__init__.py` files).
+*   **Networking:** Containers run in Docker's default bridge network. They can typically access the host machine and external internet resources. If an Action needs to expose a service, define a **[Port](/kit-development/kit-yaml#detailed-sections)** in `kit.yaml`. The mapped *host* port will be available as an environment variable like `PORT_{YOUR_PORT_NAME}` inside the container.
+
+## Example Action (`actions/file_utils.py`)
+
+```python
+# actions/file_utils.py
+import os
+from pathlib import Path
+from typing import List, Optional, Dict, Any
+import json
+from loguru import logger # Can add logger to requirements.txt
+
+# Base path inside the container where the module's workspace is mounted
+WORKSPACE_PATH = Path("/repo")
+
+def write_json_file(
+    relative_path: str,
+    data: Dict[str, Any],
+    overwrite: bool = False
+) -> Dict[str, Any]:
+    """
+    Writes dictionary data to a JSON file within the module's workspace.
+
+    :param relative_path: Path relative to the workspace root (e.g., 'output/results.json').
+    :param data: The Python dictionary to write as JSON.
+    :param overwrite: If True, overwrite the file if it exists. Defaults to False.
+    :return: Dictionary indicating success or failure, including the full path written.
+    """
+    full_path = WORKSPACE_PATH / relative_path
+    logger.info(f"Attempting to write JSON to: {full_path}")
+
+    # Basic path safety check (optional but recommended)
+    try:
+        # Ensure the resolved path is still within the workspace
+        full_path.resolve().relative_to(WORKSPACE_PATH.resolve())
+    except ValueError:
+        logger.error(f"Error: Path '{relative_path}' attempts to escape the workspace.")
+        return {"success": False, "error": "Invalid path: attempts to escape workspace."}
+
+    if full_path.exists() and not overwrite:
+        logger.warning(f"File exists and overwrite is False: {full_path}")
+        return {"success": False, "error": f"File already exists at '{relative_path}'. Set overwrite=True to replace."}
+
+    try:
+        # Ensure parent directory exists
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(full_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+
+        logger.info(f"Successfully wrote JSON to: {full_path}")
+        return {"success": True, "path_written": str(full_path)}
+    except Exception as e:
+        logger.error(f"Failed to write JSON file: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+```
+
+**Corresponding `kit.yaml` declaration:**
+
+```yaml
+# kit.yaml (snippet)
+profiles:
+  process_data:
+    agent: tasker
+    actions:
+      - name: "save_results"
+        path: "file_utils:write_json_file"
+        description: "Saves the provided dictionary data as a JSON file in the module's workspace at the specified relative path. Fails if the file exists unless overwrite is true."
+```
+
+<Callout title="Best Practices">
+*   Keep actions focused on a single task.
+*   Handle errors gracefully and return informative success/failure messages or exceptions.
+*   Use type hints and clear docstrings.
+*   Be mindful of the containerized execution environment (paths, env vars).
+*   List all external dependencies in `requirements.txt`.
+</Callout>

@@ -1,0 +1,44 @@
+---
+title: Kits and the Registry
+description: Learn about Kits as reusable AI blueprints and the role of the Registry for sharing and discovery.
+---
+
+import { BlocksIcon, PackageSearchIcon, GitBranchPlusIcon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Kits and the Registry
+
+**Kits** are the core reusable components in Genbase, packaging AI capabilities. The **Registry** is where these Kits are shared and discovered.
+
+## Kits <BlocksIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+A **Kit** is a self-contained, versioned blueprint for an AI capability. It bundles configuration, code, dependencies, and initial data needed for a specific task or workflow.
+
+*   **Purpose:** Enable modularity and reuse. Experts package complex logic and tools into Kits, allowing others to instantiate them easily.
+*   **Contents:**
+    *   `kit.yaml`: The manifest defining metadata, dependencies, actions, agents, profiles, environment variables, etc. ([Details](/kit-development/kit-yaml)).
+    *   `actions/`: Python code for executable functions ([Actions Concept](/concepts/actions-execution)).
+    *   `agents/`: Custom agent logic (optional) ([Agents Concept](/concepts/profiles-agents)).
+    *   `instructions/`: Text files (Markdown, plain text, etc.) providing context or guidance.
+    *   `workspace/`: Initial files for a Module's workspace.
+*   **Identification:** Uniquely identified by `owner`/`id`/`version`.
+*   **Usage:** Kits are templates. You instantiate them as **[Modules](/concepts/projects-modules)** to create runnable instances.
+
+## Versioning <GitBranchPlusIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Kits use **Semantic Versioning (`MAJOR.MINOR.PATCH`)**. This allows you to select specific versions when creating Modules, ensuring consistency and managing updates.
+
+## The Registry <PackageSearchIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+The **Registry** acts as a central repository for Kits. Genbase interacts with a registry service (configured via the `REGISTRY_URL` environment variable) to find and download Kits.
+
+*   **Default Registry:** Genbase defaults to using `registry.genbase.io`, where the community can potentially publish and share Kits.
+*   **Custom Registries:** You can configure Genbase to point to a private or alternative registry service, provided it adheres to the expected API structure.
+*   **Discovery & Installation:** Use the [Registry Explorer](/user-guide/registry) in Studio or the API to browse the configured registry and install Kits. Installation downloads the Kit to your local Genbase environment (in `KIT_BASE_DIR`), making it available for creating Modules.
+*   **Publishing:** To share your own Kits, you would typically package them as `.tar.gz` archives and upload them to a registry service like `registry.genbase.io` (or your configured private registry) through its specific interface. ([See Packaging](/kit-development/packaging-publishing)).
+
+<Callout title="Local Cache">
+Installing a Kit downloads it locally. Modules are always created from these local copies, ensuring consistent builds even if the registry becomes unavailable later.
+</Callout>
+
+Kits and the Registry work together to create an ecosystem for sharing and composing AI capabilities, promoting reuse and accelerating development.

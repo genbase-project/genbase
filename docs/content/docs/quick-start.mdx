@@ -1,0 +1,122 @@
+---
+title: Quick Start Guide
+description: Get Genbase up and running quickly using Docker.
+---
+
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { TerminalIcon, LogInIcon, RocketIcon, StopCircleIcon } from 'lucide-react';
+
+# Quick Start Guide
+
+This guide will walk you through the fastest way to get a local Genbase instance running using Docker and Docker Compose. This is the recommended method for most users trying out Genbase.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed on your system:
+
+*   **Docker:** [Install Docker](https://docs.docker.com/get-docker/)
+*   **Docker Compose:** Usually included with Docker Desktop. Verify with `docker-compose --version`.
+*   **Git:** [Install Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git) (for cloning the repository).
+*   A **Text Editor:** For editing configuration files.
+
+## Setup and Run
+
+<Steps>
+
+### 1. Clone the Repository
+
+Open your terminal and clone the Genbase monorepo:
+
+```bash
+git clone <your-genbase-repo-url> # Replace with the actual repository URL
+cd genbase # Navigate into the cloned directory
+```
+
+### 2. Configure Environment Variables
+
+Genbase uses `.env` files for configuration. Templates are provided, but you **must** create and edit the actual files.
+
+*   **Root `.env`:** Controls database credentials, admin user, and potentially shared settings.
+    ```bash
+    cp .env.template .env
+    ```
+    <Callout title="Important: Edit .env" intent="warn">
+      Open the newly created `.env` file in your text editor. You **must** change at least the following:
+      *   `POSTGRES_PASSWORD`: Set a strong password for the database.
+      *   `ADMIN_PASSWORD`: Set a strong password for the initial superuser account (`ADMIN_USERNAME` is usually 'admin').
+      *   LLM Keys: Add **at least one** API key (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) for the AI models to function.
+      *   `AUTH_SECRET`: Generate a strong, unique secret key (e.g., using `openssl rand -hex 32`) for securing authentication tokens.
+    </Callout>
+
+*   **Engine & Studio `.env` (Optional but Recommended):** Docker Compose will primarily use the root `.env`, but local scripts might use these. Create them from templates if they exist:
+    ```bash
+    # In the repository root directory
+    [ -f engine/.env.template ] && cp engine/.env.template engine/.env
+    [ -f studio/.env.template ] && cp studio/.env.template studio/.env
+    ```
+    *Note: The `VITE_ENGINE_URL` in `studio/.env` should typically remain `http://localhost:8000` for the default Docker setup.*
+
+### 3. Build Docker Images (Optional)
+
+While `docker-compose up` will build images if they don't exist, you can build them explicitly first:
+
+```bash {{ "title": "Terminal" }}
+./scripts/docker-run.sh build
+```
+
+### 4. Start Services
+
+Use the provided script to start all services (Database, Engine, Studio) in detached mode:
+
+```bash {{ "title": "Terminal" }}
+./scripts/docker-run.sh up
+```
+
+This command will:
+*   Pull necessary base images.
+*   Build the Engine and Studio images (if not already built).
+*   Create and start the containers defined in `docker/docker-compose.yml`.
+*   Set up the necessary network and volumes.
+
+### 5. Verify Services
+
+Wait a minute or two for the services to initialize.
+
+*   **Studio (Frontend):** Open your web browser and navigate to [`http://localhost:5173`](http://localhost:5173). You should see the Genbase Studio login page.
+*   **Engine (Backend API):** You can check the API documentation (Swagger UI) at [`http://localhost:8000/docs`](http://localhost:8000/docs).
+
+<Callout title="Troubleshooting" intent="info">
+    If services don't start correctly, check the logs:
+    ```bash
+    ./scripts/docker-run.sh logs
+    ```
+    Look for database connection errors, missing API keys, or build failures. Ensure you edited the `.env` file correctly.
+</Callout>
+
+</Steps>
+
+## First Login
+
+1.  Go to the Genbase Studio URL: [`http://localhost:5173`](http://localhost:5173).
+2.  Use the `ADMIN_USERNAME` and `ADMIN_PASSWORD` you configured in the root `.env` file to log in.
+3.  You should now have access to the Genbase Studio interface.
+
+## Stopping Genbase
+
+To stop all the running Docker containers managed by the script:
+
+```bash {{ "title": "Terminal" }}
+./scripts/docker-run.sh down
+```
+
+This will stop and remove the containers, but your data stored in Docker volumes (like the database) will persist.
+
+## Next Steps
+
+Congratulations! You have a running Genbase instance. Now you can explore:
+
+*   **[User Guide](/user-guide):** Learn how to navigate the Studio, manage projects and modules, and interact with agents.
+*   **[Install a Kit](/user-guide/registry):** Browse the registry (if configured) or manually upload a Kit to start adding capabilities.
+*   **[Create a Module](/user-guide/modules/creating):** Instantiate a Kit into a runnable Module within a project.
+*   **[Concepts](/concepts):** Dive deeper into the core ideas behind Genbase.

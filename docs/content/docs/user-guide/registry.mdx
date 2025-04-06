@@ -1,0 +1,69 @@
+---
+title: Using the Kit Registry
+description: Learn how to browse and install Kits from the Registry using Genbase Studio.
+---
+
+import { PackageSearchIcon, DownloadIcon, LayersIcon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Using the Kit Registry
+
+The **[Kit Registry](/concepts/kits-registry)** is your central hub for discovering and obtaining reusable AI blueprints called **[Kits](/concepts/kits-registry)**. Genbase Studio provides an integrated **Registry Explorer** to browse the configured registry and install Kits into your local environment.
+
+## Accessing the Registry Explorer <PackageSearchIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+1.  **Navigate:** Click the "Registry" icon (<Package className="inline-block h-4 w-4" />) in the far-left navigation sidebar of Genbase Studio.
+2.  **View:** The Explorer Panel (left sidebar area) will now display the **Registry Explorer**, listing Kits available in the configured registry (`REGISTRY_URL`).
+
+![Registry Explorer Sidebar]( /images/studio-registry.png)
+*(Image: Screenshot of the Studio interface with the Registry navigation tab active, showing the Registry Explorer sidebar listing available Kits.)*
+
+## Browsing and Searching Kits
+
+*   **Listing:** Kits are listed in the Registry Explorer, typically showing the Kit Name, Owner, Version, and potentially a short description.
+*   **Search:** Use the search bar at the top of the Registry Explorer to filter Kits by name, owner, or keywords in their description.
+*   **Selection:** Click on a Kit in the Explorer list to view its detailed information in the Main Content Area.
+
+## Viewing Kit Details
+
+When you select a Kit from the Registry Explorer, the Main Content Area displays comprehensive details about it.
+
+This view typically includes:
+
+*   **Header:** Kit Name, Owner, Version, Description, Upload Date.
+*   **Version Selector:** A dropdown to view details for different available versions of the *same* Kit (Owner/ID combination).
+*   **Install Button:** Allows you to install the currently selected Kit version.
+*   **Tabs (Content Varies by Kit):**
+    *   **Overview:** General information, dependencies, required environment variables, defined agents, exposed ports.
+    *   **Profiles:** Details about each Profile the Kit offers, including the assigned Agent, available Actions, and associated Instructions.
+    *   **Workspace:** Lists the initial files and directories included in the Kit's workspace template.
+    *   **Provide:** Shows the Actions, Instructions, or Workspace access the Kit is designed to provide to other modules.
+    *   **README:** Often displays the content of a README file if included in the Kit, providing developer notes or usage instructions.
+
+<Callout title="Fetching Details">
+Viewing Kit details often involves fetching the `kit.yaml` configuration from the registry in the background.
+</Callout>
+
+## Installing a Kit <DownloadIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Installing a Kit downloads it from the Registry and makes it available locally within your Genbase environment, allowing you to create **[Modules](/concepts/projects-modules)** from it.
+
+1.  **Select Kit & Version:** Browse the Registry Explorer and select the desired Kit. Use the version selector in the Main Content Area header to choose the specific version you want to install.
+2.  **Click Install:** Click the "Install Kit" button (usually near the version selector).
+3.  **Installation Process:** Genbase Engine will download the Kit archive (`.tar.gz`) from the Registry, extract it, validate its `kit.yaml`, and store it locally (typically under `.data/kit/{owner}/{kit_id}/{version}`).
+4.  **Feedback:** You should receive a notification (e.g., a toast message) indicating whether the installation was successful or if any errors occurred. The button might show a loading state during installation.
+
+![Install Kit Button]( /images/studio-install-kit-button.png)
+*(Image: Screenshot highlighting the version selector and the "Install Kit" button in the Kit Details view.)*
+
+<Callout title="Local Availability">
+Once installed, the Kit (at that specific version) will appear in the "Select Module" dropdown when you [create a new Module](/user-guide/modules/creating) within any of your projects.
+</Callout>
+
+## Next Steps <LayersIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+After installing the Kits you need:
+
+*   Navigate back to the "Modules" section using the far-left navigation.
+*   Select your desired Project.
+*   [Create a new Module](/user-guide/modules/creating) using the Kit you just installed.

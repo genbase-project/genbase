@@ -1,0 +1,133 @@
+---
+title: Profiles and Agents
+description: Understand how Profiles define interaction modes with Modules and how Agents orchestrate the logic.
+---
+
+import { BotIcon, MessageSquareIcon, Settings2Icon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Profiles and Agents
+
+**Profiles** define *how* you interact with a **[Module](/concepts/projects-modules)**, while **Agents** are the engines that *drive* those interactions.
+
+## Profiles <Settings2Icon className="inline-block h-5 w-5 align-text-bottom" />
+
+A Profile is a specific **operational mode** or **workflow** exposed by a Module. Think of it as a specialized interface for a particular task.
+
+*   **Purpose:** Offer distinct ways to use a Module's capabilities (e.g., setup vs. ongoing tasks).
+*   **Defined In:** `kit.yaml` within the `profiles:` section.
+*   **Specifies:**
+    *   The **Agent** responsible.
+    *   Available **Actions** for that mode.
+    *   Contextual **Instructions**.
+    *   If multiple chat **Sessions** are allowed (`allow_multiple`).
+
+```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'primaryColor': '#fff',
+    'primaryTextColor': '#333',
+    'primaryBorderColor': '#ccc',
+    'lineColor': '#333',
+    'secondaryColor': '#f5f5f5',
+    'tertiaryColor': '#fff'
+  }
+}}%%
+
+graph LR
+    M["Module Instance"] -->|Has Profile A| PA("Profile A")
+    M -->|Has Profile B| PB("Profile B")
+
+    subgraph "Profiles"
+        PA --> AgentA["Agent X"]
+        PA --> ActionsA["Actions: check, configure"]
+        PA --> InstructionsA["Instructions: init_guide.md"]
+
+        PB --> AgentB["Agent Y"]
+        PB --> ActionsB["Actions: monitor, cleanup"]
+        PB --> InstructionsB["Instructions: maint_overview.md"]
+    end
+
+    classDef module fill:#D6EAF8,stroke:#D6EAF8,color:#333,rx:5px,ry:5px
+    classDef profileA fill:#FFD700,stroke:#FFD700,color:#333,rx:5px,ry:5px
+    classDef profileB fill:#E8DAEF,stroke:#E8DAEF,color:#333,rx:5px,ry:5px
+    classDef agent fill:#1E90FF,stroke:#1E90FF,color:white,rx:5px,ry:5px
+    classDef action fill:#FFD700,stroke:#FFD700,color:#333,rx:5px,ry:5px
+    classDef instruction fill:#FFD700,stroke:#FFD700,color:#333,rx:5px,ry:5px
+    
+    class M module
+    class PA profileA
+    class PB profileB
+    class AgentA,AgentB agent
+    class ActionsA,ActionsB action
+    class InstructionsA,InstructionsB instruction
+```
+*Diagram: A Module can offer multiple Profiles, each linking to specific Agents, Actions, and Instructions.*
+
+## Agents <BotIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+An Agent is the **intelligent controller** that executes the logic for a specific Profile. It uses LLMs and Actions to respond to user input within that Profile's context.
+
+*   **Purpose:** Manage the conversation flow, interpret user requests, decide on actions (call LLM, run code), and generate responses.
+*   **Implementation:** Python classes inheriting from `BaseAgent`. Can be custom-built within a Kit or use built-in Genbase agents (like `TaskerAgent`). ([Agent Development Guide](/kit-development/agents)).
+*   **Key Tasks:**
+    *   Process user input.
+    *   Maintain chat history.
+    *   Interact with the configured LLM (`ModelService`).
+    *   Execute available Actions (`ActionService`).
+    *   Access Module workspace (`AgentUtils`).
+    *   Manage profile-specific data (`ProfileStoreService`).
+
+## Chat Interaction & Sessions <MessageSquareIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Users typically interact with a Module's Profile via a chat interface.
+
+```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'primaryColor': '#fff',
+    'primaryTextColor': '#333',
+    'primaryBorderColor': '#ccc',
+    'lineColor': '#333',
+    'secondaryColor': '#f5f5f5',
+    'tertiaryColor': '#fff',
+    'activationBorderColor': '#f5f5f5',
+    'activationBkgColor': '#f5f5f5'
+  }
+}}%%
+
+sequenceDiagram
+    participant User as User
+    participant UI as StudioUI
+    participant Agent as Agent
+    participant LLM as LLM
+    participant Action as ActionService
+
+    User->>UI: Sends Message
+    UI->>Agent: Process Request
+    
+    Agent->>LLM: Send Prompt
+    LLM-->>Agent: Response
+    
+    opt Tool Call Needed
+        Agent->>Action: Execute Action
+        Action-->>Agent: Return Result
+        Agent->>LLM: Send Result
+        LLM-->>Agent: Final Response
+    end
+    
+    Agent->>UI: Return Response
+    UI->>User: Display Response
+```
+*Diagram: Simplified chat interaction flow involving the User, UI, Engine, Agent, LLM, and Action Service.*
+
+*   **Chat History:** All turns (user, assistant, tool calls, tool results) are stored per Module/Profile/Session.
+*   **Sessions:** If a Profile has `allow_multiple: true`, users can have separate, parallel conversations within that single Profile, each with its own history.
+
+<Callout title="Human-in-the-Loop">
+Genbase Agents operate within the defined Profile scope, typically guided by user prompts and confirmations, rather than acting fully autonomously.
+</Callout>
+
+In short, **Profiles** define *what* a Module can do in a specific mode, and **Agents** define *how* it does it, orchestrating LLMs and code execution.

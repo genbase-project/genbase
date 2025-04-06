@@ -1,0 +1,95 @@
+---
+title: Defining Initial Workspace Content
+description: Learn how to structure the `workspace/` directory in your Kit to provide initial files for new Modules.
+---
+
+import { FolderGitIcon, FileJsonIcon, FileCodeIcon } from 'lucide-react';
+import { CodeBlock } from 'fumadocs-ui/components/codeblock';
+import { File, Folder, Files } from 'fumadocs-ui/components/files'; // Using Fumadocs components
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Defining Initial Workspace Content <FolderGitIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+When a **[Module](/concepts/projects-modules)** is created from your Kit, it gets its own dedicated **[Workspace](/concepts/workspace-resources)**, which is essentially a Git repository. The initial content of this repository is populated from the files and directories you place inside the `workspace/` folder within your Kit's source structure.
+
+## Purpose of the `workspace/` Directory
+
+*   **Initial State:** Provide default configuration files, templates, initial data sets, or scripts that your Module's **[Actions](/concepts/actions-execution)** or **[Agents](/concepts/profiles-agents)** might need to function correctly from the start.
+*   **Templates:** Include template files (e.g., `config.json.template`, `Dockerfile.template`) that Actions might read, modify, and write back into the *Module's* live workspace repository.
+*   **Examples:** Provide example input files or data structures.
+*   **Scripts:** Include utility scripts that might be executed by an Action.
+
+## Structure and Content
+
+1.  **Location:** Create a directory named `workspace` at the root of your Kit structure.
+2.  **Contents:** Place any files or subdirectories you want to be included in the initial Module workspace inside this `workspace/` directory. The directory structure you create here will be mirrored in the Module's Git repository.
+
+**Example Kit Structure showing `workspace/`:**
+
+<Files>
+  <Folder name="my-data-processor-kit" defaultOpen>
+    <File name="kit.yaml" />
+    <Folder name="actions">
+      <File name="processor.py" />
+    </Folder>
+    <Folder name="workspace" defaultOpen> {/* Initial content defined here */}
+       <File name="config.json" />
+       <File name=".gitattributes" /> {/* Example: Ensure line endings */}
+       <Folder name="input_schemas">
+         <File name="event_schema.json" />
+       </Folder>
+       <Folder name="scripts">
+         <File name="validate_input.py" />
+       </Folder>
+    </Folder>
+    <File name="requirements.txt" />
+  </Folder>
+</Files>
+
+When a Module is created from `my-data-processor-kit`, its workspace repository (`.data/repositories/{module_id}`) will initially contain:
+
+*   `config.json`
+*   `.gitattributes`
+*   `input_schemas/event_schema.json`
+*   `scripts/validate_input.py`
+*   A `.gitignore` file (potentially, based on `kit.yaml` settings)
+
+## Referencing Workspace Files in `kit.yaml`
+
+While placing files in `workspace/` copies them initially, you can optionally reference specific files or directories within the `workspace.files` list in your `kit.yaml`. This primarily serves documentation and discoverability purposes (e.g., allowing the `ResourceService` to easily list these specific files via the API, which Studio might use).
+
+```yaml
+# kit.yaml (snippet)
+
+workspace:
+  files: # List specific files/dirs for documentation/API access
+    - path: "config.json"
+      description: "Main configuration file for the data processor."
+    - path: "input_schemas/"
+      description: "Directory containing JSON schemas for input validation."
+    - path: "scripts/validate_input.py"
+      description: "Script used by the 'validate' action."
+
+  ignore: # Patterns for the Module's .gitignore
+    - "*.log"
+    - "output/"
+    - ".DS_Store"
+```
+
+*   **`workspace.files`:** List of objects describing key initial files/dirs.
+    *   `path`: Path relative to the `workspace/` directory in your Kit source (and thus relative to the root of the Module's repo).
+    *   `description`: Explains the purpose of the file/directory.
+*   **`workspace.ignore`:** List of patterns added to the `.gitignore` file created in the Module's repository, helping keep it clean from logs, temporary files, etc.
+
+<Callout title="Initial Copy vs. Live Files">
+Remember that the `workspace/` directory in your Kit source only defines the *initial* state. Once a Module is created, its workspace repository is independent. Changes made by Actions within a running Module *do not* affect the Kit's source `workspace/` directory or other Modules created from the same Kit.
+</Callout>
+
+## Best Practices
+
+*   **Keep it Minimal:** Only include files essential for the Module's initial operation or commonly needed templates. Avoid large datasets or binaries if possible.
+*   **Use Templates:** If configuration needs to be customized per-module, provide template files (e.g., `config.template.json`) and have an initialization Action read the template, modify it (perhaps with environment variables), and write the final `config.json`.
+*   **Consider `.gitignore`:** Use the `workspace.ignore` setting in `kit.yaml` or include a `.gitignore` file directly in your `workspace/` directory to prevent common unwanted files (logs, caches, OS files) from being accidentally committed by Actions.
+*   **Document Key Files:** Use the `workspace.files` list in `kit.yaml` to document the purpose of important initial files.
+
+By carefully defining the initial workspace content, you ensure that Modules created from your Kit start in a consistent and functional state.

@@ -1,0 +1,105 @@
+---
+title: Defining Profiles
+description: Learn how to configure Profiles in kit.yaml to define interaction modes for your Kit.
+---
+
+import { Settings2Icon, BotIcon, ZapIcon, FileTextIcon } from 'lucide-react';
+import { CodeBlock } from 'fumadocs-ui/components/codeblock';
+
+# Defining Profiles <Settings2Icon className="inline-block h-5 w-5 align-text-bottom" />
+
+**[Profiles](/concepts/profiles-agents)** are defined in your `kit.yaml` file and act as the primary interfaces for users or other systems to interact with **[Modules](/concepts/projects-modules)** created from your Kit. Each Profile configures a specific workflow or operational mode.
+
+## Purpose of Profiles
+
+*   **Define Interaction Modes:** Separate different ways of using the Kit's capabilities (e.g., setup vs. regular use vs. troubleshooting).
+*   **Assign Responsibility:** Link each interaction mode to a specific **[Agent](/concepts/profiles-agents)** (either built-in or custom).
+*   **Control Capabilities:** Specify exactly which **[Actions](/concepts/actions-execution)** are available within the context of that Profile.
+*   **Provide Context:** Supply relevant **Instructions** to the Agent for guidance.
+*   **Manage Conversations:** Control whether multiple concurrent chat **Sessions** are permitted for the Profile.
+
+## Structure in `kit.yaml`
+
+Profiles are defined under the top-level `profiles:` key. This key holds a dictionary where each key is the unique name of a profile, and the value is an object defining its configuration.
+
+```yaml
+# kit.yaml
+# ... (other top-level keys like id, version, agents, etc.)
+
+profiles:
+  # --- Profile 1: Initialization ---
+  initialize: # Unique profile name
+    agent: "setup_wizard_agent" # Agent responsible (must be defined in 'agents:' or built-in)
+    allow_multiple: false       # Only one setup session at a time (default is false)
+    instructions:               # Context for the agent
+      - name: "welcome_message"
+        path: "guides/welcome.md"
+        description: "Initial welcome and prerequisites."
+    actions:                    # Actions available during initialization
+      - name: "check_db_connection"
+        path: "db_utils:test_connection"
+        description: "Tests the database connection using provided credentials."
+      - name: "apply_initial_schema"
+        path: "db_utils:apply_schema"
+        description: "Applies the baseline database schema."
+
+  # --- Profile 2: Data Querying ---
+  query_data:
+    agent: "tasker"             # Using a built-in agent
+    allow_multiple: true        # Allow multiple concurrent query sessions
+    instructions:
+      - name: "query_syntax_help"
+        path: "guides/query_help.txt"
+        description: "Tips on how to phrase data queries."
+    actions:
+      - name: "run_select_query"
+        path: "db_reader:safe_select"
+        description: "Executes a safe, read-only SELECT query provided by the user."
+      - name: "get_table_schema"
+        path: "db_reader:describe_table"
+        description: "Retrieves the column names and types for a specified table."
+
+  # --- Profile 3: Maintenance ---
+  maintain:
+    agent: "tasker"
+    # No instructions or actions specifically defined here,
+    # might rely solely on agent's base capabilities or provided actions.
+    # (If an agent is specified, it must exist)
+```
+
+## Configuration Fields
+
+For each profile defined under `profiles:`:
+
+*   **`profile_name` (Key):** (Required, String)
+    *   The unique identifier for the profile (e.g., `initialize`, `maintain`, `generate_report`).
+    *   This name is used by users/clients when initiating an interaction (e.g., selecting the profile tab in Studio).
+*   **`agent`:** (Required, String)
+    *   The name of the Agent responsible for handling this profile.
+    *   Must match either a `name` defined in the top-level `agents:` section of your `kit.yaml` or the identifier of a built-in Genbase agent (like `tasker`).
+*   **`allow_multiple`:** (Optional, Boolean)
+    *   Determines if users can have multiple simultaneous chat sessions for this specific profile within the *same* Module instance.
+    *   `true`: Multiple sessions allowed.
+    *   `false` (Default): Only one session (the default session) is typically used.
+*   **`instructions`:** (Optional, List of Objects)
+    *   Provides contextual information (from files in the `instructions/` directory) to the assigned `agent`.
+    *   Each object requires:
+        *   `name`: (String) A reference name.
+        *   `path`: (String) Path to the instruction file relative to the Kit's `instructions/` folder.
+        *   `description`: (Optional, String) Description of the instruction's content.
+    *   The Agent receives this information (including file content) via the `profile_data` argument in `process_request`.
+*   **`actions`:** (Optional, List of Objects)
+    *   Specifies which **[Kit Actions](/concepts/actions-execution)** (defined in the `actions/` directory) are made available as tools to the `agent` when operating under *this specific profile*.
+    *   Each object requires:
+        *   `name`: (String) The identifier the Agent/LLM uses for the tool call.
+        *   `path`: (String) The locator for the Python function (`filename:function_name` or `function_name`).
+        *   `description`: (String) Crucial explanation for the LLM on what the action does and when to use it.
+
+## Best Practices
+
+*   **Choose Meaningful Names:** Profile names should clearly indicate their purpose (e.g., `create_user`, `analyze_data`, `configure_settings`).
+*   **Scope Actions Appropriately:** Only include Actions relevant to the specific workflow of the Profile. Avoid exposing overly broad or potentially dangerous actions in profiles meant for general use.
+*   **Use Instructions:** Provide clear instructions to guide the Agent, especially for complex profiles or when specific information formats are expected from the user.
+*   **Consider Session Needs:** Use `allow_multiple: true` thoughtfully for profiles where parallel, independent conversations make sense (e.g., querying different datasets, working on separate analysis tasks). Use `false` for stateful, sequential processes like initialization or configuration.
+
+By carefully defining Profiles, you create structured, predictable, and capability-focused interfaces for your Kit's functionality.

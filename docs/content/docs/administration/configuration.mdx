@@ -1,0 +1,118 @@
+---
+title: Environment Variable Configuration
+description: Reference guide for environment variables used by Genbase Engine and Studio.
+---
+
+import { KeyIcon, DatabaseIcon, BotIcon, ServerIcon, NetworkIcon, LockIcon } from 'lucide-react';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Accordions, Accordion } from 'fumadocs-ui/components/accordion';
+
+# Environment Variable Configuration <KeyIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Genbase uses environment variables extensively for configuration. These variables control database connections, API keys for external services, authentication settings, and operational parameters.
+
+## Configuration Files
+
+Environment variables are typically managed using `.env` files:
+
+*   **Root `.env`:** Located at the repository root. Primarily used by Docker Compose to set environment variables for the containers.
+*   **`engine/.env`:** Located in the `engine/` directory. Read directly by the Engine application (FastAPI). Contains database URLs, API keys, auth secrets, etc.
+*   **`studio/.env`:** Located in the `studio/` directory. Primarily used for build-time arguments for the Studio Docker image (like `VITE_ENGINE_URL`) and potentially runtime configuration read by the frontend application.
+
+<Callout title="Priority and Overrides">
+When using Docker Compose, variables set directly in the `docker-compose.yml` `environment:` section or passed via the command line might override values from the `.env` files. For local development (`run-local.sh`), the `.env` files in the respective service directories (`engine/`, `studio/`) are typically used.
+</Callout>
+
+## Variable Reference
+
+Here is a breakdown of common environment variables used by Genbase:
+
+<Accordions>
+  <Accordion title="Database Configuration (Engine)">
+    <DatabaseIcon className="inline-block h-4 w-4 mr-1 align-text-bottom" /> Used by the Engine to connect to the PostgreSQL database.
+
+    *   **`DATABASE_URL`** (Required)
+        *   **Description:** The full connection string for the PostgreSQL database.
+        *   **Format:** `postgresql://<user>:<password>@<host>:<port>/<database_name>`
+        *   **Example (Docker):** `postgresql://user:your_password@postgres:5432/genbase` (uses service name `postgres`)
+        *   **Example (Local):** `postgresql://dbuser:dbpass@localhost:5432/my_genbase_db`
+    *   **`POSTGRES_USER`** (Used by Docker Compose & Root `.env`)
+        *   **Description:** Username for the PostgreSQL container/database.
+        *   **Default:** `user`
+    *   **`POSTGRES_PASSWORD`** (Used by Docker Compose & Root `.env`)
+        *   **Description:** Password for the PostgreSQL container/database. **Must be changed from default!**
+        *   **Default:** `password` (Template value)
+    *   **`POSTGRES_DB`** (Used by Docker Compose & Root `.env`)
+        *   **Description:** Name of the database to create/use within PostgreSQL.
+        *   **Default:** `genbase`
+  </Accordion>
+
+  <Accordion title="LLM & Embedding API Keys (Engine)">
+     <BotIcon className="inline-block h-4 w-4 mr-1 align-text-bottom" /> API keys required to enable specific AI model providers. Add keys for the services you intend to use.
+
+    *   `OPENAI_API_KEY`: For OpenAI models (GPT-4, GPT-3.5, Embeddings).
+    *   `ANTHROPIC_API_KEY`: For Anthropic models (Claude).
+    *   `GROQ_API_KEY`: For Groq cloud inference.
+    *   `MISTRAL_API_KEY`: For Mistral AI API models.
+    *   `DEEPSEEK_API_KEY`: For DeepSeek models.
+    *   `COHERE_API_KEY`: For Cohere models (including embeddings).
+    *   `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`: For Azure OpenAI Service.
+    *   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION_NAME`: For AWS Bedrock models.
+    *   `NVIDIA_NIM_API_KEY`, `NVIDIA_NIM_API_BASE`: For NVIDIA NIM endpoints.
+    *   `HUGGINGFACE_API_KEY`: For Hugging Face Inference Endpoints or specific models.
+    *   `GEMINI_API_KEY`: For Google Gemini models.
+    *   `VOYAGE_API_KEY`: For Voyage AI embeddings.
+    *   Support for other providers will be added soon
+
+     <Callout intent="info">
+     The availability of models in the [LLM/Embedding Settings](/docs/administration/llm-embedding) depends on which corresponding API keys are set in the Engine's environment.
+     </Callout>
+  </Accordion>
+
+  <Accordion title="Authentication & Security (Engine)">
+    <LockIcon className="inline-block h-4 w-4 mr-1 align-text-bottom" /> Variables related to user authentication and security.
+
+    *   **`AUTH_SECRET`** (Required)
+        *   **Description:** A strong, secret key used for signing JWT tokens and other security functions. **Must be kept confidential and changed from any default/template value.**
+        *   **Recommendation:** Generate using a secure method, e.g., `openssl rand -hex 32`.
+    *   **`ADMIN_USERNAME`** (Required)
+        *   **Description:** The email address/username for the initial superuser account created on first startup.
+        *   **Default:** `admin`
+    *   **`ADMIN_PASSWORD`** (Required)
+        *   **Description:** The password for the initial superuser account. **Must be changed from any default/template value.**
+        *   **Default:** `password` (Template value)
+  </Accordion>
+
+  <Accordion title="Core Engine Settings">
+    <ServerIcon className="inline-block h-4 w-4 mr-1 align-text-bottom" /> General operational settings for the Engine.
+
+    *   **`REGISTRY_URL`** (Optional)
+        *   **Description:** The base URL of the Kit Registry service used for discovering and downloading Kits.
+        *   **Default:** `https://registry.genbase.io`
+    *   **`DATA_DIR`** (Optional)
+        *   **Description:** The path *inside the Engine container* where persistent data like Kits and Module repositories are stored. This path is typically mounted to a Docker volume.
+        *   **Default:** `.data`
+  </Accordion>
+
+  <Accordion title="Studio Configuration (Build/Runtime)">
+    <NetworkIcon className="inline-block h-4 w-4 mr-1 align-text-bottom" /> Variables primarily used by the Studio frontend. Set in `studio/.env`.
+
+    *   **`VITE_ENGINE_URL`** (Required)
+        *   **Description:** The URL that the user's *browser* uses to connect to the Genbase Engine API.
+        *   **Docker Default:** `http://localhost:8000` (if accessing Studio on the same machine Docker is running).
+        *   **Local Dev Default:** `http://localhost:8000`
+        *   **Important:** If accessing Studio from a different machine than the Engine, set this to the Engine's accessible IP address or domain name (e.g., `http://192.168.1.100:8000`).
+    *   **`VITE_API_USERNAME`, `VITE_API_PASSWORD`** (Optional - Primarily for older basic auth or specific build needs, less relevant with JWT)
+        *   **Description:** May have been used for basic auth during development or specific build processes. With JWT auth, these are likely **not needed** for standard operation. Check Studio code if behaviour seems dependent on them.
+        *   **Default:** `admin`/`password` (Template values)
+
+  </Accordion>
+</Accordions>
+
+<Callout title="Configuration Priority">
+1.  **Environment Variables:** Variables set directly in the runtime environment (e.g., via `export` or Docker Compose `environment:` section) usually take the highest priority.
+2.  **`.env` Files:** Variables loaded from `.env` files are typically loaded next.
+3.  **Default Values:** Code defaults are used if no value is provided via environment or `.env`.
+
+Always refer to the `.env.template` files in the repository root, `engine/`, and `studio/` directories for the most up-to-date list of expected variables.
+</Callout>

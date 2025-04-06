@@ -1,0 +1,118 @@
+---
+title: Deploying with Docker Compose
+description: Step-by-step instructions for setting up and running Genbase using Docker and Docker Compose.
+---
+
+import { ContainerIcon, TerminalIcon, FileTextIcon, AlertTriangleIcon } from 'lucide-react'; // Assuming ContainerIcon exists
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { CodeBlock } from 'fumadocs-ui/components/codeblock';
+
+# Deploying with Docker Compose <ContainerIcon className="inline-block h-5 w-5 align-text-bottom" />
+
+Using Docker Compose is the recommended method for running Genbase. It orchestrates the necessary services (Database, Engine, Studio) in isolated containers.
+
+## Prerequisites
+
+*   **Docker & Docker Compose:** Ensure they are installed and running on your system. ([Docker Install Guide](https://docs.docker.com/get-docker/)).
+*   **Git:** To clone the Genbase repository.
+*   **Cloned Repository:** You need a local copy of the Genbase monorepo.
+
+## Setup and Configuration
+
+<Steps>
+
+### 1. Prepare Environment Files (`.env`)
+
+Genbase relies heavily on `.env` files for configuration. **You must create these from the provided templates and edit them.**
+
+*   **Root `.env` File:** Controls database, initial admin user, auth secret, and registry URL.
+    ```bash {{ title: "Terminal" }}
+    # Navigate to the root of the cloned Genbase repository
+    cd /path/to/genbase
+    cp .env.template .env
+    ```
+    **Edit the `.env` file and set:**
+    *   `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`: Credentials for the PostgreSQL container.
+    *   `ADMIN_USERNAME`, `ADMIN_PASSWORD`: Credentials for the initial Genbase superuser. **Change the default password!**
+    *   `AUTH_SECRET`: **Crucial!** Generate a strong, random secret key (e.g., `openssl rand -hex 32`) for session security.
+    *   `*_API_KEY`: Provide API keys for the LLM and Embedding providers you intend to use (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`). At least one LLM key is usually required for core functionality.
+    *   `REGISTRY_URL`: (Optional) Change if using a private Kit registry. Defaults to `registry.genbase.io`.
+    *   `DATA_DIR`: (Optional) Path *inside the Engine container* where persistent data (kits, repos) is stored. Usually keep the default `.data`.
+
+*   **Engine `.env` File (`engine/.env`):** While Docker Compose primarily uses the root `.env` for service environment variables, the Engine service *also* loads this file internally. Ensure it exists, especially if you need Engine-specific overrides not set in the root file.
+    ```bash {{ title: "Terminal" }}
+    # In the repository root
+    [ -f engine/.env.template ] && cp engine/.env.template engine/.env
+    ```
+    *This file might inherit values from the root `.env` within the container, but having it present avoids potential issues.*
+
+*   **Studio `.env` File (`studio/.env`):** Needed primarily for *build arguments* passed during the Studio image creation.
+    ```bash {{ title: "Terminal" }}
+    # In the repository root
+    [ -f studio/.env.template ] && cp studio/.env.template studio/.env
+    ```
+    **Edit `studio/.env` and ensure:**
+    *   `VITE_ENGINE_URL`: This should point to the URL where the Studio *browser* can reach the Engine API. In the default Docker setup, this is usually `http://localhost:8000` (or the host IP/domain if accessing remotely).
+
+<Callout title="Security Warning" intent="danger" icon={<AlertTriangleIcon />}>
+    **Never commit your actual `.env` files to Git.** Ensure they are listed in your `.gitignore` file. Treat API keys and secrets with care.
+</Callout>
+
+### 2. Understand `docker-compose.yml`
+
+The main configuration is in `docker/docker-compose.yml`. Key aspects:
+
+*   **Services:** Defines `postgres`, `engine`, and `studio`.
+*   **Database (`postgres`):** Uses the official PostgreSQL image. Environment variables for user/password/db are taken from the root `.env`. Persists data using a named volume (`postgres_data`). Includes a healthcheck.
+*   **Backend (`engine`):** Builds the image from the `engine/` directory. Depends on the database being healthy. Mounts the `engine/.env` file read-only. Mounts a named volume (`engine_data`) to the path specified by `DATA_DIR` (inside the container) for persistent Kit and repository storage. Exposes port 8000.
+*   **Frontend (`studio`):** Builds the image from the `studio/` directory. Passes `VITE_ENGINE_URL` etc., as build arguments from `studio/.env`. Exposes port 5173.
+*   **Network:** Creates a bridge network (`genbase-network`) for services to communicate.
+*   **Volumes:** Defines named volumes (`postgres_data`, `engine_data`) for data persistence.
+
+### 3. Use the Helper Script (`docker-run.sh`)
+
+The `scripts/docker-run.sh` script simplifies common Docker Compose operations. Navigate to the `scripts/` directory or run it from the root (`./scripts/docker-run.sh ...`).
+
+*   **Build Images:** (Optional, `up` does this too)
+    ```bash {{ title: "Terminal" }}
+    ./scripts/docker-run.sh build
+    ```
+*   **Start Services:** (Builds if needed, starts in detached mode)
+    ```bash {{ title: "Terminal" }}
+    ./scripts/docker-run.sh up
+    ```
+*   **View Logs:** (Follows logs from all services)
+    ```bash {{ title: "Terminal" }}
+    ./scripts/docker-run.sh logs
+    ```
+*   **Stop Services:** (Stops and removes containers)
+    ```bash {{ title: "Terminal" }}
+    ./scripts/docker-run.sh down
+    ```
+*   **Restart Services:**
+    ```bash {{ title: "Terminal" }}
+    ./scripts/docker-run.sh restart
+    ```
+
+</Steps>
+
+## Accessing Services
+
+Once started with `./scripts/docker-run.sh up`:
+
+*   **Genbase Studio:** Access via your browser at [`http://localhost:5173`](http://localhost:5173) (or the host's IP/domain if running on a server).
+*   **Genbase Engine API:** The API is available at [`http://localhost:8000`](http://localhost:8000). API documentation (Swagger UI) is at [`http://localhost:8000/docs`](http://localhost:8000/docs).
+
+## Data Persistence
+
+*   **Database:** Data is stored in the `postgres_data` Docker volume. It persists even if you run `docker-run.sh down`. To remove it completely, use `docker volume rm genbase-postgres_data` (use with caution!).
+*   **Engine Data:** Kits, Module repositories, and other state managed by the Engine are stored in the `engine_data` Docker volume, mapped to the `DATA_DIR` inside the container. This also persists across `down`/`up` cycles. Remove with `docker volume rm genbase-engine_data`.
+
+## Troubleshooting
+
+*   **Permission Errors (Linux):** Ensure the directories referenced by volumes (like `.data/` if you changed `DATA_DIR`) have appropriate permissions for the user running the Docker daemon or the user inside the container. Sometimes `chown` or `chmod` might be needed on the host for the mounted volume location *before* the first run.
+*   **Port Conflicts:** If ports `5432`, `8000`, or `5173` are already in use on your host, edit `docker/docker-compose.yml` to map them to different host ports (e.g., `ports: - "8001:8000"` for the engine). Remember to update `VITE_ENGINE_URL` in `studio/.env` if you change the Engine's host port.
+*   **Build Failures:** Check the logs (`docker-run.sh logs` or `docker-compose build`). Often related to network issues during dependency downloads or errors in Dockerfiles.
+*   **Engine Startup Errors:** Check Engine logs (`docker-run.sh logs engine`). Common issues include incorrect `DATABASE_URL`, missing required environment variables (like LLM keys), or database migration failures.
+*   **Studio Connection Errors:** Ensure `VITE_ENGINE_URL` in `studio/.env` correctly points to where the Engine API is accessible *from the browser*. If running Docker on a remote machine, use that machine's IP/domain, not `localhost`. Ensure CORS is configured correctly if accessing from different domains (though the default FastAPI setup is usually permissive).

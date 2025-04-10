@@ -523,7 +523,7 @@ const UserManagementPage: React.FC = () => {
                                                                  <Trash2 className="h-4 w-4" />
                                                              </Button>
                                                          </AlertDialogTrigger>
-                                                        <AlertDialogContent className="  text-neutral-900">
+                                                        <AlertDialogContent className="  text-neutral-900 bg-white">
                                                             <AlertDialogHeader>
                                                                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                                                 <AlertDialogDescription className="text-gray-400">

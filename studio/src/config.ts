@@ -1,5 +1,5 @@
 // Constants
-const DEFAULT_ENGINE_URL = import.meta.env.VITE_ENGINE_URL || 'http://localhost:8000';
+const DEFAULT_ENGINE_URL = import.meta.env.VITE_ENGINE_URL || 'http://localhost:8000/api/v1';
 
 // Get stored engine URL or use default
 export const ENGINE_BASE_URL = localStorage.getItem('engine_url') || DEFAULT_ENGINE_URL;

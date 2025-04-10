@@ -71,7 +71,7 @@ interface EnvironmentVariable {
   default?: string;
 }
 
-const RESOURCE_TYPES = ['provide-instructions', 'workspace'];
+const RESOURCE_TYPES = ['workspace', 'provide-instructions', ];
 
 const buildTreeFromPaths = (items: ApiResponse[]): TreeItem[] => {
   const root: { [key: string]: TreeItem } = {};

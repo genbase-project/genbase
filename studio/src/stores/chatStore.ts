@@ -87,7 +87,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-      // Example: Sending a plain text description instead of the old GIML format.
       // The actual format depends entirely on how the backend agent is designed to receive this.
       const inputPayload = `User input for ${id}: ${value}`;
 

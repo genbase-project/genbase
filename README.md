@@ -16,19 +16,12 @@
 
 ---
 
-**Genbase is an open-source platform designed to help you build, manage, and orchestrate complex AI systems.** Instead of building monolithic AI applications, Genbase enables you to create sophisticated solutions by composing specialized, reusable AI agents that can securely collaborate.
+**Genbase is an open-source platform designed to help you build, manage, and orchestrate complex AI systems.** 
 
-Building powerful AI systems often involves integrating diverse capabilities – managing databases, generating code, interacting with external APIs, analyzing data, and more. Doing this reliably, securely, and without reinventing the wheel is challenging.
+Building powerful AI systems often involves integrating diverse capabilities – managing databases, generating code, interacting with external APIs, analyzing data, and more.
 
 Genbase tackles this complexity by introducing **Kits**: self-contained, versioned blueprints that package specific AI functionalities. A Kit might contain specialized agent logic, Python tools (Actions), configuration, dependencies, and even initial workspace files. These Kits can be shared and reused across projects.
 
-You instantiate Kits as **Modules** within your **Project**. Each Module runs as a managed component with its own state and secure execution environment. Crucially, Modules can be interconnected:
-*   They can establish **Relationships** (`Connection`, `Context`) to understand dependencies.
-*   They can securely **Provide** resources like workspace access or specific Actions to other Modules that need them.
-
-This modular, collaborative approach allows you to build systems where specialized agents work together. For example, a code generation Module could use an Action provided by a database management Module to fetch schema information before writing application code.
-
-Humans remain central to the process. Genbase Studio provides an intuitive interface to manage your ecosystem, interact with agents through defined **Profiles** (specific operational modes like 'initialize' or 'maintain'), monitor progress, and guide the overall system.
 
 ![Genbase Studio Interface - Module View](https://raw.githubusercontent.com/genbase-project/genbase/refs/heads/main/docs/public/module.png)
 
@@ -47,7 +40,6 @@ Humans remain central to the process. Genbase Studio provides an intuitive inter
 *   **Project:** An organizational container for Modules.
 *   **Profile:** A specific task or interaction mode defined for a Module (e.g., `initialize`, `maintain`).
 *   **Action:** A Kit-defined Python function executed securely in a container.
-*   **Relation:** A defined link between Modules (`Connection` or `Context`).
 *   **Provide:** Mechanism for one Module to grant another access to its `Workspace` or specific `Actions`.
 
 *(For more details, see the [Core Concepts Documentation](link-to-docs/concepts))*
@@ -115,9 +107,8 @@ The recommended way to run Genbase is using Docker Compose.
 
 ## Documentation 📚
 
-*   [Getting Started Guide](https://docs.genbase.io/docs/overview/getting-started)
-*   [Core Concepts Explained](https://docs.genbase.io/docs/overview/concepts)
-*   [Architecture Details](https://docs.genbase.io/docs/overview/architecture)
+*   [Quick Start Guide](https://docs.genbase.io/docs/quick-start)
+*   [Core Concepts Explained](https://docs.genbase.io/docs/concepts)
 *   [Creating Kits](https://docs.genbase.io/docs/development/creating-kits)
 
 ## Contributing 🤝

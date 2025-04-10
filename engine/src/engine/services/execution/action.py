@@ -2,6 +2,7 @@ import ast
 from datetime import datetime
 import hashlib
 import json
+import os
 from pathlib import Path
 import threading
 import time
@@ -9,6 +10,7 @@ from typing import Any, Dict, List, Set, Callable, Optional
 import cloudpickle
 import docker.errors
 
+from engine.services.core.api_key import ApiKeyService
 from engine.services.core.kit import Port
 from engine.services.execution.function_parser import FunctionMetadata, FunctionParser
 from engine.services.storage.repository import RepoService
@@ -82,7 +84,6 @@ class ActionService:
             # Read the source code
             with open(full_path, 'r') as f:
                 source = f.read()
-                logger.debug(f"Source code: {source}")
 
             # Parse using AST
             tree = ast.parse(source)
@@ -516,7 +517,8 @@ except Exception as e:
             env_vars: Dict[str, str],
             repo_name: str,
             base_image: str = "python:3.9-slim",
-            ports: Optional[List[Port]] = None
+            ports: Optional[List[Port]] = None,
+            module_id: Optional[str] = None
         ) -> Any:
         """Execute a function from a file in a Docker container using cached images"""
         try:
@@ -527,6 +529,18 @@ except Exception as e:
             # Convert to absolute paths
             repo_path = Path(self.repo_service.get_repo_path(repo_name)).resolve()
             actions_path = Path(folder_path).resolve()
+
+
+
+            # Add gateway env vars
+            if module_id:
+                env_vars['GENBASE_GATEWAY_URL'] = os.getenv('BASE_URL').replace('http://localhost','http://host.docker.internal')+ "/api/v1" + "/gateway"
+                api_key_service = ApiKeyService()
+                api_key_obj = api_key_service.get_api_key(module_id, auto_create=True)
+                module_api_key = api_key_obj.api_key
+                logger.debug(f"Found API key for module {module_id}")
+
+                env_vars['GENBASE_GATEWAY_API_KEY'] = module_api_key
             
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)

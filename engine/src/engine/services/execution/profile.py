@@ -289,7 +289,8 @@ class ProfileService:
                 env_vars=module_metadata.env_vars,
                 repo_name=module_metadata.repo_name,
                 base_image=kit_config.image,
-                ports=kit_config.ports
+                ports=kit_config.ports,
+                module_id=action_info.module_id,
             )
 
             return result

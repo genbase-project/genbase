@@ -695,19 +695,6 @@ class ModuleRouter:
             summary="Get all modules in a project"
         )
 
-        self.router.add_api_route(
-            "/relation",
-            self._create_relation,
-            methods=["POST"],
-            summary="Create module relation"
-        )
-
-        self.router.add_api_route(
-            "/relation/{source_id}/{target_id}/{relation_type}",
-            self._delete_relation,
-            methods=["DELETE"],
-            summary="Delete module relation"
-        )
 
         self.router.add_api_route(
             "/graph",
@@ -717,21 +704,6 @@ class ModuleRouter:
             summary="Get module graph"
         )
 
-        self.router.add_api_route(
-            "/{module_id}/connections",
-            self.get_module_connections,
-            methods=["GET"],
-            response_model=List[ModuleResponse],
-            summary="Get modules with connection relation to this module"
-        )
-
-        self.router.add_api_route(
-            "/{module_id}/context",
-            self.get_module_context,
-            methods=["GET"],
-            response_model=List[ModuleResponse],
-            summary="Get modules with context relation to this module"
-        )
 
 
         self.router.add_api_route(
@@ -751,12 +723,6 @@ class ModuleRouter:
         )
 
 
-        self.router.add_api_route(
-            "/relation/{source_id}/{target_id}/{relation_type}/description",
-            self._update_relation_description,
-            methods=["PUT"],
-            summary="Update relation description"
-        )
 
 
         self.router.add_api_route(

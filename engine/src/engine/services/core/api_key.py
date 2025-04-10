@@ -49,15 +49,17 @@ class ApiKeyService:
             logger.info(f"Created API key for module {module_id}")
             return api_key
     
-    def get_api_key(self, module_id: str) -> Optional[ModuleApiKey]:
+    def get_api_key(self, module_id: str, auto_create: bool = False, key_description: Optional[str] = None) -> Optional[ModuleApiKey]:
         """
-        Get the active API key for a module
+        Get the active API key for a module. Optionally create a new key if none exists.
         
         Args:
             module_id: ID of the module
+            auto_create: If True, automatically create a new key if none exists
+            key_description: Optional description for a newly created key
             
         Returns:
-            The active API key or None if not found
+            The active API key or None if not found and auto_create is False
         """
         with self._get_db() as db:
             query = select(ModuleApiKey).where(
@@ -65,7 +67,14 @@ class ApiKeyService:
                 ModuleApiKey.is_active
             )
             result = db.execute(query)
-            return result.scalars().first()
+            api_key = result.scalars().first()
+            
+            if api_key is None and auto_create:
+                # No active API key found, create a new one
+                logger.info(f"No active API key found for module {module_id}, creating one")
+                return self.create_api_key(module_id, key_description)
+                
+            return api_key
     
     def revoke_api_key(self, module_id: str) -> bool:
         """

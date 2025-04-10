@@ -48,11 +48,11 @@ from engine.services.storage.repository import RepoService
 from engine.services.storage.resource import ResourceService
 from engine.services.execution.state import StateService
 from engine.services.execution.profile import ProfileService
-from engine.services.storage.vector_store import VectorStoreService
+
 from engine.services.storage.embedder import EmbeddingService
 from engine.apis.embedding import EmbeddingRouter
 
-from engine.apis.llm_gateway import LLMGatewayRouter
+from engine.apis.gateway import LLMGatewayRouter
 from engine.auth.users import auth_backend, current_active_user, fastapi_users
 
 
@@ -122,6 +122,7 @@ Stack Trace:
 app = FastAPI(
     title="Genbase API",
     debug=True,  # Enable debug mode for detailed error responses
+    root_path="/api/v1"  
 )
 app.add_middleware(LogMiddleware)
 

@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Union, Literal
 
 
-
+# Note: Agents should only import from BaseAgent
 
 @dataclass
 class AgentServices:
@@ -144,7 +144,7 @@ class BaseAgent(ABC):
         Args:
             agent_instructions: Optional agent-specific instructions
             actions: List of action names to include, or None for all actions
-            include: Whether to include provided actions and GIML elements
+            include: Whether to include provided actions and elements
             
         Returns:
             Tuple of (system prompt, list of tools)
@@ -404,24 +404,18 @@ class BaseAgent(ABC):
             logger.debug(f"Chat completion response: {response}")
 
             if run_actions:
-                # Add response to history
-                # check if response has tool calls
                 assistant_message = response.choices[0].message
                 
                 if hasattr(assistant_message, "tool_calls") and assistant_message.tool_calls:
-                    # Add assistant message with tool calls info
-                    self.add_message(
-                        "assistant",
-                        None,
-                        message_type="tool_calls",
-                        tool_calls=assistant_message.tool_calls
-                    )
-
+                    # Variables to track successful tool calls
+                    successful_tool_calls = []
+                    successful_tool_results = []
+                    
+                    # Execute all tool calls and track successful ones
                     for tool_call in assistant_message.tool_calls:
                         try:
                             # Parse parameters
                             parameters = json.loads(tool_call.function.arguments)
-
 
                             # Execute the profile action
                             result = await self.run_action(
@@ -429,43 +423,53 @@ class BaseAgent(ABC):
                                 parameters
                             )
 
-                            # Add to history with tool call ID
-                            self.add_message(
-                                role="tool",
-                                content=json.dumps(result),
-                                message_type="tool_result",
-                                tool_call_id=tool_call.id,
-                                tool_name=tool_call.function.name
-                            )
-
+                            # Store successful tool call and result for history
+                            successful_tool_calls.append(tool_call)
+                            successful_tool_results.append({
+                                "role": "tool",
+                                "content": json.dumps(result),
+                                "message_type": "tool_result",
+                                "tool_call_id": tool_call.id,
+                                "tool_name": tool_call.function.name
+                            })
                         except Exception as e:
                             error_msg = str(e)
                             logger.error(f"Error executing tool {tool_call.function.name}: {error_msg}")
-
-
-
-
-
-
-
-
-
-
+                    
+                    # If we have successful tool calls, add them to history
+                    if successful_tool_calls:
+                        # Add the assistant message with tool calls first
+                        self.add_message(
+                            "assistant",
+                            None,
+                            message_type="tool_calls",
+                            tool_calls=successful_tool_calls  # Only include successful tool calls
+                        )
+                        
+                        # Then add each successful tool result
+                        for result_info in successful_tool_results:
+                            self.add_message(
+                                role=result_info["role"],
+                                content=result_info["content"],
+                                message_type=result_info["message_type"],
+                                tool_call_id=result_info["tool_call_id"],
+                                tool_name=result_info["tool_name"]
+                            )
+                    else:
+                        # If no successful tool calls, just add the assistant message content
+                        # or an error message if content is None
+                        content = assistant_message.content or "Failed to execute tool calls."
+                        self.add_message("assistant", content)
+                
                 elif assistant_message.content:
                     # Add regular assistant message to history
-                   self.add_message("assistant", assistant_message.content)
-
-            
-
-
-
-
-
+                    self.add_message("assistant", assistant_message.content)
 
             return response
         except Exception as e:
             logger.error(f"Chat completion failed: {str(e)}")
             raise
+
 
 
 
@@ -550,7 +554,7 @@ class BaseAgent(ABC):
 
 
 
-    def get_store(self, collection: str) -> Optional[str]:
+    def get_store(self, collection: str) -> Optional[ProfileStoreService]:
         """Get a stored value by key"""
         if not self.context:
             raise ValueError("No active context")

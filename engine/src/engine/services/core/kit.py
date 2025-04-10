@@ -376,11 +376,18 @@ class KitService:
 
             # Read kit.yaml if it exists
             kit_path = kit_path / "kit.yaml"
+
+            logger.debug(f"Reading kit.yaml from {kit_path}")
             kit_data = {}
             if kit_path.exists():
                 with open(kit_path) as f:
+                    logger.debug(f"Parsing kit.yaml")
+
                     kit_data = yaml.safe_load(f)
 
+                    
+                    logger.debug(f"Parsed kit.yaml: {kit_data}")
+            
             return KitMetadata(
                 name=kit_data.get('name', kit_path.parent.name),
                 version=kit_data.get('version', kit_path.name),

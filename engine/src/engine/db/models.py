@@ -7,7 +7,7 @@ import uuid
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from sqlalchemy import JSON, UUID, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-
+from .encryption_utils import EncryptedJSON
 
 
 from engine.db.base import Base
@@ -47,7 +47,7 @@ class Module(Base):
     owner: Mapped[str] = mapped_column(String, nullable=False)
     version: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    env_vars: Mapped[Dict] = mapped_column(JSON, nullable=False)
+    env_vars: Mapped[Dict] = mapped_column(EncryptedJSON, nullable=False)
     repo_name: Mapped[str] = mapped_column(String, nullable=False)
     
     # Updated relationships with cascade

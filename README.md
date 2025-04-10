@@ -42,7 +42,6 @@ Genbase tackles this complexity by introducing **Kits**: self-contained, version
 *   **Action:** A Kit-defined Python function executed securely in a container.
 *   **Provide:** Mechanism for one Module to grant another access to its `Workspace` or specific `Actions`.
 
-*(For more details, see the [Core Concepts Documentation](link-to-docs/concepts))*
 
 ## Getting Started 🚀
 

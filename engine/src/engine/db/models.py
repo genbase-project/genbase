@@ -156,13 +156,6 @@ class ModuleProvide(Base):
         back_populates="resources_received"
     )
     
-    # Indexes for efficient lookups
-    __table_args__ = (
-        Index('idx_module_provides_provider', 'provider_id'),
-        Index('idx_module_provides_receiver', 'receiver_id'),
-        Index('idx_module_provides_resource', 'resource_type'),
-    )
-
 
 class StoreType(enum.Enum):
     CHROMA = "chroma"

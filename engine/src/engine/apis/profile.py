@@ -80,7 +80,7 @@ class ProfileRouter:
         - Base profile configuration (type, agent, instructions, prerequisites)
         - Module-specific customizations from kit.yaml
         - Profile metadata (instructions, steps, requirements)
-        - Default available actions with their schemas
+        - Default available tools with their schemas
         
         Returns:
             List[Dict[str, Any]]: List of profile configurations where each contains:
@@ -108,11 +108,11 @@ class ProfileRouter:
             
             for profile_type in profile_list:
                 try:
-                    # Get kit profile config first and ensure actions list
+                    # Get kit profile config first and ensure tools list
                     kit_profile = kit.get('profiles', {}).get(profile_type, {})
-                    # Default empty actions list if not provided
-                    if 'actions' not in kit_profile:
-                        kit_profile['actions'] = []
+                    # Default empty tools list if not provided
+                    if 'tools' not in kit_profile:
+                        kit_profile['tools'] = []
 
                     instructions = kit_profile.get('instructions', [])
                         
@@ -178,13 +178,13 @@ class ProfileRouter:
 
         This endpoint provides detailed information about a specific profile, including:
         - profile instructions from the module's instructions directory
-        - Available steps/actions with their metadata
+        - Available tool with their metadata
         - Module requirements needed for the profile
         
         Returns:
             Dict[str, Any]: profile metadata containing:
                 - instructions: String containing profile instructions
-                - actions: List of available steps with metadata
+                - tools: List of available steps with metadata
                 - requirements: List of module requirements
         """
         try:
@@ -197,7 +197,9 @@ class ProfileRouter:
             logger.error(f"Failed to get metadata for profile {profile} in module {module_id}: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
-    async def _execute_profile_action(
+
+# TODO: Check if this is needed
+    async def _execute_profile_tool( 
         self,
         module_id: str = Query(..., description="Module ID"),
         profile: str = Query(..., description="profile (initialize/maintain/remove/edit)"),
@@ -223,8 +225,8 @@ class ProfileRouter:
             if request is None:
                 request = ExecuteStepRequest()
 
-            result = self.service.execute_profile_action(
-                action_name=step_name,
+            result = self.service.execute_profile_tool(
+                tool_name=step_name,
                 parameters=request.parameters
             )
             return {"result": result}
@@ -314,7 +316,7 @@ class ProfileRouter:
 
         self.router.add_api_route(
             "/execute",
-            self._execute_profile_action,
+            self._execute_profile_tool,
             methods=["POST"],
             response_model=Dict[str, Any],
             summary="Execute a specific step in a profile",

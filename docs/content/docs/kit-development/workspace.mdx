@@ -14,10 +14,10 @@ When a **[Module](/concepts/projects-modules)** is created from your Kit, it get
 
 ## Purpose of the `workspace/` Directory
 
-*   **Initial State:** Provide default configuration files, templates, initial data sets, or scripts that your Module's **[Actions](/concepts/actions-execution)** or **[Agents](/concepts/profiles-agents)** might need to function correctly from the start.
-*   **Templates:** Include template files (e.g., `config.json.template`, `Dockerfile.template`) that Actions might read, modify, and write back into the *Module's* live workspace repository.
+*   **Initial State:** Provide default configuration files, templates, initial data sets, or scripts that your Module's **[Tools](/concepts/tools-execution)** or **[Agents](/concepts/profiles-agents)** might need to function correctly from the start.
+*   **Templates:** Include template files (e.g., `config.json.template`, `Dockerfile.template`) that Tools might read, modify, and write back into the *Module's* live workspace repository.
 *   **Examples:** Provide example input files or data structures.
-*   **Scripts:** Include utility scripts that might be executed by an Action.
+*   **Scripts:** Include utility scripts that might be executed by an Tool.
 
 ## Structure and Content
 
@@ -29,7 +29,7 @@ When a **[Module](/concepts/projects-modules)** is created from your Kit, it get
 <Files>
   <Folder name="my-data-processor-kit" defaultOpen>
     <File name="kit.yaml" />
-    <Folder name="actions">
+    <Folder name="tools">
       <File name="processor.py" />
     </Folder>
     <Folder name="workspace" defaultOpen> {/* Initial content defined here */}
@@ -68,7 +68,7 @@ workspace:
     - path: "input_schemas/"
       description: "Directory containing JSON schemas for input validation."
     - path: "scripts/validate_input.py"
-      description: "Script used by the 'validate' action."
+      description: "Script used by the 'validate' tool."
 
   ignore: # Patterns for the Module's .gitignore
     - "*.log"
@@ -82,14 +82,14 @@ workspace:
 *   **`workspace.ignore`:** List of patterns added to the `.gitignore` file created in the Module's repository, helping keep it clean from logs, temporary files, etc.
 
 <Callout title="Initial Copy vs. Live Files">
-Remember that the `workspace/` directory in your Kit source only defines the *initial* state. Once a Module is created, its workspace repository is independent. Changes made by Actions within a running Module *do not* affect the Kit's source `workspace/` directory or other Modules created from the same Kit.
+Remember that the `workspace/` directory in your Kit source only defines the *initial* state. Once a Module is created, its workspace repository is independent. Changes made by Tools within a running Module *do not* affect the Kit's source `workspace/` directory or other Modules created from the same Kit.
 </Callout>
 
 ## Best Practices
 
 *   **Keep it Minimal:** Only include files essential for the Module's initial operation or commonly needed templates. Avoid large datasets or binaries if possible.
-*   **Use Templates:** If configuration needs to be customized per-module, provide template files (e.g., `config.template.json`) and have an initialization Action read the template, modify it (perhaps with environment variables), and write the final `config.json`.
-*   **Consider `.gitignore`:** Use the `workspace.ignore` setting in `kit.yaml` or include a `.gitignore` file directly in your `workspace/` directory to prevent common unwanted files (logs, caches, OS files) from being accidentally committed by Actions.
+*   **Use Templates:** If configuration needs to be customized per-module, provide template files (e.g., `config.template.json`) and have an initialization Tool read the template, modify it (perhaps with environment variables), and write the final `config.json`.
+*   **Consider `.gitignore`:** Use the `workspace.ignore` setting in `kit.yaml` or include a `.gitignore` file directly in your `workspace/` directory to prevent common unwanted files (logs, caches, OS files) from being accidentally committed by Tools.
 *   **Document Key Files:** Use the `workspace.files` list in `kit.yaml` to document the purpose of important initial files.
 
 By carefully defining the initial workspace content, you ensure that Modules created from your Kit start in a consistent and functional state.

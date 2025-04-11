@@ -1,5 +1,5 @@
-// src/ProjectInterface.tsx
-import React, { useState } from 'react';
+// src/App.tsx
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'; // Import useLocation
 import {
   ResizableHandle,
@@ -19,6 +19,7 @@ import { Toaster } from './components/ui/toaster';
 import UserManagementPage from './app/users/UserManagementPage'; // Import the new page
 import { useAuth } from './context/AuthContext'; // Import useAuth
 import PasswordResetPage from './app/settings/PasswordResetPage';
+import { useRegistryStore } from './stores/registryStore';
 
 // --- ModuleLayout and SettingsLayout remain the same ---
 const ModuleLayout = () => {
@@ -91,9 +92,24 @@ const SuperuserRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 
 const App = () => {
-  const [sidebarExpand, setSidebarExpand] = useState(true);
+  // Initialize with expanded state from localStorage, defaulting to true if not found
+  const getInitialSidebarState = () => {
+    const savedState = localStorage.getItem('sidebarExpanded');
+    // Default to true if nothing saved
+    return savedState === null ? true : savedState === 'true';
+  };
+  
+  const [sidebarExpand, setSidebarExpand] = useState(getInitialSidebarState);
   const [selectedRegistryKit, setSelectedRegistryKit] = useState<RegistryKit | null>(null);
-  const { isLoading, isAuthenticated } = useAuth(); // Use auth state
+  const { isLoading, isAuthenticated } = useAuth();
+  
+  // Get the selected kit from the store
+  const getSelectedKit = useRegistryStore(state => state.getSelectedKit);
+
+  // Save sidebar state to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('sidebarExpanded', String(sidebarExpand));
+  }, [sidebarExpand]);
 
   const changeLeftSidebarSize = (expand: boolean) => {
     setSidebarExpand(expand);
@@ -104,78 +120,76 @@ const App = () => {
     setSelectedRegistryKit(kit);
   };
 
-   // Handle loading and authentication check before rendering main layout
-   if (isLoading) {
-     return <div className="h-screen flex items-center justify-center bg-background"><p className="text-foreground">Initializing...</p></div>; // Changed to theme variables
-   }
+  // Calculate sizes in pixels - increased expandedWidth from 240 to 280
+  const expandedWidth = 280;
+  const collapsedWidth = 56;
+  const currentWidth = sidebarExpand ? expandedWidth : collapsedWidth;
 
-   // Redirect to login if not authenticated (adjust as needed for your login flow)
-    // This might be handled better by your Router setup depending on public/private routes
-   if (!isAuthenticated) {
-     
-         console.log("Not authenticated");
-   }
+  // Handle loading and authentication check before rendering main layout
+  if (isLoading) {
+    return <div className="h-screen flex items-center justify-center bg-background">
 
+<img src="/logo.png" alt="Genbase Logo" className="h-20 w-20" />
+    </div>;
+  }
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    console.log("Not authenticated");
+  }
 
   return (
-    // Set default theme to light
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-      <div className="h-screen flex flex-col bg-background text-foreground"> {/* Changed to theme variables */}
-        <ResizablePanelGroup direction="horizontal" className="flex-1 relative">
-          <ResizablePanel
-            minSize={sidebarExpand ? 20 : 5}
-            maxSize={sidebarExpand ? 30 : 5}
-            defaultSize={sidebarExpand ? 25 : 5}
-            collapsible={true}
-            collapsedSize={5} // Corresponds to w-14 of SidebarNav
-            onCollapse={() => setSidebarExpand(false)}
-            onExpand={() => setSidebarExpand(true)}
-            className={`transition-all duration-300 ease-in-out ${!sidebarExpand ? 'min-w-[56px]' : ''}`} // Use pixel width for collapsed state
+      <div className="h-screen flex flex-col bg-background text-foreground">
+        {/* Fixed-width sidebar approach instead of using ResizablePanelGroup */}
+        <div className="flex-1 flex relative">
+          {/* Fixed-width sidebar with transition */}
+          <div 
+            className="h-full transition-all duration-300 ease-in-out border-r border-border"
+            style={{ 
+              width: `${currentWidth}px`,
+              minWidth: `${currentWidth}px`, 
+              maxWidth: `${currentWidth}px`,
+              overflow: 'hidden'
+            }}
           >
             <LeftSidebar
               onExpand={changeLeftSidebarSize}
               expanded={sidebarExpand}
               onRegistryKitSelect={handleRegistryKitSelect}
             />
-          </ResizablePanel>
-          <ResizableHandle withHandle className="bg-border data-[resize-handle-state=drag]:bg-indigo-500 z-10" />
-          <ResizablePanel className="z-0 bg-background"> {/* Changed to theme variable */}
-             <Routes>
-                {/* Redirect root or define a default authenticated route */}
-                <Route path="/" element={<Navigate to="/modules" replace />} />
-
-
-                {/* Authenticated routes */}
-                <Route path="/modules/*" element={<ModuleLayout />} />
-                <Route
-                    path="/registry/*"
-                    element={<RegistryPage selectedKit={selectedRegistryKit} />}
-                 />
-                <Route path="/settings" element={<SettingsLayout />}>
-                    <Route index element={<Navigate to="model" replace />} />
-                    <Route path="model" element={<ModelSettings />} />
-                    <Route path="security" element={<PasswordResetPage />} />
-                </Route>
-
-                {/* Superuser-only route */}
-                 <Route
-                    path="/users/*"
-                    element={
-                        <SuperuserRoute>
-                            <UserManagementPage />
-                        </SuperuserRoute>
-                    }
-                 />
-
-                 {/* Catch-all 404 */}
-                 <Route path="*" element={
-                    <div className="h-full flex items-center justify-center bg-background"> {/* Changed to theme variable */}
-                         <h2 className="text-xl text-muted-foreground">404 - Page Not Found</h2> {/* Adjusted color */}
-                    </div>
-                } />
-             </Routes>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+          </div>
+          
+          {/* Main content area */}
+          <div className="flex-1 h-full overflow-hidden bg-background relative">
+            <Routes>
+              <Route path="/" element={<Navigate to="/modules" replace />} />
+              <Route path="/modules/*" element={<ModuleLayout />} />
+              <Route
+                path="/registry/*"
+                element={<RegistryPage selectedKit={getSelectedKit() || selectedRegistryKit} />}
+              />
+              <Route path="/settings" element={<SettingsLayout />}>
+                <Route index element={<Navigate to="model" replace />} />
+                <Route path="model" element={<ModelSettings />} />
+                <Route path="security" element={<PasswordResetPage />} />
+              </Route>
+              <Route
+                path="/users/*"
+                element={
+                  <SuperuserRoute>
+                    <UserManagementPage />
+                  </SuperuserRoute>
+                }
+              />
+              <Route path="*" element={
+                <div className="h-full flex items-center justify-center bg-background">
+                  <h2 className="text-xl text-muted-foreground">404 - Page Not Found</h2>
+                </div>
+              } />
+            </Routes>
+          </div>
+        </div>
       </div>
       <Toaster/>
     </ThemeProvider>

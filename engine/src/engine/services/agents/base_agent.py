@@ -13,16 +13,16 @@ import xmltodict
 from litellm import ChatCompletionMessageToolCall, Choices
 from engine.services.agents.generative_elements import get_element_format_documentation
 from engine.services.core.kit import KitConfig
-from engine.services.execution.action import FunctionMetadata
-from engine.services.execution.internal_actions import InternalActionManager
+from engine.services.execution.tool import FunctionMetadata
+from engine.services.execution.internal_tools import InternalToolManager
 from engine.services.execution.model import ModelService, ResponseType
 from engine.services.execution.state import StateService
 from engine.services.execution.profile import (
-    FullProfileAction,
+    FullProfileTool,
     ProfileExecutionResult,
     ProfileService,
     ProfileMetadataResult,
-    ActionInfo
+    ToolInfo
 )
 from engine.services.agents.chat_history import ChatHistoryManager
 from engine.services.core.module import ModuleService
@@ -56,11 +56,11 @@ IncludeType = Union[Literal["all", "none"], List[str]]
 TModel = TypeVar('TModel', bound=BaseModel)
 
 class IncludeOptions(BaseModel):
-    provided_actions: bool = False
+    provided_tools: bool = False
     elements: IncludeType = "all"
-    actions: IncludeType = "all"
+    tools: IncludeType = "all"
     
-    @field_validator('elements', 'actions')
+    @field_validator('elements', 'tools')
     @classmethod
     def validate_include_type(cls, value, info):
         field_name = info.field_name
@@ -99,15 +99,17 @@ class BaseAgent(ABC):
         self.services = services
         self.history_manager = ChatHistoryManager()
         self.context: Optional[AgentContext] = None
-        self.actions: List[Dict[str, Any]] = []
+        self.tools: List[Dict[str, Any]] = []
         self.system_prompt: Optional[str] = None
         self._utils: Optional[AgentUtils] = None
 
-        self.module_action_map: Dict[str, FullProfileAction] = {}
+        self.current_model = None
+
+        self.module_tool_map: Dict[str, FullProfileTool] = {}
 
 
-        # Initialize the custom action manager
-        self.action_manager = InternalActionManager()
+        # Initialize the custom tool manager
+        self.tool_manager = InternalToolManager()
 
 
 
@@ -132,25 +134,28 @@ class BaseAgent(ABC):
         self,
         agent_instructions: str = None,
         include: IncludeOptions = IncludeOptions(
-            provided_actions=False,
+            provided_tools=False,
             elements="all",
-            actions="all",
-        )
-
+            tools="all",
+        ),
+        model: Optional[str] = None
     ) -> tuple[str, List[Dict[str, Any]]]:
         """
-        Build system prompt with selected actions as tools
+        Build system prompt with selected tools as tools
         
         Args:
             agent_instructions: Optional agent-specific instructions
-            actions: List of action names to include, or None for all actions
-            include: Whether to include provided actions and elements
+            tools: List of tool names to include, or None for all tools
+            include: Whether to include provided tools and elements
             
         Returns:
             Tuple of (system prompt, list of tools)
         """
         if not self.context:
             raise ValueError("No active context")
+        
+
+        self.current_model = model or self.services.model_service.get_current_model()
             
         parts: Dict[str, str] = {"Agent Instructions": agent_instructions}
         tools = []
@@ -159,64 +164,62 @@ class BaseAgent(ABC):
         profile_data: ProfileMetadataResult = self.services.profile_service.get_profile_metadata(
             self.context.module_id,
             self.context.profile,
-            with_provided=include.provided_actions
+            with_provided=include.provided_tools
         )
 
-        internal_actions = collect_actions(self)
+        internal_tools = collect_tools(self)
 
-        # Clear existing custom actions if we're passed new ones
-        logger.info(f"Setting context with internal actions: {internal_actions}")
-        if internal_actions is not None:
-            self.action_manager.register_actions(internal_actions)
+        logger.info(f"Setting context with internal tools: {internal_tools}")
+        if internal_tools is not None:
+            self.tool_manager.register_tools(internal_tools)
 
-        # Get profile actions
-        profile_actions = []
+     
+        profile_tools = []
 
 
-        if include.actions == "none":
-            profile_actions = []        
+        if include.tools == "none":
+            profile_tools = []        
 
-        elif include.actions == "all":
-            # Include all profile actions
-            profile_actions = [
+        elif include.tools == "all":
+            profile_tools = [
                 {
                     "type": "function",
                     "function": {
-                        "name": action.action.name,
-                        "description": action.action.description,
-                        "parameters": action.metadata.parameters if action.metadata else {}
+                        "name": tool.tool.name,
+                        "description": tool.tool.description,
+                        "parameters": tool.metadata.parameters if tool.metadata else {}
                     }
                 }
-                for action in profile_data.actions
+                for tool in profile_data.tools
             ]
-            for action in profile_data.actions:
-                self.module_action_map[action.action.name] = action
+            for tool in profile_data.tools:
+                self.module_tool_map[tool.tool.name] = tool
         else:
-            # Filter profile actions by name
-            profile_actions = [
+            # Filter profile tools by name
+            profile_tools = [
                 {
                     "type": "function",
                     "function": {
-                        "name": action.action.name,
-                        "description": action.action.description,
-                        "parameters": action.metadata.parameters if action.metadata else {}
+                        "name": tool.tool.name,
+                        "description": tool.tool.description,
+                        "parameters": tool.metadata.parameters if tool.metadata else {}
                     }
                 }
-                for action in profile_data.actions
-                if action.action.name in include.actions
+                for tool in profile_data.tools
+                if tool.tool.name in include.tools
             ]
-            for action in profile_data.actions:
-                if action.action.name in include.actions:
-                    self.module_action_map[action.action.name] = action
+            for tool in profile_data.tools:
+                if tool.tool.name in include.tools:
+                    self.module_tool_map[tool.tool.name] = tool
         
-        # Add profile actions to tools
-        tools.extend(profile_actions)
+        # Add profile tools to tools
+        tools.extend(profile_tools)
         
-        # Add custom actions from the action manager
+        # Add custom tools from the tool manager
 
-        internal_action_tools = self.action_manager.get_tool_definitions(include.actions)
-        logger.info(f"Internal action tools: {internal_action_tools}")
-        tools.extend(internal_action_tools)
+        internal_tools = self.tool_manager.get_tool_definitions(include.tools)
+        logger.info(f"Internal tools: {internal_tools}")
+        tools.extend(internal_tools)
 
         # Add tool descriptions to prompt
         profile_tool_descriptions = []
@@ -239,43 +242,43 @@ class BaseAgent(ABC):
             if value:
                 final_instruction += f"\n\n##{key}:\n{value}"
             
-        self.actions = tools
+        self.tools = tools
 
-        logger.info(f"Set context with actions: {tools}")
+        logger.info(f"Set context with tools: {tools}")
         self.system_prompt = final_instruction
         return final_instruction, tools
         
-    async def run_action(
+    async def run_tool(
         self,
-        action_name: str,
+        tool_name: str,
         parameters: Dict[str, Any]
     ) -> Any:
-        """Execute a profile action or custom internal action"""
+        """Execute a profile tool or custom internal tool"""
         try:
             if not self.context:
                 raise ValueError("No active context")
 
-            # Check if this is a custom internal action first
-            if self.action_manager.has_action(action_name):
-                # Execute internal action
-                return await self.action_manager.execute_action(action_name, parameters)
+            # Check if this is a custom internal tool first
+            if self.tool_manager.has_tool(tool_name):
+                # Execute internal tool
+                return await self.tool_manager.execute_tool(tool_name, parameters)
             
-            # Otherwise, execute as a normal profile action
-            action_info = ActionInfo(
-                module_id=(self.module_action_map[action_name]).module_id or self.context.module_id,
+            # Otherwise, execute as a normal profile tool
+            tool_info = ToolInfo(
+                module_id=(self.module_tool_map[tool_name]).module_id or self.context.module_id,
                 profile=self.context.profile,
-                name=action_name
+                name=tool_name
             )
 
-            result = self.services.profile_service.execute_profile_action(
-                action_info=action_info,
+            result = self.services.profile_service.execute_profile_tool(
+                tool_info=tool_info,
                 parameters=parameters,
-                with_provided=self.module_action_map[action_name].is_provided
+                with_provided=self.module_tool_map[tool_name].is_provided
             )
 
             return result
         except Exception as e:
-            logger.error(f"Error executing action: {str(e)}")
+            logger.error(f"Error executing tool: {str(e)}")
             raise
 
 
@@ -361,9 +364,9 @@ class BaseAgent(ABC):
         self,
         messages: List[Dict[str, str]],
         stream: bool = False,
-        action_choice: Optional[str] = "auto",
+        tool_choice: Optional[str] = "auto",
         save_messages: bool = True,
-        run_actions: bool = True,
+        run_tools: bool = True,
         use_history: bool = True,
         **kwargs
     ):
@@ -391,19 +394,20 @@ class BaseAgent(ABC):
             all_messages.extend(history + messages)
 
             logger.debug(f"Chat completion messages: {all_messages}")
-            logger.debug(f"Chat completion tools: {self.actions}")
+            logger.debug(f"Chat completion tools: {self.tools}")
             
             # Execute chat completion with current tools
             response = await self.services.model_service.chat_completion(
                 messages=all_messages,
                 stream=stream,
-                tools=self.actions if self.actions else None,
-                tool_choice=action_choice if self.actions else None,
+                tools=self.tools if self.tools else None,
+                tool_choice=tool_choice if self.tools else None,
+                model=self.current_model,
                 **kwargs
             )
             logger.debug(f"Chat completion response: {response}")
 
-            if run_actions:
+            if run_tools:
                 assistant_message = response.choices[0].message
                 
                 if hasattr(assistant_message, "tool_calls") and assistant_message.tool_calls:
@@ -417,8 +421,8 @@ class BaseAgent(ABC):
                             # Parse parameters
                             parameters = json.loads(tool_call.function.arguments)
 
-                            # Execute the profile action
-                            result = await self.run_action(
+                            # Execute the profile tool
+                            result = await self.run_tool(
                                 tool_call.function.name,
                                 parameters
                             )
@@ -505,7 +509,7 @@ class BaseAgent(ABC):
             all_messages.extend(history + messages)
 
             logger.debug(f"Structured chat completion messages: {all_messages}")
-            logger.debug(f"Structured chat completion tools: {self.actions}")
+            logger.debug(f"Structured chat completion tools: {self.tools}")
             
             # Execute structured chat completion with current tools
             structured_response, raw_response =  self.services.model_service.structured_output(
@@ -595,28 +599,28 @@ class BaseAgent(ABC):
 
 
 
-def action(func):
+def tool(func):
     """
-    Simple decorator to mark methods as agent actions.
-    The method name becomes the action name, and the docstring becomes the description.
+    Simple decorator to mark methods as agent tools.
+    The method name becomes the tool name, and the docstring becomes the description.
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
     
-    # Just mark this method as an action
-    wrapper._is_action = True
+    # Just mark this method as an tool
+    wrapper._is_tool = True
     return wrapper
 
 
-def collect_actions(instance) -> Dict[str, Callable]:
+def collect_tools(instance) -> Dict[str, Callable]:
     """
-    Collect all methods marked as actions from an instance
+    Collect all methods marked as tools from an instance
     
     Returns:
-        Dictionary mapping action names to method references
+        Dictionary mapping tool names to method references
     """
-    actions = {}
+    tools = {}
     
     # Iterate through all attributes of the instance
     for attr_name in dir(instance):
@@ -625,9 +629,9 @@ def collect_actions(instance) -> Dict[str, Callable]:
             
         attr = getattr(instance, attr_name)
         
-        # Check if this is a marked action
-        if callable(attr) and hasattr(attr, '_is_action'):
-            # Use method name as action name
-            actions[attr_name] = attr
+        # Check if this is a marked tool
+        if callable(attr) and hasattr(attr, '_is_tool'):
+            # Use method name as tool name
+            tools[attr_name] = attr
     
-    return actions
+    return tools

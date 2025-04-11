@@ -72,7 +72,7 @@ interface ExtendedRelationshipTreeNode extends RelationshipTreeNode {
 
 const RelationshipNode = React.forwardRef<HTMLDivElement, NodeRendererProps<ExtendedRelationshipTreeNode>>(
   ({ node, style }, ref) => {
-    const [showActions, setShowActions] = useState(false);
+    const [showTools, setShowTools] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const hideTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -80,13 +80,13 @@ const RelationshipNode = React.forwardRef<HTMLDivElement, NodeRendererProps<Exte
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current);
       }
-      setShowActions(true);
+      setShowTools(true);
     };
 
     const handleMouseLeave = () => {
       if (!isMenuOpen) {
         hideTimeoutRef.current = setTimeout(() => {
-          setShowActions(false);
+          setShowTools(false);
         }, 100);
       }
     };
@@ -149,7 +149,7 @@ const RelationshipNode = React.forwardRef<HTMLDivElement, NodeRendererProps<Exte
             );
           })}
         </div>
-        {(showActions || isMenuOpen) && node.data.module && !node.data.isFolder && (
+        {(showTools || isMenuOpen) && node.data.module && !node.data.isFolder && (
           <DropdownMenu 
             modal={false}
             open={isMenuOpen}

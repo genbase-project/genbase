@@ -16,11 +16,11 @@ Consider creating a custom agent when:
 
 *   You need fine-grained control over the interaction flow beyond what built-in agents offer.
 *   The agent needs to maintain specific internal state or memory across multiple turns within a Profile session.
-*   You require complex decision-making logic about when to call LLMs versus **[Actions](/concepts/actions-execution)**.
+*   You require complex decision-making logic about when to call LLMs versus **[Tools](/concepts/tools-execution)**.
 *   You want to implement custom parsing of user input or formatting of outputs.
-*   You need specialized **[Internal Actions](/concepts/actions-execution#2-internal-actions)** specific to the agent's logic.
+*   You need specialized **[Internal Tools](/concepts/tools-execution#2-internal-tools)** specific to the agent's logic.
 
-If your Profile primarily involves straightforward task execution based on user requests (like running a sequence of predefined Actions), a built-in agent like `TaskerAgent` might be sufficient.
+If your Profile primarily involves straightforward task execution based on user requests (like running a sequence of predefined Tools), a built-in agent like `TaskerAgent` might be sufficient.
 
 ## Implementation Basics
 
@@ -58,13 +58,13 @@ class MyCustomAgent(BaseAgent):
         """
         logger.info(f"MyCustomAgent processing request for module {context.module_id}, profile {context.profile}")
         logger.info(f"User Input: {context.user_input}")
-        logger.info(f"Available Actions: {[a.action.name for a in profile_data.actions]}")
+        logger.info(f"Available Tools: {[a.tool.name for a in profile_data.tools]}")
 
         # 1. Set up context (system prompt, available tools)
-        #    We can customize which actions are available if needed
+        #    We can customize which tools are available if needed
         system_prompt, tools = await self.set_context(
             agent_instructions="You are a helpful custom agent. Your goal is to...",
-            include=IncludeOptions(actions="all") # Or filter specific actions
+            include=IncludeOptions(tools="all") # Or filter specific tools
         )
 
         # 2. Add user message to history (optional, BaseAgent.create does this by default if save_messages=True)
@@ -72,19 +72,19 @@ class MyCustomAgent(BaseAgent):
 
         # 3. Core Logic: Decide what to do based on input, history, state
         #    - Call LLM?
-        #    - Run an action directly?
+        #    - Run an tool directly?
         #    - Ask for clarification?
 
         # Example: Simple LLM call
         llm_response = await self.create(
             messages=[{"role": "user", "content": context.user_input}],
             # save_messages=True, # Default
-            # run_actions=True, # Default: automatically run tool calls if LLM requests them
+            # run_tools=True, # Default: automatically run tool calls if LLM requests them
         )
 
-        # 4. Process LLM response / Action results
-        #    BaseAgent.create handles tool calls/results if run_actions=True.
-        #    If run_actions=False, you'd need to handle llm_response.choices[0].message.tool_calls manually here.
+        # 4. Process LLM response / Tool results
+        #    BaseAgent.create handles tool calls/results if run_tools=True.
+        #    If run_tools=False, you'd need to handle llm_response.choices[0].message.tool_calls manually here.
 
         assistant_message = llm_response.choices[0].message
 
@@ -113,26 +113,26 @@ agents:
 profiles:
   process_finance_data:
     agent: "my_custom_agent" # Link profile to this agent
-    actions:
+    tools:
       - name: "fetch_stock_price"
         path: "finance:get_price"
         description: "Gets the latest stock price."
-      # ... other relevant actions
+      # ... other relevant tools
 ```
 
 ## Using `BaseAgent` Capabilities
 
 Your custom agent inherits useful methods and properties from `BaseAgent`:
 
-*   **`self.set_context(...)`:** Define the system prompt and which actions (Kit-defined, Provided, Internal) are available as tools for the LLM. Use `IncludeOptions` for fine-grained control.
-*   **`self.create(...)`:** Make calls to the configured LLM. Handles message history automatically. Can execute tool calls requested by the LLM if `run_actions=True`.
+*   **`self.set_context(...)`:** Define the system prompt and which tools (Kit-defined, Provided, Internal) are available as tools for the LLM. Use `IncludeOptions` for fine-grained control.
+*   **`self.create(...)`:** Make calls to the configured LLM. Handles message history automatically. Can execute tool calls requested by the LLM if `run_tools=True`.
 *   **`self.create_structured(...)`:** Call the LLM expecting a Pydantic model as output.
-*   **`self.run_action(name, params)`:** Manually execute a specific Kit Action or Provided Action.
+*   **`self.run_tool(name, params)`:** Manually execute a specific Kit Tool or Provided Tool.
 *   **`self.add_message(...)`:** Manually add messages (user, assistant, tool) to the chat history for the current session.
 *   **`self.get_messages()`:** Retrieve the current chat history list.
 *   **`self.utils`:** Access `AgentUtils` for file operations within the Module's workspace (`read_file`, `write_file`, `list_files`, etc.).
 *   **`self.get_store(collection_name)`:** Get a `ProfileStoreService` instance to store/retrieve key-value data specific to this module, profile, and a named collection.
-*   **`self.action_manager`:** (Advanced) Interact with the manager for **[Internal Actions](/concepts/actions-execution#2-internal-actions)** defined on the agent class itself.
+*   **`self.tool_manager`:** (Advanced) Interact with the manager for **[Internal Tools](/concepts/tools-execution#2-internal-tools)** defined on the agent class itself.
 
 <Callout title="State Management">
 For simple state within a single `process_request` call, use local variables. For state that needs to persist *across* multiple turns within the *same chat session*, use agent instance variables (`self.my_state`). For state that needs to persist across *different sessions* or *different profiles* within the same Module, use the `ProfileStoreService` (`self.get_store(...)`).

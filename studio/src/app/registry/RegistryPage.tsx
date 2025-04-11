@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Download, ExternalLink, ChevronRight, AlertCircle, ChevronDown } from "lucide-react";
+import React, { useState } from 'react';
+import { Download, AlertCircle, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -14,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
+import { useRegistryStore } from '@/stores/registryStore';
 
 // Define types based on the kit structure
 interface KitEnvironmentVar {
@@ -22,7 +22,7 @@ interface KitEnvironmentVar {
   optional?: boolean;
 }
 
-interface KitAction {
+interface KitTool {
   path: string;
   name: string;
   description: string;
@@ -31,7 +31,7 @@ interface KitAction {
 interface KitProfile {
   agent?: string;
   instructions: KitInstruction[];
-  actions?: KitAction[];
+  tools?: KitTool[];
   allow_multiple?: boolean;
 }
 
@@ -72,7 +72,7 @@ export interface RegistryKitConfig {
   image?: string;
   workspace?: {
     files?: KitWorkspaceFile[];
-    ignote?: string[]; // Assuming this is a typo in the original data and should be "ignore"
+    ignore?: string[]; // Assuming this is a typo in the original data and should be "ignore"
   };
   ports?: KitPort[];
 }
@@ -89,52 +89,34 @@ interface RegistryPageProps {
   selectedKit: RegistryKit | null;
 }
 
-const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
+const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit: propSelectedKit }) => {
   const { toast } = useToast();
   const [isInstalling, setIsInstalling] = useState(false);
-  const [availableVersions, setAvailableVersions] = useState<string[]>([]);
-  const [selectedVersion, setSelectedVersion] = useState<string>("");
+  
+  // Get registry state from store
+  const { 
+    availableVersions, 
+    selectedVersion, 
+    selectVersion,
+    getSelectedKit,
+    isKitInstalled
+  } = useRegistryStore();
+  
+  // Use the kit from store if available, otherwise fall back to the prop
+  const selectedKit = getSelectedKit() || propSelectedKit;
 
-  // Fetch available versions for a kit
-  const fetchVersions = async (owner: string, kitId: string) => {
-    try {
-      const response = await fetchWithAuth(`${ENGINE_BASE_URL}/kit/${owner}/${kitId}/versions`);
-      if (!response.ok) throw new Error('Failed to fetch kit versions');
-      
-      const data = await response.json();
-      if (data && Array.isArray(data.versions)) {
-        setAvailableVersions(data.versions);
-        // Set current version as default
-        if (selectedKit?.kitConfig.version) {
-          setSelectedVersion(selectedKit.kitConfig.version);
-        } else if (data.versions.length > 0) {
-          setSelectedVersion(data.versions[0]);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching kit versions:', error);
-      // Fallback to using the current version only
-      if (selectedKit?.kitConfig.version) {
-        setAvailableVersions([selectedKit.kitConfig.version]);
-        setSelectedVersion(selectedKit.kitConfig.version);
-      }
-    }
-  };
-
-  // Effect to fetch versions when selected kit changes
-  useEffect(() => {
-    if (selectedKit) {
-      fetchVersions(selectedKit.kitConfig.owner, selectedKit.kitConfig.id);
-    }
-  }, [selectedKit]);
-
-  const installKit = async (owner: string, kitId: string, version?: string) => {
+  const installKit = async () => {
+    if (!selectedKit) return;
+    
+    const owner = selectedKit.kitConfig.owner;
+    const kitId = selectedKit.kitConfig.id;
+    const version = selectedVersion;
+    
     setIsInstalling(true);
     try {
-      // Use the selected version from dropdown if available, otherwise fallback to passed version
-      const versionToInstall = selectedVersion || version;
-      const endpoint = versionToInstall 
-        ? `${ENGINE_BASE_URL}/kit/install/${owner}/${kitId}/${versionToInstall}`
+      // Use the selected version from dropdown if available
+      const endpoint = version 
+        ? `${ENGINE_BASE_URL}/kit/install/${owner}/${kitId}/${version}`
         : `${ENGINE_BASE_URL}/kit/install/${owner}/${kitId}`;
         
       const response = await fetchWithAuth(endpoint, {
@@ -145,8 +127,11 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
       
       toast({
         title: "Success",
-        description: `Successfully installed ${kitId} ${versionToInstall ? `(v${versionToInstall})` : ''}`,
+        description: `Successfully installed ${kitId} ${version ? `(v${version})` : ''}`,
       });
+      
+      // Refresh installed kits list
+      window.location.reload(); // Temporary solution for refreshing
     } catch (error) {
       console.error('Error installing kit:', error);
       toast({
@@ -168,6 +153,11 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
     });
   };
 
+  // Handle version change
+  const handleVersionChange = (version: string) => {
+    selectVersion(version);
+  };
+
   if (!selectedKit) {
     return (
       <div className="h-full flex items-center justify-center bg-white">
@@ -183,6 +173,7 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
   }
 
   const { kitConfig } = selectedKit;
+  const isInstalled = isKitInstalled(kitConfig.owner, kitConfig.id, selectedVersion!);
 
   return (
     <div className="h-full flex flex-col bg-white overflow-hidden">
@@ -190,7 +181,15 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
       <div className="p-6 border-b border-gray-200 backdrop-blur-sm bg-white/50">
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">{kitConfig.name}</h1>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-2xl font-bold text-gray-800">{kitConfig.name}</h1>
+              {isInstalled && (
+                <Badge className="bg-green-100 text-green-700 border-green-200">
+                  <CheckCircle2 size={14} className="mr-1" />
+                  Installed
+                </Badge>
+              )}
+            </div>
             <div className="flex items-center mt-1 text-gray-600">
               <span className="font-medium">{kitConfig.owner}</span>
               <span className="mx-2">•</span>
@@ -204,8 +203,8 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
           
           <div className="flex items-center space-x-2">
             <Select
-              value={selectedVersion}
-              onValueChange={setSelectedVersion}
+              value={selectedVersion || kitConfig.version}
+              onValueChange={handleVersionChange}
               disabled={isInstalling || availableVersions.length <= 1}
             >
               <SelectTrigger className="w-32 bg-white border-gray-200 text-gray-800">
@@ -220,26 +219,50 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
               </SelectContent>
             </Select>
 
-            <Button
-              onClick={() => installKit(kitConfig.owner, kitConfig.id)}
-              disabled={isInstalling}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {isInstalling ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Installing...
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <Download size={16} className="mr-2" />
-                  Install Kit
-                </span>
-              )}
-            </Button>
+            {isInstalled ? (
+              <Button
+                onClick={installKit}
+                disabled={isInstalling}
+                variant="outline"
+                className="border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+              >
+                {isInstalling ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Installing...
+                  </span>
+                ) : (
+                  <span className="flex items-center">
+                    <RefreshCw size={16} className="mr-2" />
+                    Reinstall
+                  </span>
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={installKit}
+                disabled={isInstalling}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isInstalling ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Installing...
+                  </span>
+                ) : (
+                  <span className="flex items-center">
+                    <Download size={16} className="mr-2" />
+                    Install Kit
+                  </span>
+                )}
+              </Button>
+            )}
           </div>
         </div>
         
@@ -261,7 +284,6 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
                 {kitConfig.workspace?.files && kitConfig.workspace.files.length > 0 && (
                   <TabsTrigger value="workspace" className="data-[state=active]:bg-white data-[state=active]:text-blue-600">Workspace</TabsTrigger>
                 )}
-          
               </TabsList>
               
               <TabsContent value="overview" className="mt-6">
@@ -377,15 +399,15 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
                           ))}
                         </div>
                         
-                        {profile.actions && profile.actions.length > 0 && (
+                        {profile.tools && profile.tools.length > 0 && (
                           <div className="space-y-2">
-                            <h5 className="text-sm font-medium text-gray-700">Actions:</h5>
+                            <h5 className="text-sm font-medium text-gray-700">Tools:</h5>
                             <div className="space-y-3 pl-3">
-                              {profile.actions.map((action, idx) => (
+                              {profile.tools.map((tool, idx) => (
                                 <div key={idx} className="bg-gray-50 p-3 rounded-md">
-                                  <h6 className="text-sm font-medium text-gray-800">{action.name}</h6>
-                                  <p className="text-xs text-gray-600 mt-1">{action.description}</p>
-                                  <p className="text-xs font-mono text-gray-500 mt-1">{action.path}</p>
+                                  <h6 className="text-sm font-medium text-gray-800">{tool.name}</h6>
+                                  <p className="text-xs text-gray-600 mt-1">{tool.description}</p>
+                                  <p className="text-xs font-mono text-gray-500 mt-1">{tool.path}</p>
                                 </div>
                               ))}
                             </div>
@@ -414,8 +436,6 @@ const RegistryPage: React.FC<RegistryPageProps> = ({ selectedKit }) => {
                   </div>
                 </div>
               </TabsContent>
-              
-             
             </Tabs>
           </div>
         </ScrollArea>

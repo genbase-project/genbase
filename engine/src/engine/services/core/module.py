@@ -444,7 +444,7 @@ class ModuleService:
         Args:
             provider_id: ID of module providing the resource
             receiver_id: ID of module receiving the resource
-            resource_type: Type of resource being provided (ACTION or WORKSPACE)
+            resource_type: Type of resource being provided (TOOL or WORKSPACE)
             description: Optional description of the provide relationship
             
         Returns:
@@ -655,7 +655,7 @@ class ModuleService:
         Args:
             provider_id: ID of module providing the resource
             receiver_id: ID of module receiving the resource
-            resource_type: Type of resource being provided (ACTION or WORKSPACE)
+            resource_type: Type of resource being provided (TOOL or WORKSPACE)
             description: Optional description of the provide relationship
             
         Returns:

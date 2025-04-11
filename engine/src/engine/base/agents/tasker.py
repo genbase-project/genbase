@@ -14,16 +14,16 @@ When handling user requests:
 - After each tool:
     - Explain the results
     - If more tools are needed, explain what you'll do next
-- Use previous results to inform next actions
+- Use previous results to inform next tools
 
 2. Tool execution guidelines:
 - Execute sequentially when:
     - Results from one tool affect another
-    - Actions need specific order
-- Only use parallel execution for independent actions
+    - tools need specific order
+- Only use parallel execution for independent tools
 
 3. Communication:
-- Keep user informed of actions
+- Keep user informed of tools
 - Explain reasoning for tool choices
 - Provide clear result summaries
 - When asking for user input, use XML prompts format

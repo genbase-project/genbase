@@ -38,7 +38,7 @@ Traditional AI assistants try to know everything but often lack depth in special
 - **Database Module**: Expertise in schema design, query optimization and administration
 - **Deployment Module**: Specialized in containerization, networking and cloud services
 
-Modules collaborate through actions, sharing context, and workspace access - creating solutions no single agent could provide alone.
+Modules collaborate through tools, sharing context, and workspace access - creating solutions no single agent could provide alone.
 
 ## Getting Started
 

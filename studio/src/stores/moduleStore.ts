@@ -15,7 +15,7 @@ export const useModuleStore = create<ModuleStoreState>((set) => ({
     selectedModule: module,
     selectedModuleId: module ? `module-${module.module_id}` : null
   }),
-  clearSelectedModule: () => set({ // Implement the clear action
+  clearSelectedModule: () => set({ 
     selectedModule: null,
     selectedModuleId: null,
   }),

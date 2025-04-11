@@ -1,22 +1,22 @@
 import inspect
 import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Union, get_type_hints
-from engine.services.execution.action import FunctionMetadata
+from engine.services.execution.tool import FunctionMetadata
 from loguru import logger
 
-class InternalActionManager:
+class InternalToolManager:
     """
-    Manages registration and metadata extraction for custom actions.
+    Manages registration and metadata extraction for custom tools.
     Handles JSON schema generation for function definitions.
     """
     
     def __init__(self):
         """Initialize the custom action manager"""
         # Dictionary to store custom (internal) actions
-        self._internal_actions: Dict[str, Callable] = {}
+        self._internal_tools: Dict[str, Callable] = {}
         # Metadata cache for custom actions
-        self._internal_action_metadata: Dict[str, FunctionMetadata] = {}
-        logger.info("InternalActionManager initialized")
+        self._internal_tool_metadata: Dict[str, FunctionMetadata] = {}
+        logger.info("InternalToolManager initialized")
     
     def register_action(self, name: str, func: Callable, description: str = None) -> None:
         """
@@ -29,30 +29,30 @@ class InternalActionManager:
         """
         logger.info(f"Registering action '{name}' with function {func}")
         
-        if name in self._internal_actions:
+        if name in self._internal_tools:
             logger.warning(f"Custom action '{name}' already registered")
             raise ValueError(f"Custom action '{name}' already registered")
             
-        self._internal_actions[name] = func
+        self._internal_tools[name] = func
         
         # Extract metadata and cache it
         try:
             metadata = self._extract_function_metadata(func, name, description)
-            self._internal_action_metadata[name] = metadata
+            self._internal_tool_metadata[name] = metadata
             logger.info(f"Successfully registered action '{name}' with metadata: {metadata}")
         except Exception as e:
             logger.error(f"Failed to extract metadata for action '{name}': {str(e)}")
             # Remove action from registry if metadata extraction fails
-            del self._internal_actions[name]
+            del self._internal_tools[name]
             raise
     
-    def clear_actions(self) -> None:
+    def clear_tools(self) -> None:
         """Clear all registered custom actions"""
         logger.info("Clearing all registered actions")
-        self._internal_actions = {}
-        self._internal_action_metadata = {}
+        self._internal_tools = {}
+        self._internal_tool_metadata = {}
     
-    def register_actions(self, functions: Dict[str, Callable]) -> None:
+    def register_tools(self, functions: Dict[str, Callable]) -> None:
         """
         Register multiple custom actions at once.
         
@@ -60,7 +60,7 @@ class InternalActionManager:
             functions: Dictionary mapping action names to function references
         """
         logger.info(f"Registering multiple actions: {list(functions.keys())}")
-        self.clear_actions()
+        self.clear_tools()
         
         for name, func in functions.items():
             try:
@@ -75,7 +75,7 @@ class InternalActionManager:
             except Exception as e:
                 logger.error(f"Failed to register action '{name}': {str(e)}")
     
-    def get_action_metadata(self, action_name: str) -> Optional[FunctionMetadata]:
+    def get_tool_metadata(self, action_name: str) -> Optional[FunctionMetadata]:
         """
         Get metadata for a custom action by name
         
@@ -85,11 +85,11 @@ class InternalActionManager:
         Returns:
             FunctionMetadata or None if action not found
         """
-        metadata = self._internal_action_metadata.get(action_name)
+        metadata = self._internal_tool_metadata.get(action_name)
         logger.debug(f"Retrieved metadata for action '{action_name}': {metadata}")
         return metadata
     
-    def get_action_function(self, action_name: str) -> Optional[Callable]:
+    def get_tool_function(self, action_name: str) -> Optional[Callable]:
         """
         Get the function reference for a custom action
         
@@ -99,22 +99,22 @@ class InternalActionManager:
         Returns:
             Function reference or None if not found
         """
-        function = self._internal_actions.get(action_name)
+        function = self._internal_tools.get(action_name)
         logger.debug(f"Retrieved function for action '{action_name}': {function}")
         return function
     
-    def get_all_actions(self) -> List[str]:
+    def get_all_tools(self) -> List[str]:
         """
         Get names of all registered custom actions
         
         Returns:
-            List of action names
+            List of tool names
         """
-        actions = list(self._internal_actions.keys())
-        logger.debug(f"All registered actions: {actions}")
+        actions = list(self._internal_tools.keys())
+        logger.debug(f"All registered tools: {actions}")
         return actions
     
-    def has_action(self, action_name: str) -> bool:
+    def has_tool(self, action_name: str) -> bool:
         """
         Check if a custom action exists
         
@@ -124,42 +124,42 @@ class InternalActionManager:
         Returns:
             True if action exists, False otherwise
         """
-        exists = action_name in self._internal_actions
+        exists = action_name in self._internal_tools
         logger.debug(f"Action '{action_name}' exists: {exists}")
         return exists
         
-    def get_tool_definitions(self, action_names: Optional[Union[List[str], Literal["all", "none"]]] = None) -> List[Dict[str, Any]]:
+    def get_tool_definitions(self, tool_names: Optional[Union[List[str], Literal["all", "none"]]] = None) -> List[Dict[str, Any]]:
         """
-        Get tool definitions for specified actions in OpenAI format
+        Get tool definitions for specified tools in OpenAI format
         
         Args:
-            action_names: Optional list of action names to include, 
-                        "all" for all actions, "none" for no actions,
-                        or None for all registered actions
+            _nametools: Optional list of tool names to include, 
+                        "all" for all tools, "none" for no tools,
+                        or None for all registered tool
             
         Returns:
             List of tool definitions
         """
-        logger.info(f"Getting tool definitions for actions: {action_names}")
-        logger.info(f"Currently registered actions: {self.get_all_actions()}")
-        logger.info(f"Action metadata available: {list(self._internal_action_metadata.keys())}")
+        logger.info(f"Getting tool definitions for tools: {tool_names}")
+        logger.info(f"Currently registered tools: {self.get_all_tools()}")
+        logger.info(f"Tool metadata available: {list(self._internal_tool_metadata.keys())}")
         
         # Handle special string values
-        if action_names == "all" or action_names is None:
-            action_names = self.get_all_actions()
-            logger.debug(f"Using all registered actions: {action_names}")
-        elif action_names == "none":
+        if tool_names == "all" or tool_names is None:
+            tool_names = self.get_all_tools()
+            logger.debug(f"Using all registered actions: {tool_names}")
+        elif tool_names == "none":
             logger.debug("No actions requested")
             return []
         else:
             # If it's a list, filter to only include actions that exist
-            original_names = action_names
-            action_names = [name for name in action_names if self.has_action(name)]
-            logger.debug(f"Filtered action names from {original_names} to {action_names}")
+            original_names = tool_names
+            tool_names = [name for name in tool_names if self.has_tool(name)]
+            logger.debug(f"Filtered action names from {original_names} to {tool_names}")
         
         tools = []
-        for action_name in action_names:
-            metadata = self._internal_action_metadata.get(action_name)
+        for action_name in tool_names:
+            metadata = self._internal_tool_metadata.get(action_name)
             logger.debug(f"Metadata for action '{action_name}': {metadata}")
             
             if metadata:
@@ -179,7 +179,7 @@ class InternalActionManager:
         logger.info(f"Generated {len(tools)} tool definitions")
         return tools
 
-    async def execute_action(self, action_name: str, parameters: Dict[str, Any]) -> Any:
+    async def execute_tool(self, action_name: str, parameters: Dict[str, Any]) -> Any:
         """
         Execute a custom action by name
         
@@ -195,11 +195,11 @@ class InternalActionManager:
         """
         logger.info(f"Executing action '{action_name}' with parameters: {parameters}")
         
-        if not self.has_action(action_name):
+        if not self.has_tool(action_name):
             logger.error(f"Custom action '{action_name}' not found")
             raise ValueError(f"Custom action '{action_name}' not found")
         
-        func = self._internal_actions[action_name]
+        func = self._internal_tools[action_name]
         try:
             if inspect.iscoroutinefunction(func):
                 # Handle async functions

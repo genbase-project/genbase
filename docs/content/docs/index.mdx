@@ -18,8 +18,8 @@ Developing advanced AI applications often involves wrestling with complexity, in
 
 *   **Modularity & Reusability:** Package specific AI expertise, tools, and workflows into versioned **Kits** that can be shared and reused across projects.
 *   **Structured Orchestration:** Instantiate Kits as **Modules** within organized **Projects**, defining clear relationships and controlled resource sharing between them.
-*   **Secure & Isolated Execution:** Run Kit-defined **Actions** in sandboxed environments (Docker containers) with managed dependencies and configurations.
-*   **Agentic Interaction:** Interact with Modules through defined **Profiles** managed by intelligent **Agents** capable of using LLMs and executing Actions.
+*   **Secure & Isolated Execution:** Run Kit-defined **Tools** in sandboxed environments (Docker containers) with managed dependencies and configurations.
+*   **Agentic Interaction:** Interact with Modules through defined **Profiles** managed by intelligent **Agents** capable of using LLMs and executing Tools.
 *   **Human-in-the-Loop Focus:** Designed for human operators to manage, direct, and collaborate with AI agents via intuitive interfaces like the **Genbase Studio**.
 *   **Ecosystem Potential:** Discover and leverage Kits from a central **Registry** (future) or share your own, fostering a collaborative development environment.
 
@@ -47,16 +47,16 @@ Understanding these fundamental building blocks is key to leveraging Genbase eff
     description="Define interaction modes (Profiles) handled by intelligent Agents."
   />
   <Card
-    href="/concepts/actions-execution"
+    href="/concepts/tools-execution"
     icon={<ZapIcon />}
-    title="Actions & Execution"
+    title="Tools & Execution"
     description="Package and run executable code securely within isolated environments."
   />
   <Card
     href="/concepts/relationships-provide"
     icon={<LinkIcon />}
     title="Relationships & Provide"
-    description="Connect Modules and enable controlled sharing of resources like Workspaces and Actions."
+    description="Connect Modules and enable controlled sharing of resources like Workspaces and Tools."
   />
     <Card
     href="/concepts/workspace-resources"
@@ -117,7 +117,7 @@ flowchart TD
                 ModuleSvc["Module Service"]
                 ProjectSvc["Project Service"]
                 ProfileSvc["Profile Service"]
-                ActionSvc["Action Service"]
+                ToolSvc["Tool Service"]
             end
             
             Services --> Execution
@@ -143,7 +143,7 @@ flowchart TD
     %% Straight line connections for key relationships
     ProfileSvc --- Agents
     ProfileSvc --- Models
-    ActionSvc --- Docker
+    ToolSvc --- Docker
     
     %% Styling based on Miro example with larger blocks
     classDef platform fill:#FFFFFF,color:#000000,stroke:#E6E6E6,stroke-width:1px
@@ -160,7 +160,7 @@ flowchart TD
     class Core,Services,Execution coreLayer
     class Data dataLayer
     class Studio,API component
-    class KitSvc,ModuleSvc,ProjectSvc,ProfileSvc,ActionSvc component
+    class KitSvc,ModuleSvc,ProjectSvc,ProfileSvc,ToolSvc component
     class Agents,Models,Docker component
     class DB evalComponent
     class KitStore,FileSystem component

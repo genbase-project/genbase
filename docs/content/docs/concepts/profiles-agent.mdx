@@ -18,7 +18,7 @@ A Profile is a specific **operational mode** or **workflow** exposed by a Module
 *   **Defined In:** `kit.yaml` within the `profiles:` section.
 *   **Specifies:**
     *   The **Agent** responsible.
-    *   Available **Actions** for that mode.
+    *   Available **Tools** for that mode.
     *   Contextual **Instructions**.
     *   If multiple chat **Sessions** are allowed (`allow_multiple`).
 
@@ -41,11 +41,11 @@ graph LR
 
     subgraph "Profiles"
         PA --> AgentA["Agent X"]
-        PA --> ActionsA["Actions: check, configure"]
+        PA --> ToolsA["Tools: check, configure"]
         PA --> InstructionsA["Instructions: init_guide.md"]
 
         PB --> AgentB["Agent Y"]
-        PB --> ActionsB["Actions: monitor, cleanup"]
+        PB --> ToolsB["Tools: monitor, cleanup"]
         PB --> InstructionsB["Instructions: maint_overview.md"]
     end
 
@@ -53,29 +53,29 @@ graph LR
     classDef profileA fill:#FFD700,stroke:#FFD700,color:#333,rx:5px,ry:5px
     classDef profileB fill:#E8DAEF,stroke:#E8DAEF,color:#333,rx:5px,ry:5px
     classDef agent fill:#1E90FF,stroke:#1E90FF,color:white,rx:5px,ry:5px
-    classDef action fill:#FFD700,stroke:#FFD700,color:#333,rx:5px,ry:5px
+    classDef tool fill:#FFD700,stroke:#FFD700,color:#333,rx:5px,ry:5px
     classDef instruction fill:#FFD700,stroke:#FFD700,color:#333,rx:5px,ry:5px
     
     class M module
     class PA profileA
     class PB profileB
     class AgentA,AgentB agent
-    class ActionsA,ActionsB action
+    class ToolsA,ToolsB tool
     class InstructionsA,InstructionsB instruction
 ```
-*Diagram: A Module can offer multiple Profiles, each linking to specific Agents, Actions, and Instructions.*
+*Diagram: A Module can offer multiple Profiles, each linking to specific Agents, Tools, and Instructions.*
 
 ## Agents <BotIcon className="inline-block h-5 w-5 align-text-bottom" />
 
-An Agent is the **intelligent controller** that executes the logic for a specific Profile. It uses LLMs and Actions to respond to user input within that Profile's context.
+An Agent is the **intelligent controller** that executes the logic for a specific Profile. It uses LLMs and Tools to respond to user input within that Profile's context.
 
-*   **Purpose:** Manage the conversation flow, interpret user requests, decide on actions (call LLM, run code), and generate responses.
+*   **Purpose:** Manage the conversation flow, interpret user requests, decide on tools (call LLM, run code), and generate responses.
 *   **Implementation:** Python classes inheriting from `BaseAgent`. Can be custom-built within a Kit or use built-in Genbase agents (like `TaskerAgent`). ([Agent Development Guide](/kit-development/agents)).
 *   **Key Tasks:**
     *   Process user input.
     *   Maintain chat history.
     *   Interact with the configured LLM (`ModelService`).
-    *   Execute available Actions (`ActionService`).
+    *   Execute available Tools (`ToolService`).
     *   Access Module workspace (`AgentUtils`).
     *   Manage profile-specific data (`ProfileStoreService`).
 
@@ -103,7 +103,7 @@ sequenceDiagram
     participant UI as StudioUI
     participant Agent as Agent
     participant LLM as LLM
-    participant Action as ActionService
+    participant Tool as ToolService
 
     User->>UI: Sends Message
     UI->>Agent: Process Request
@@ -112,8 +112,8 @@ sequenceDiagram
     LLM-->>Agent: Response
     
     opt Tool Call Needed
-        Agent->>Action: Execute Action
-        Action-->>Agent: Return Result
+        Agent->>Tool: Execute Tool
+        Tool-->>Agent: Return Result
         Agent->>LLM: Send Result
         LLM-->>Agent: Final Response
     end
@@ -121,7 +121,7 @@ sequenceDiagram
     Agent->>UI: Return Response
     UI->>User: Display Response
 ```
-*Diagram: Simplified chat interaction flow involving the User, UI, Engine, Agent, LLM, and Action Service.*
+*Diagram: Simplified chat interaction flow involving the User, UI, Engine, Agent, LLM, and Tool Service.*
 
 *   **Chat History:** All turns (user, assistant, tool calls, tool results) are stored per Module/Profile/Session.
 *   **Sessions:** If a Profile has `allow_multiple: true`, users can have separate, parallel conversations within that single Profile, each with its own history.

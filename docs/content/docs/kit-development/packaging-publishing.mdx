@@ -19,7 +19,7 @@ Genbase expects Kits to be distributed as **gzipped tar archives (`.tar.gz`)**. 
 
 ### Create the Archive
 
-Ensure all your Kit's files (`kit.yaml`, `actions/`, `workspace/`, `requirements.txt`, etc.) are in a single root directory (e.g., `my-awesome-kit`). Open your terminal, navigate to the directory *containing* your Kit's root folder, and run the `tar` command:
+Ensure all your Kit's files (`kit.yaml`, `tools/`, `workspace/`, `requirements.txt`, etc.) are in a single root directory (e.g., `my-awesome-kit`). Open your terminal, navigate to the directory *containing* your Kit's root folder, and run the `tar` command:
 
 ```bash
 # Example: Kit files are in './my-awesome-kit'
@@ -43,7 +43,7 @@ Check the contents to ensure files are at the root:
 tar tzvf your_owner-my_awesome_kit-1.0.0.tar.gz
 ```
 
-You should see entries like `./kit.yaml`, `./actions/some_action.py`, etc., *without* a leading directory like `my-awesome-kit/`.
+You should see entries like `./kit.yaml`, `./tools/some_tool.py`, etc., *without* a leading directory like `my-awesome-kit/`.
 
 </Steps>
 

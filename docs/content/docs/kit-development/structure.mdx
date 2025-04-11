@@ -17,11 +17,11 @@ Here is the recommended sample directory structure for a Genbase Kit:
 <Files>
   <Folder name="your-kit-root-directory" defaultOpen>
     <File name="kit.yaml" />
-    <Folder name="actions" defaultOpen>
+    <Folder name="tools" defaultOpen>
       <File name="__init__.py" />
-      <File name="some_action_module.py" />
+      <File name="some_tool_module.py" />
       <File name="another_module.py" />
-      {/* Other action files... */}
+      {/* Other tool files... */}
     </Folder>
     <Folder name="agents" defaultOpen>
        <File name="__init__.py" />
@@ -49,16 +49,16 @@ Here is the recommended sample directory structure for a Genbase Kit:
 
 *   **`kit.yaml` (Required):**
     *   The **manifest file** for your Kit.
-    *   Defines metadata (ID, version, owner), dependencies, environment variables, agents, profiles, actions, provided resources, initial workspace files, etc.
+    *   Defines metadata (ID, version, owner), dependencies, environment variables, agents, profiles, tools, provided resources, initial workspace files, etc.
     *   This is the central configuration file Genbase reads to understand your Kit.
     *   See the [kit.yaml Reference](/kit-development/kit-yaml) for full details.
 
-*   **`actions/` (Required if Actions are defined):**
-    *   Contains the Python code for the executable **[Actions](/concepts/actions-execution)** your Kit provides.
+*   **`tools/` (Required if Tools are defined):**
+    *   Contains the Python code for the executable **[Tools](/concepts/tools-execution)** your Kit provides.
     *   Organize code into multiple `.py` files (modules).
-    *   An `__init__.py` file is recommended (can contain actions referenced by function name).
-    *   Actions in other files are referenced as `filename:function_name` in `kit.yaml`.
-    *   See [Writing Actions](/kit-development/actions).
+    *   An `__init__.py` file is recommended (can contain tools referenced by function name).
+    *   Tools in other files are referenced as `filename:function_name` in `kit.yaml`.
+    *   See [Writing Tools](/kit-development/tools).
 
 *   **`agents/` :**
     *   Contains Python code for custom **[Agents](/concepts/profiles-agents)** specific to this Kit.
@@ -76,8 +76,8 @@ Here is the recommended sample directory structure for a Genbase Kit:
     *   Useful for templates, default configs, initial data. Structure is preserved.
     *   See [Defining Workspace Content](/kit-development/workspace).
 
-*   **`requirements.txt` (Required if Actions have dependencies):**
-    *   Standard Python requirements file for Action dependencies.
+*   **`requirements.txt` (Required if Tools have dependencies):**
+    *   Standard Python requirements file for Tool dependencies.
     *   Installed automatically in the secure Docker execution environment.
 
 *   **`README.md` (Recommended):**

@@ -19,7 +19,7 @@ def require_permission(obj: str, act: str):
 
     Args:
         obj: The resource (object) the user is trying to access (e.g., "/projects", "/kits/my-kit").
-        act: The action the user is trying to perform (e.g., "read", "create", "delete").
+        act: The tool the user is trying to perform (e.g., "read", "create", "delete").
 
     Returns:
         A FastAPI dependency function.
@@ -33,7 +33,7 @@ def require_permission(obj: str, act: str):
         """
         user_id = str(user.id)
 
-        logger.debug(f"Checking permission for user '{user_id}' on object '{obj}' with action '{act}'")
+        logger.debug(f"Checking permission for user '{user_id}' on object '{obj}' with tool '{act}'")
 
         has_permission = enforcer_instance.enforce(user_id, obj, act)
 
@@ -43,13 +43,13 @@ def require_permission(obj: str, act: str):
                 logger.warning(f"Superuser '{user_id}' granted access to '{obj}' ({act}) via superuser status.")
                 return user # Allow access
 
-            logger.warning(f"Permission denied for user '{user_id}' on object '{obj}' with action '{act}'")
+            logger.warning(f"Permission denied for user '{user_id}' on object '{obj}' with tool '{act}'")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to perform this action."
+                detail="You do not have permission to perform this tool."
             )
 
-        logger.info(f"Permission granted for user '{user_id}' on object '{obj}' with action '{act}'")
+        logger.info(f"Permission granted for user '{user_id}' on object '{obj}' with tool '{act}'")
         return user # Return the user object if needed by the route function
 
     return permission_checker # Return the inner function

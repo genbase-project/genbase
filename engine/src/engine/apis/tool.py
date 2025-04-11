@@ -1,11 +1,11 @@
-# engine/apis/action.py
+# engine/apis/tool.py
 
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from engine.services.execution.action import ActionError, ActionService, FunctionMetadata
+from engine.services.execution.tool import ToolError, ToolService, FunctionMetadata
 
 
 class OpenAIFunctionSchema(BaseModel):
@@ -31,16 +31,16 @@ class ExecuteFunctionRequest(BaseModel):
     requirements: List[str] = []
     env_vars: Dict[str, str] = {}  # Add environment variables field
 
-class ActionRouter:
+class ToolRouter:
     """FastAPI router for function execution"""
 
     def __init__(
         self,
-        action_service: ActionService,
+        tool_service: ToolService,
         prefix: str = "/action"
     ):
-        self.service = action_service
-        self.router = APIRouter(prefix=prefix, tags=["action"])
+        self.service = tool_service
+        self.router = APIRouter(prefix=prefix, tags=["tool"])
         self._setup_routes()
 
     async def _get_function_metadata(
@@ -57,7 +57,7 @@ class ActionRouter:
                 function_name=function_name
             )
             return OpenAIFunctionSchema.from_metadata(metadata)
-        except ActionError as e:
+        except ToolError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
     async def _execute_function(
@@ -81,7 +81,7 @@ class ActionRouter:
                 env_vars=request.env_vars  # Pass environment variables to service
             )
             return {"result": result}
-        except ActionError as e:
+        except ToolError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
     def _setup_routes(self):

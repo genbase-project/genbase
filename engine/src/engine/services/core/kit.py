@@ -53,12 +53,12 @@ class InstructionItem:
     content: str = ""
 
 @dataclass
-class ProfileAction:
-    """Profile action definition"""
+class ProfileTool:
+    """Profile tool definition"""
     path: str  # Original path in format "module:function" or just "function"
     name: str
     description: Optional[str] = None
-    full_file_path: str = ""  # Full path to the action file
+    full_file_path: str = ""  # Full path to the tool file
     function_name: str = ""  # Function name extracted from path
 
     def to_dict(self) -> Dict[str, Any]:
@@ -73,11 +73,11 @@ class ProfileAction:
     @classmethod
     def resolve_path(cls, path: str, kit_path: Path) -> Tuple[str, str]:
         """
-        Resolve action path and function name.
+        Resolve tool path and function name.
         If path doesn't contain a colon, assume it's just a function name in __init__.py
         
         Args:
-            path: Action path in format "module:function" or just "function"
+            path: Tool path in format "module:function" or just "function"
             kit_path: Base path to kit
             
         Returns:
@@ -85,12 +85,12 @@ class ProfileAction:
         """
         if ":" in path:
             # Traditional format: path:function
-            action_file_path, func_name = path.split(":")
-            full_file_path = str(kit_path / "actions" / f"{action_file_path}.py")
+            tool_file_path, func_name = path.split(":")
+            full_file_path = str(kit_path / "tools" / f"{tool_file_path}.py")
         else:
             # New format: just function name, look in __init__.py
             func_name = path
-            full_file_path = str(kit_path / "actions" / "__init__.py")
+            full_file_path = str(kit_path / "tools" / "__init__.py")
             
         return full_file_path, func_name
 
@@ -98,25 +98,25 @@ class ProfileAction:
 class Profile:
     """Profile configuration"""
     agent: str
-    actions: List[ProfileAction]
+    tools: List[ProfileTool]
     instructions: List[InstructionItem] = field(default_factory=list)
 
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any], kit_path: Optional[Path] = None) -> 'Profile':
-        def create_profile_action(action: Dict[str, Any]) -> ProfileAction:
-            profile_action = ProfileAction(
-                path=action['path'],
-                name=action['name'],
-                description=action.get('description')
+        def create_profile_tool(tool: Dict[str, Any]) -> ProfileTool:
+            profile_tool = ProfileTool(
+                path=tool['path'],
+                name=tool['name'],
+                description=tool.get('description')
             )
             
             # Use the new resolution method
-            full_file_path, func_name = ProfileAction.resolve_path(action['path'], kit_path)
-            profile_action.full_file_path = full_file_path
-            profile_action.function_name = func_name
+            full_file_path, func_name = ProfileTool.resolve_path(tool['path'], kit_path)
+            profile_tool.full_file_path = full_file_path
+            profile_tool.function_name = func_name
 
-            return profile_action
+            return profile_tool
 
 
 
@@ -137,7 +137,7 @@ class Profile:
         
         return cls(
             agent=data['agent'],
-            actions=[create_profile_action(action) for action in data.get('actions', [])],
+            tools=[create_profile_tool(tool) for tool in data.get('tools', [])],
             instructions=instruction_data
         )
 
@@ -171,7 +171,7 @@ class WorkspaceProvide:
 @dataclass
 class Provide:
     """Resources provided by the kit"""
-    actions: List[ProfileAction] = field(default_factory=list)
+    tools: List[ProfileTool] = field(default_factory=list)
     instructions: List[InstructionItem] = field(default_factory=list) 
     workspace: Optional[WorkspaceProvide] = None
 
@@ -200,16 +200,16 @@ class KitConfig:
             
         # Create provide section
         provide = Provide(
-            # Move shared_actions to provide.actions
-            actions=[
-                ProfileAction(
-                    path=action['path'],
-                    name=action['name'],
-                    description=action.get('description'),
+            # Move shared_tools to provide.tools
+            tools=[
+                ProfileTool(
+                    path=tool['path'],
+                    name=tool['name'],
+                    description=tool.get('description'),
                     # Use the new path resolution logic
-                    **_resolve_action_path(action['path'], data['kit_path'])
+                    **_resolve_tool_path(tool['path'], data['kit_path'])
                 )
-                for action in data.get('provide', {}).get('actions', [])
+                for tool in data.get('provide', {}).get('tool', [])
             ],
             instructions=[
                 InstructionItem(
@@ -251,13 +251,13 @@ class KitConfig:
             ports=[Port(**p) for p in data.get('ports', [])]
         )
 
-# Helper function to resolve action paths
-def _resolve_action_path(path: str, kit_path: Path) -> Dict[str, str]:
+# Helper function to resolve tool paths
+def _resolve_tool_path(path: str, kit_path: Path) -> Dict[str, str]:
     """
-    Resolve action path and return a dictionary with full_file_path and function_name
+    Resolve tool path and return a dictionary with full_file_path and function_name
     
     Args:
-        path: Action path as string (either "path:function" or just "function")
+        path: Tool path as string (either "path:function" or just "function")
         kit_path: Base kit path
         
     Returns:
@@ -265,12 +265,12 @@ def _resolve_action_path(path: str, kit_path: Path) -> Dict[str, str]:
     """
     if ":" in path:
         # Traditional format: path:function
-        action_file_path, func_name = path.split(":")
-        full_file_path = str(kit_path / "actions" / f"{action_file_path}.py")
+        tool_file_path, func_name = path.split(":")
+        full_file_path = str(kit_path / "tools" / f"{tool_file_path}.py")
     else:
         # New format: just function name, look in __init__.py
         func_name = path
-        full_file_path = str(kit_path / "actions" / "__init__.py")
+        full_file_path = str(kit_path / "tools" / "__init__.py")
         
     return {
         "full_file_path": full_file_path,
@@ -385,7 +385,7 @@ class KitService:
 
                     kit_data = yaml.safe_load(f)
 
-                    
+
                     logger.debug(f"Parsed kit.yaml: {kit_data}")
             
             return KitMetadata(

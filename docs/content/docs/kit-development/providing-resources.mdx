@@ -1,6 +1,6 @@
 ---
 title: Providing Resources to Other Modules
-description: Learn how to define shared Actions, Workspaces, and Instructions in your Kit's `provide` section.
+description: Learn how to define shared Tools, Workspaces, and Instructions in your Kit's `provide` section.
 ---
 
 import { Share2Icon, ZapIcon, FolderGitIcon, FileTextIcon } from 'lucide-react';
@@ -21,20 +21,20 @@ The optional top-level `provide` key in `kit.yaml` is where you declare the reso
 # ... (id, version, name, owner, etc.)
 
 provide:
-  # --- Actions shared by this Kit ---
-  actions:
+  # --- Tools shared by this Kit ---
+  tools:
     - name: "lookup_user_id" # Name the consuming agent will use
-      path: "user_service:get_id_by_email" # Function in actions/user_service.py
+      path: "user_service:get_id_by_email" # Function in tools/user_service.py
       description: "Looks up a user ID based on their email address."
     - name: "validate_token"
-      path: "auth:verify_token" # Function in actions/auth.py
+      path: "auth:verify_token" # Function in tools/auth.py
       description: "Validates an authentication token."
 
   # --- Instructions shared by this Kit ---
   instructions:
     - name: "api_guidelines"
       path: "guides/provider_api_usage.md" # File in instructions/guides/
-      description: "Best practices for interacting with this Kit's provided actions."
+      description: "Best practices for interacting with this Kit's provided tools."
 
   # --- Workspace sharing declaration ---
   workspace:
@@ -46,15 +46,15 @@ provide:
 
 You can define the following under the `provide` key:
 
-1.  **`actions`** <ZapIcon className="inline-block h-4 w-4 align-text-bottom" /> (Optional, List of Objects):
-    *   Declares **[Kit Actions](/concepts/actions-execution)** that consuming Modules can invoke.
-    *   The structure for each action (`name`, `path`, `description`) is identical to defining actions within `profiles`.
-    *   **Crucially:** When a consuming Module's Agent calls a provided action, the action code executes in an isolated Docker container using the **Provider Module's** environment variables, dependencies, and workspace context. Only the result is returned to the consuming Agent.
+1.  **`tools`** <ZapIcon className="inline-block h-4 w-4 align-text-bottom" /> (Optional, List of Objects):
+    *   Declares **[Kit Tools](/concepts/tools-execution)** that consuming Modules can invoke.
+    *   The structure for each tool (`name`, `path`, `description`) is identical to defining tools within `profiles`.
+    *   **Crucially:** When a consuming Module's Agent calls a provided tool, the tool code executes in an isolated Docker container using the **Provider Module's** environment variables, dependencies, and workspace context. Only the result is returned to the consuming Agent.
 
 2.  **`instructions`** <FileTextIcon className="inline-block h-4 w-4 align-text-bottom" /> (Optional, List of Objects):
     *   Declares **[Instruction Files](/kit-development/instructions)** that provide context about the shared resources.
     *   The structure (`name`, `path`, `description`) is identical to defining instructions within `profiles`.
-    *   This information can be made available to the *consuming* Module's Agent to help it understand how to use the provided Actions or interpret the provided Workspace content.
+    *   This information can be made available to the *consuming* Module's Agent to help it understand how to use the provided Tools or interpret the provided Workspace content.
 
 3.  **`workspace`** <FolderGitIcon className="inline-block h-4 w-4 align-text-bottom" /> (Optional, Object):
     *   If this object exists (even if empty, `{}`), it signifies that Modules created from this Kit *can* share their entire **[Workspace](/concepts/workspace-resources)**.
@@ -64,15 +64,15 @@ You can define the following under the `provide` key:
 ## How Consumers Use Provided Resources
 
 *   **Establishing the Link:** A user or administrator must explicitly create the `ModuleProvide` link between two running Module instances using the Studio UI ([Managing Provisions](/user-guide/modules/providing)) or the API. Simply defining resources in `provide` doesn't automatically link modules.
-*   **Consuming Actions:** Once Module A provides an Action (e.g., `lookup_user_id`) to Module B, that action name becomes available as a potential tool call for Module B's Agent when it interacts with its Profiles. The Agent's `set_context` method (potentially via `IncludeOptions(provided_actions=True)`) can be configured to include these provided actions in the list of tools passed to the LLM.
-*   **Consuming Workspace:** Once Module A provides its Workspace to Module B, any Action executed by Module B can access the files within Module A's workspace by reading from the path `/repo/workspaces/{module_a_id}/...` inside its Docker execution container.
+*   **Consuming Tools:** Once Module A provides an Tool (e.g., `lookup_user_id`) to Module B, that tool name becomes available as a potential tool call for Module B's Agent when it interacts with its Profiles. The Agent's `set_context` method (potentially via `IncludeOptions(provided_tools=True)`) can be configured to include these provided tools in the list of tools passed to the LLM.
+*   **Consuming Workspace:** Once Module A provides its Workspace to Module B, any Tool executed by Module B can access the files within Module A's workspace by reading from the path `/repo/workspaces/{module_a_id}/...` inside its Docker execution container.
 *   **Consuming Instructions:** Instructions defined in the `provide` section of Module A's Kit can be included in the `profile_data.instructions` list passed to Module B's Agent, providing context on how to use Module A's provided resources.
 
 <Callout title="Design Considerations">
-*   Only `provide` Actions and Instructions that make sense for external consumption. Keep internal helper functions private.
-*   Ensure provided Actions have clear descriptions for the consuming LLM/Agent.
+*   Only `provide` Tools and Instructions that make sense for external consumption. Keep internal helper functions private.
+*   Ensure provided Tools have clear descriptions for the consuming LLM/Agent.
 *   Document the purpose and structure of a provided Workspace clearly in the `provide.workspace.description` or a README.
-*   Remember that provided Actions execute within the *Provider's* context – they have access to the Provider's environment variables and workspace, not the Consumer's.
+*   Remember that provided Tools execute within the *Provider's* context – they have access to the Provider's environment variables and workspace, not the Consumer's.
 </Callout>
 
 Defining resources in the `provide` section is how you turn your Kit from a standalone capability into a collaborative component within the larger Genbase ecosystem.

@@ -126,7 +126,7 @@ class ModuleApiKey(Base):
 class ProvideType(enum.Enum):
     """Types of resources a module can provide to another module"""
     WORKSPACE = "workspace"
-    ACTION = "action"
+    TOOL = "tool"
     
 class ModuleProvide(Base):
     """Tracks which module provides what resources to which other modules"""

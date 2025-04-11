@@ -142,7 +142,7 @@ export default function DocsLandingPage() {
                     Secure Execution Environment
                   </h3>
                   <p className="text-gray-600 dark:text-gray-300 mb-4">
-                    All module actions run in isolated Docker containers with controlled
+                    All module tools run in isolated Docker containers with controlled
                     access to resources. Modules communicate through explicit, well-defined
                     interfaces, preventing unintended side-effects while maintaining security.
                   </p>
@@ -214,7 +214,7 @@ export default function DocsLandingPage() {
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Define Reusable Kits</h3>
                   <p className="text-gray-600 dark:text-gray-300">
                     Package AI capabilities as versioned, reusable components with 
-                    defined interfaces, actions, and profiles. Each kit contains
+                    defined interfaces, tools, and profiles. Each kit contains
                     specialized expertise, dependencies, and base configurations.
                   </p>
                 </div>
@@ -266,7 +266,7 @@ export default function DocsLandingPage() {
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Define Module Relationships</h3>
                   <p className="text-gray-600 dark:text-gray-300">
                     Connect modules through controlled resource sharing. A module can provide
-                    specific actions or workspace access to other modules, creating clean
+                    specific tools or workspace access to other modules, creating clean
                     interfaces for collaboration while maintaining isolation.
                   </p>
                 </div>
@@ -292,7 +292,7 @@ export default function DocsLandingPage() {
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Interact Through Agent Profiles</h3>
                   <p className="text-gray-600 dark:text-gray-300">
                     Interact with modules through purpose-specific profiles, each managed by
-                    an agent that combines LLM capabilities with defined actions. Profiles
+                    an agent that combines LLM capabilities with defined tools. Profiles
                     provide tailored interfaces for different module functions.
                   </p>
                 </div>
@@ -470,7 +470,7 @@ export default function DocsLandingPage() {
                   <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-100 dark:border-gray-700">
                     <h4 className="font-medium text-gray-900 dark:text-white mb-2">How They Work Together:</h4>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
-                      The Information Retrieval module provides search actions to the Analysis Engine,
+                      The Information Retrieval module provides search tools to the Analysis Engine,
                       which processes and evaluates the information. Both modules provide workspace
                       access to the Document Creator, which compiles a comprehensive report with
                       citations. Each module maintains expertise in its domain while collaborating
@@ -484,7 +484,7 @@ export default function DocsLandingPage() {
         </div>
       </section>
 
-      {/* Call to Action */}
+      {/* Call to Tool */}
       <section className="py-20 bg-gradient-to-b from-blue-50 to-white dark:from-blue-950/30 dark:to-gray-950 relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700 to-transparent"></div>
         

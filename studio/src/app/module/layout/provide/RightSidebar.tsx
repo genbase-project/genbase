@@ -43,7 +43,7 @@ import { AddProvideDialog, ModuleProvide, ProvideRelationshipCard } from './dial
 // Define ProvideType enum
 enum ProvideType {
   WORKSPACE = "workspace",
-  ACTION = "action",
+  TOOL = "tool",
 }
 
 

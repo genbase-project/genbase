@@ -17,7 +17,7 @@ from loguru import logger
 from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from engine.apis.action import ActionRouter
+from engine.apis.tool import ToolRouter
 
 # Import routers
 from engine.apis.chat import ChatRouter
@@ -37,7 +37,7 @@ from engine.db.models import User
 from engine.db.session import SessionLocal
 from engine.services.agents.base_agent import AgentServices
 from engine.services.core.api_key import ApiKeyService
-from engine.services.execution.action import ActionService
+from engine.services.execution.tool import ToolService
 
 # Import services
 from engine.services.core.kit import KitService
@@ -255,14 +255,14 @@ resource_service = ResourceService(
     model_service=model_service
 )
 
-action_service = ActionService(repo_service=repo_service)
+tool_service = ToolService(repo_service=repo_service)
 
 # Add this with other service initializations
 profile_service = ProfileService(
     workspace_base=str(KIT_BASE_DIR),
     module_base=str(KIT_BASE_DIR),
     module_service=module_service,
-    action_service=action_service,
+    tool_service=tool_service,
     resource_service=resource_service,
     repo_service=repo_service,
     kit_service=kit_service
@@ -301,9 +301,9 @@ resource_router = ResourceRouter(
 model_router = ModelRouter(model_service)
 
 # Add to router initialization
-operation_router = ActionRouter(
-    action_service=action_service,
-    prefix="/action"
+operation_router = ToolRouter(
+    tool_service=tool_service,
+    prefix="/tool"
 )
 
 # Add this with other router initializations

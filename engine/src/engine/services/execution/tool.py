@@ -21,7 +21,7 @@ from docker.errors import DockerException
 
 from docker.models.containers import Container
 
-class ActionError(Exception):
+class ToolError(Exception):
     """Base exception for action errors"""
     pass
 
@@ -33,7 +33,7 @@ class WarmContainer:
 
 
 
-class ActionService:
+class ToolService:
     def __init__(self, repo_service: RepoService, warm_container_timeout: int = 900):
         self.repo_service = repo_service
         self.docker_client = docker.from_env()
@@ -123,11 +123,11 @@ class ActionService:
                     return self.get_function_metadata(folder_path, str(target_file), function_name)
                     
             # If we get here, the function wasn't found and wasn't imported
-            raise ActionError(f"Function {function_name} not found in {file_path}")
+            raise ToolError(f"Function {function_name} not found in {file_path}")
 
         except Exception as e:
             logger.error(f"Error analyzing function: {str(e)}")
-            raise ActionError(f"Error analyzing function: {str(e)}")
+            raise ToolError(f"Error analyzing function: {str(e)}")
     
 
     def _get_cache_tag(self, base_image: str, requirements: List[str]) -> str:
@@ -311,7 +311,7 @@ except Exception as e:
             finally:
                 sock.close()
         
-        raise ActionError(f"No available ports found starting from {start_port}")
+        raise ToolError(f"No available ports found starting from {start_port}")
 
     def _execute_in_container(
         self,
@@ -383,8 +383,8 @@ except Exception as e:
                 if exec_result.exit_code != 0:
                     if (temp_path / 'error.txt').exists():
                         error_msg = (temp_path / 'error.txt').read_text()
-                        raise ActionError(f"Function execution failed: {error_msg}")
-                    raise ActionError(f"Container execution failed: {exec_result.output.decode()}")
+                        raise ToolError(f"Function execution failed: {error_msg}")
+                    raise ToolError(f"Container execution failed: {exec_result.output.decode()}")
 
                 # Load result
                 with open(temp_path / 'result.json', 'rb') as f:
@@ -413,9 +413,9 @@ except Exception as e:
                 raise e
 
         except DockerException as e:
-            raise ActionError(f"Docker error: {str(e)}")
+            raise ToolError(f"Docker error: {str(e)}")
         except Exception as e:
-            raise ActionError(f"Error executing function: {str(e)}")
+            raise ToolError(f"Error executing function: {str(e)}")
 
 
 
@@ -499,11 +499,11 @@ except Exception as e:
                     return self.resolve_function_location(folder_path, target_file_str, function_name)
                     
             # If we get here, the function wasn't found and wasn't imported
-            raise ActionError(f"Function {function_name} not found in {file_path}")
+            raise ToolError(f"Function {function_name} not found in {file_path}")
 
         except Exception as e:
             logger.error(f"Error resolving function location: {str(e)}")
-            raise ActionError(f"Error resolving function location: {str(e)}")
+            raise ToolError(f"Error resolving function location: {str(e)}")
         
 
 
@@ -575,7 +575,7 @@ except Exception as e:
                 )
 
         except Exception as e:
-            raise ActionError(f"Error executing function: {str(e)}")
+            raise ToolError(f"Error executing function: {str(e)}")
 
     def execute_direct_function(
         self,
@@ -623,5 +623,5 @@ except Exception as e:
                 )
 
         except Exception as e:
-            raise ActionError(f"Error executing function: {str(e)}")
+            raise ToolError(f"Error executing function: {str(e)}")
 

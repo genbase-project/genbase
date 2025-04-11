@@ -395,7 +395,7 @@ const UserManagementPage: React.FC = () => {
                                         <TableHead className="text-gray-700">Email</TableHead>
                                         <TableHead className="text-gray-700">Status</TableHead>
                                         <TableHead className="text-gray-700">Role</TableHead>
-                                        <TableHead className="text-right text-gray-700 min-w-[100px]">Actions</TableHead> {/* Added min-width */}
+                                        <TableHead className="text-right text-gray-700 min-w-[100px]">Tools</TableHead> {/* Added min-width */}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>

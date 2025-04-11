@@ -44,7 +44,7 @@ import { Module } from '@/components/TreeView';
 // Define ProvideType enum
 enum ProvideType {
     WORKSPACE = "workspace",
-    ACTION = "action",
+    TOOL = "tool",
 }
 
 
@@ -288,23 +288,23 @@ export interface ProvideRelationshipCardProps {
                 <Card 
                   className={cn(
                     "cursor-pointer transition-colors",
-                    selectedType === ProvideType.ACTION && "border-primary"
+                    selectedType === ProvideType.TOOL && "border-primary"
                   )}
-                  onClick={() => setSelectedType(ProvideType.ACTION)}
+                  onClick={() => setSelectedType(ProvideType.TOOL)}
                 >
                   <CardHeader className="p-4 space-y-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <Checkbox
-                        checked={selectedType === ProvideType.ACTION}
+                        checked={selectedType === ProvideType.TOOL}
                         onCheckedChange={(checked) => {
-                          setSelectedType(checked ? ProvideType.ACTION : null);
+                          setSelectedType(checked ? ProvideType.TOOL : null);
                         }}
                       />
                       <PlugZap className="h-4 w-4" />
-                      ACTION
+                      TOOL
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      Provide action capabilities to the target module
+                      Provide tool capabilities to the target module
                     </CardDescription>
                   </CardHeader>
                 </Card>

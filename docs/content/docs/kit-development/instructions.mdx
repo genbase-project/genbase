@@ -14,7 +14,7 @@ Instructions provide a way to embed static, contextual information directly into
 
 *   **Agent Guidance:** Provide specific directives, constraints, or background information to the Agent handling a Profile (e.g., "Always ask for confirmation before deleting data," "Format your output as a JSON object with keys 'summary' and 'keywords'").
 *   **User Context (Indirect):** While primarily for the Agent, well-written instructions can help the Agent formulate better prompts or explanations for the end-user.
-*   **Context for Provided Resources:** Explain the purpose or usage guidelines for Actions or Workspaces shared via the `provide` section in `kit.yaml`.
+*   **Context for Provided Resources:** Explain the purpose or usage guidelines for Tools or Workspaces shared via the `provide` section in `kit.yaml`.
 
 ## Creating Instruction Files
 
@@ -29,14 +29,14 @@ Instructions provide a way to embed static, contextual information directly into
 
 You are assisting with PostgreSQL database maintenance.
 
-**Available Actions:**
+**Available Tools:**
 - `vacuum`: Reclaims storage and updates statistics. Use regularly, especially on frequently updated tables. Avoid `full=true` during peak hours.
 - `analyze_db`: Updates query planner statistics. Run after significant data changes or VACUUM operations.
 - `custom_query`: Executes **read-only** SELECT queries. Verify user intent before running potentially expensive queries.
 
 **Workflow:**
 1. Assess current status (e.g., using `get_table_stats` - if available in profile).
-2. Recommend appropriate maintenance actions (VACUUM, ANALYZE) based on stats or user request.
+2. Recommend appropriate maintenance tools (VACUUM, ANALYZE) based on stats or user request.
 3. If running `custom_query`, ensure it's a SELECT statement.
 4. Report results clearly to the user.
 ```
@@ -55,8 +55,8 @@ profiles:
       - name: "maint_overview" # A logical name for this instruction
         path: "maintenance_guide.md" # Path relative to instructions/ directory
         description: "Guidelines for performing database maintenance tasks." # Optional description
-    actions:
-      # ... actions for maintain profile
+    tools:
+      # ... tools for maintain profile
       - name: "vacuum"
         path: "db_maint:vacuum_db"
         description: "Run VACUUM."
@@ -64,14 +64,14 @@ profiles:
 # ...
 
 provide:
-  actions:
+  tools:
     - name: "get_db_summary"
       path: "db_maint:summarize_stats"
       description: "Provides a quick summary of database health."
   instructions: # Instructions explaining the provided resources
     - name: "provider_usage"
       path: "guides/how_to_use_provider.md"
-      description: "Explains how consuming modules should use the provided actions."
+      description: "Explains how consuming modules should use the provided tools."
 ```
 
 *   **`instructions` List:** Appears under a `profiles.<profile_name>` key or the top-level `provide` key.

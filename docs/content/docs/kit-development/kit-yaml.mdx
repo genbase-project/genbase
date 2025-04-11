@@ -28,7 +28,7 @@ owner: "my-org"          # Namespace/Owner identifier (lowercase, kebab-case rec
 description: "A brief description of what this kit does." # Optional description for UI/Registry
 
 # --- Dependencies & Environment ---
-dependencies:            # Optional: List of Python packages required by actions
+dependencies:            # Optional: List of Python packages required by tools
   - requests
   - beautifulsoup4
 environment:             # Optional: List of environment variables the kit expects
@@ -41,8 +41,8 @@ environment:             # Optional: List of environment variables the kit expec
     default: "https://api.example.com" # Optional default value
 
 # --- Runtime & Execution ---
-image: "python:3.11-slim" # Optional: Base Docker image for action execution (default: python:3.11-slim)
-ports:                   # Optional: Ports to map from the action container to the host
+image: "python:3.11-slim" # Optional: Base Docker image for tool execution (default: python:3.11-slim)
+ports:                   # Optional: Ports to map from the tool container to the host
   - name: "WEB_UI"         # Name used for environment variable (PORT_WEB_UI)
     port: 8080             # Port inside the container
 
@@ -65,16 +65,16 @@ workspace: { ... }       # Optional: Definitions for initial workspace files & i
     *   `name` (Required, String): A human-friendly name displayed in the UI. Example: "PostgreSQL Administrator".
     *   `owner` (Required, String): The namespace for the Kit, usually your organization or username. Use lowercase letters, numbers, and hyphens. Example: `genbase`, `mycompany`.
     *   `description` (Optional, String): A brief, one-sentence description of the Kit's purpose.
-    *   `dependencies` (Optional, List of Strings): A list of Python package names required by the Kit's **[Actions](/kit-development/actions)**. These will be installed via `pip` in the Action execution container. Format should match `requirements.txt` entries. Example: `['requests', 'psycopg2-binary>=2.9']`.
-    *   `environment` (Optional, List of Objects): Defines environment variables expected by the Kit's Actions or Agents. Users will be prompted to provide values when creating a Module from this Kit.
+    *   `dependencies` (Optional, List of Strings): A list of Python package names required by the Kit's **[Tools](/kit-development/tools)**. These will be installed via `pip` in the Tool execution container. Format should match `requirements.txt` entries. Example: `['requests', 'psycopg2-binary>=2.9']`.
+    *   `environment` (Optional, List of Objects): Defines environment variables expected by the Kit's Tools or Agents. Users will be prompted to provide values when creating a Module from this Kit.
         *   `name` (Required, String): The environment variable name (e.g., `API_KEY`).
         *   `description` (Required, String): Explanation of what the variable is for.
         *   `required` (Optional, Boolean): If `true`, the user *must* provide a value when creating a module. Default: `false`.
         *   `default` (Optional, String): A default value if the user doesn't provide one (only applies if `required` is `false`).
-    *   `image` (Optional, String): Specifies the base Docker image used for running the Kit's **[Actions](/concepts/actions-execution)**. Defaults to `python:3.11-slim`. Choose an image that meets your Action's runtime needs.
-    *   `ports` (Optional, List of Objects): Defines network ports that should be mapped from the Action execution container to the host machine.
+    *   `image` (Optional, String): Specifies the base Docker image used for running the Kit's **[Tools](/concepts/tools-execution)**. Defaults to `python:3.11-slim`. Choose an image that meets your Tool's runtime needs.
+    *   `ports` (Optional, List of Objects): Defines network ports that should be mapped from the Tool execution container to the host machine.
         *   `name` (Required, String): A logical name for the port (e.g., `API`, `DEBUGGER`). This name will be used to create an environment variable `PORT_{NAME}` inside the container, holding the *host* port number it was mapped to (e.g., `PORT_API=34567`).
-        *   `port` (Required, Integer): The port number *inside* the container that your Action listens on. Genbase will find an available port on the host and map it to this container port.
+        *   `port` (Required, Integer): The port number *inside* the container that your Tool listens on. Genbase will find an available port on the host and map it to this container port.
   </Accordion>
 
   <Accordion title="Agents">
@@ -107,12 +107,12 @@ workspace: { ... }       # Optional: Definitions for initial workspace files & i
           - name: "init_guide"
             path: "initialization_steps.md" # Path relative to 'instructions/' dir
             description: "Step-by-step setup guide."
-        actions:                # Optional: List of actions available in this profile
+        tools:                # Optional: List of tools available in this profile
           - name: "check_system"
             path: "setup:check_system_status" # Path format: 'module_name:function_name' or just 'function_name'
             description: "Verify system prerequisites."
           - name: "apply_config"
-            path: "configure" # Assumes 'configure()' function in 'actions/__init__.py'
+            path: "configure" # Assumes 'configure()' function in 'tools/__init__.py'
             description: "Apply initial configuration."
 
       maintain:
@@ -122,11 +122,11 @@ workspace: { ... }       # Optional: Definitions for initial workspace files & i
           - name: "maint_overview"
             path: "maintenance_guide.md"
             description: "Overview of maintenance tasks."
-        actions:
+        tools:
           - name: "get_status"
             path: "monitoring:get_current_status"
             description: "Retrieve the current operational status."
-          # ... more actions specific to maintenance
+          # ... more tools specific to maintenance
     ```
     *   `profile_name` (Key, String): The unique name for this profile (e.g., `initialize`, `query`, `generate_report`).
     *   `agent` (Required, String): The `name` of the agent (from the `agents:` section or a built-in agent like `tasker`) that will handle this profile.
@@ -135,10 +135,10 @@ workspace: { ... }       # Optional: Definitions for initial workspace files & i
         *   `name` (Required, String): A reference name for the instruction.
         *   `path` (Required, String): Path to the instruction file relative to the Kit's `instructions/` directory.
         *   `description` (Optional, String): Brief description of the instruction content.
-    *   `actions` (Optional, List of Objects): Defines which **[Kit Actions](/concepts/actions-execution)** are available to the `agent` when operating under this specific `profile`.
-        *   `name` (Required, String): The name the agent will use to refer to this action (e.g., in tool calls).
-        *   `path` (Required, String): Specifies the action function. Format: `filename:function_name` (e.g., `utils:parse_data`) or just `function_name` (implies the function is in `actions/__init__.py`).
-        *   `description` (Required, String): A clear description for the LLM explaining what the action does and potentially how/when to use it.
+    *   `tools` (Optional, List of Objects): Defines which **[Kit Tools](/concepts/tools-execution)** are available to the `agent` when operating under this specific `profile`.
+        *   `name` (Required, String): The name the agent will use to refer to this tool (e.g., in tool calls).
+        *   `path` (Required, String): Specifies the tool function. Format: `filename:function_name` (e.g., `utils:parse_data`) or just `function_name` (implies the function is in `tools/__init__.py`).
+        *   `description` (Required, String): A clear description for the LLM explaining what the tool does and potentially how/when to use it.
   </Accordion>
 
   <Accordion title="Provide">
@@ -146,7 +146,7 @@ workspace: { ... }       # Optional: Definitions for initial workspace files & i
 
     ```yaml
     provide:
-      actions:          # Optional: Actions this kit offers for others to use
+      tools:          # Optional: Tools this kit offers for others to use
         - name: "get_summary"
           path: "summarizer:create_summary"
           description: "Generates a text summary for the given content."
@@ -157,12 +157,12 @@ workspace: { ... }       # Optional: Definitions for initial workspace files & i
       instructions:     # Optional: Instructions provided as context to consumers
         - name: "api_usage_guide"
           path: "provider_api_guide.md"
-          description: "How to effectively use the provided actions."
+          description: "How to effectively use the provided tools."
 
       workspace:        # Optional: Allow sharing the module's workspace
         description: "Provides access to the processed data files."
     ```
-    *   `actions` (Optional, List of Objects): Actions made available to consuming modules. Structure is identical to actions within `profiles`. When a consuming module calls a provided action, it executes in the *provider's* context.
+    *   `tools` (Optional, List of Objects): Tools made available to consuming modules. Structure is identical to tools within `profiles`. When a consuming module calls a provided tool, it executes in the *provider's* context.
     *   `instructions` (Optional, List of Objects): Instructions made available to consuming modules' agents for context. Structure is identical to instructions within `profiles`.
     *   `workspace` (Optional, Object): If present, allows this Module's **[Workspace](/concepts/workspace-resources)** to be provided to other modules (mounted read-only as a Git submodule).
         *   `description` (Optional, String): Describes the content or purpose of the shared workspace.
@@ -177,7 +177,7 @@ workspace: { ... }       # Optional: Definitions for initial workspace files & i
         - path: "config/default.json" # Path relative to 'workspace/' dir
           description: "Default configuration template."
         - path: "scripts/init.py"
-          description: "Initial setup script (can be run by an action)."
+          description: "Initial setup script (can be run by an tool)."
         - path: "data_schemas/" # Can include directories
           description: "Directory containing data schema definitions."
 
@@ -194,5 +194,5 @@ workspace: { ... }       # Optional: Definitions for initial workspace files & i
 </Accordions>
 
 <Callout title="Validation">
-Genbase validates the `kit.yaml` file when a Kit is installed or uploaded. Ensure your YAML is well-formed and adheres to this specification. Referencing non-existent files (in `instructions`, `workspace.files`, `actions`) will likely cause errors during Module creation or Action execution.
+Genbase validates the `kit.yaml` file when a Kit is installed or uploaded. Ensure your YAML is well-formed and adheres to this specification. Referencing non-existent files (in `instructions`, `workspace.files`, `tools`) will likely cause errors during Module creation or Tool execution.
 </Callout>

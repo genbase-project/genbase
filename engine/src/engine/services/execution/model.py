@@ -93,7 +93,7 @@ MODEL_CONFIGS = {
 }
 
 # Constants
-DEFAULT_MODEL = "claude-3-5-sonnet-20240620"
+DEFAULT_MODEL = "gpt-4o"
 MODEL_CONFIG_KEY = "model_name"
 
 ResponseType = TypeVar('ResponseType', bound=BaseModel)
@@ -188,6 +188,7 @@ class ModelService:
         stream: bool = False,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Union[str, Dict[str, str]]] = None,
+        model: Optional[str] = None,
         **kwargs
     ):
         """
@@ -202,7 +203,7 @@ class ModelService:
         """
         try:
             response = completion(
-                model=self.model_name,
+                model=model or self.model_name,
                 messages=messages,
                 stream=stream,
                 tools=tools,

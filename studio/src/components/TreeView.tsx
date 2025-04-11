@@ -106,7 +106,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
 
   const Node = React.forwardRef<HTMLDivElement, NodeRendererProps<TreeNode>>((props, ref) => {
     const { node, style, dragHandle } = props;
-    const [showActions, setShowActions] = useState(false);
+    const [showTools, setShowTools] = useState(false);
     
     const isSelected = !node.data.isFolder && 
       node.data.module?.module_id === selectedModuleId;
@@ -119,8 +119,8 @@ export const TreeView: React.FC<TreeViewProps> = ({
           if (typeof ref === 'function') ref(element);
           else if (ref) ref.current = element;
         }}
-        onMouseEnter={() => setShowActions(true)}
-        onMouseLeave={() => setShowActions(false)}
+        onMouseEnter={() => setShowTools(true)}
+        onMouseLeave={() => setShowTools(false)}
         data-id={node.id}
       >
         <div 
@@ -164,7 +164,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
             </span>
           </div>
 
-          {showActions && (onCreateModule || onEditPath || onRename) && (
+          {showTools && (onCreateModule || onEditPath || onRename) && (
             <div className="flex gap-1">
               {node.data.isFolder && onCreateModule && (
                 <Button 

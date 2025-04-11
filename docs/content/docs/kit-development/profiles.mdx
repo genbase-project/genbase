@@ -14,7 +14,7 @@ import { CodeBlock } from 'fumadocs-ui/components/codeblock';
 
 *   **Define Interaction Modes:** Separate different ways of using the Kit's capabilities (e.g., setup vs. regular use vs. troubleshooting).
 *   **Assign Responsibility:** Link each interaction mode to a specific **[Agent](/concepts/profiles-agents)** (either built-in or custom).
-*   **Control Capabilities:** Specify exactly which **[Actions](/concepts/actions-execution)** are available within the context of that Profile.
+*   **Control Capabilities:** Specify exactly which **[Tools](/concepts/tools-execution)** are available within the context of that Profile.
 *   **Provide Context:** Supply relevant **Instructions** to the Agent for guidance.
 *   **Manage Conversations:** Control whether multiple concurrent chat **Sessions** are permitted for the Profile.
 
@@ -35,7 +35,7 @@ profiles:
       - name: "welcome_message"
         path: "guides/welcome.md"
         description: "Initial welcome and prerequisites."
-    actions:                    # Actions available during initialization
+    tools:                    # Tools available during initialization
       - name: "check_db_connection"
         path: "db_utils:test_connection"
         description: "Tests the database connection using provided credentials."
@@ -51,7 +51,7 @@ profiles:
       - name: "query_syntax_help"
         path: "guides/query_help.txt"
         description: "Tips on how to phrase data queries."
-    actions:
+    tools:
       - name: "run_select_query"
         path: "db_reader:safe_select"
         description: "Executes a safe, read-only SELECT query provided by the user."
@@ -62,8 +62,8 @@ profiles:
   # --- Profile 3: Maintenance ---
   maintain:
     agent: "tasker"
-    # No instructions or actions specifically defined here,
-    # might rely solely on agent's base capabilities or provided actions.
+    # No instructions or tools specifically defined here,
+    # might rely solely on agent's base capabilities or provided tools.
     # (If an agent is specified, it must exist)
 ```
 
@@ -88,17 +88,17 @@ For each profile defined under `profiles:`:
         *   `path`: (String) Path to the instruction file relative to the Kit's `instructions/` folder.
         *   `description`: (Optional, String) Description of the instruction's content.
     *   The Agent receives this information (including file content) via the `profile_data` argument in `process_request`.
-*   **`actions`:** (Optional, List of Objects)
-    *   Specifies which **[Kit Actions](/concepts/actions-execution)** (defined in the `actions/` directory) are made available as tools to the `agent` when operating under *this specific profile*.
+*   **`tools`:** (Optional, List of Objects)
+    *   Specifies which **[Kit Tools](/concepts/tools-execution)** (defined in the `tools/` directory) are made available as tools to the `agent` when operating under *this specific profile*.
     *   Each object requires:
         *   `name`: (String) The identifier the Agent/LLM uses for the tool call.
         *   `path`: (String) The locator for the Python function (`filename:function_name` or `function_name`).
-        *   `description`: (String) Crucial explanation for the LLM on what the action does and when to use it.
+        *   `description`: (String) Crucial explanation for the LLM on what the tool does and when to use it.
 
 ## Best Practices
 
 *   **Choose Meaningful Names:** Profile names should clearly indicate their purpose (e.g., `create_user`, `analyze_data`, `configure_settings`).
-*   **Scope Actions Appropriately:** Only include Actions relevant to the specific workflow of the Profile. Avoid exposing overly broad or potentially dangerous actions in profiles meant for general use.
+*   **Scope Tools Appropriately:** Only include Tools relevant to the specific workflow of the Profile. Avoid exposing overly broad or potentially dangerous tools in profiles meant for general use.
 *   **Use Instructions:** Provide clear instructions to guide the Agent, especially for complex profiles or when specific information formats are expected from the user.
 *   **Consider Session Needs:** Use `allow_multiple: true` thoughtfully for profiles where parallel, independent conversations make sense (e.g., querying different datasets, working on separate analysis tasks). Use `false` for stateful, sequential processes like initialization or configuration.
 

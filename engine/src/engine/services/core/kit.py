@@ -55,44 +55,17 @@ class InstructionItem:
 @dataclass
 class ProfileTool:
     """Profile tool definition"""
-    path: str  # Original path in format "module:function" or just "function"
     name: str
+    profile: Optional[str] = None
     description: Optional[str] = None
-    full_file_path: str = ""  # Full path to the tool file
-    function_name: str = ""  # Function name extracted from path
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "path": self.path,
             "name": self.name,
-            "description": self.description,
-            "full_file_path": self.full_file_path,
-            "function_name": self.function_name
+            "profile": self.profile,
+            "description": self.description
         }
     
-    @classmethod
-    def resolve_path(cls, path: str, kit_path: Path) -> Tuple[str, str]:
-        """
-        Resolve tool path and function name.
-        If path doesn't contain a colon, assume it's just a function name in __init__.py
-        
-        Args:
-            path: Tool path in format "module:function" or just "function"
-            kit_path: Base path to kit
-            
-        Returns:
-            Tuple of (full_file_path, function_name)
-        """
-        if ":" in path:
-            # Traditional format: path:function
-            tool_file_path, func_name = path.split(":")
-            full_file_path = str(kit_path / "tools" / f"{tool_file_path}.py")
-        else:
-            # New format: just function name, look in __init__.py
-            func_name = path
-            full_file_path = str(kit_path / "tools" / "__init__.py")
-            
-        return full_file_path, func_name
 
 @dataclass
 class Profile:
@@ -110,11 +83,7 @@ class Profile:
                 name=tool['name'],
                 description=tool.get('description')
             )
-            
-            # Use the new resolution method
-            full_file_path, func_name = ProfileTool.resolve_path(tool['path'], kit_path)
-            profile_tool.full_file_path = full_file_path
-            profile_tool.function_name = func_name
+
 
             return profile_tool
 
@@ -203,13 +172,11 @@ class KitConfig:
             # Move shared_tools to provide.tools
             tools=[
                 ProfileTool(
-                    path=tool['path'],
                     name=tool['name'],
-                    description=tool.get('description'),
-                    # Use the new path resolution logic
-                    **_resolve_tool_path(tool['path'], data['kit_path'])
+                    profile=tool.get('profile'),
+                    description=tool.get('description')
                 )
-                for tool in data.get('provide', {}).get('tool', [])
+                for tool in data.get('provide', {}).get('tools', [])
             ],
             instructions=[
                 InstructionItem(
@@ -236,7 +203,7 @@ class KitConfig:
                 EnvironmentVariable(**env) 
                 for env in data.get('environment', [])
             ],
-            image=data.get('image', 'python:3.11-slim'),
+            image=data.get('image', 'python:3.12-slim'),
             agents=[Agent.from_dict(agent) for agent in data.get('agents', [])],
             profiles={
                 name: Profile.from_dict(profile, kit_path=data['kit_path'])

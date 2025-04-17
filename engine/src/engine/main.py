@@ -1,12 +1,14 @@
+import asyncio
 import os
 import logging
+import threading
 import time
 import traceback
 from pathlib import Path
 from typing import Any, Dict, List
 import secrets
 from base64 import b64decode
-
+from rpyc import ThreadedServer
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -17,7 +19,6 @@ from loguru import logger
 from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from engine.apis.tool import ToolRouter
 
 # Import routers
 from engine.apis.chat import ChatRouter
@@ -32,18 +33,20 @@ from engine.apis.resource import ResourceRouter
 from engine.apis.profile import ProfileRouter
 from engine.auth.schemas import UserCreate, UserRead, UserUpdate
 from engine.auth.superuser import create_default_superuser
-from engine.const import BASE_DATA_DIR, KIT_BASE_DIR, REPO_BASE_DIR
+from engine.const import BASE_DATA_DIR, KIT_BASE_DIR, REPO_BASE_DIR, RPC_PORT
 from engine.db.models import User
 from engine.db.session import SessionLocal
-from engine.services.agents.base_agent import AgentServices
+from engine.services.agents.types import AgentServices
 from engine.services.core.api_key import ApiKeyService
-from engine.services.execution.tool import ToolService
+from engine.services.execution.agent_execution import AgentRunnerService
+
 
 # Import services
 from engine.services.core.kit import KitService
 from engine.services.execution.model import ModelService
 from engine.services.core.module import ModuleService
 from engine.services.core.project import ProjectService
+from engine.services.platform_rpyc_service import PlatformRPyCService
 from engine.services.storage.repository import RepoService
 from engine.services.storage.resource import ResourceService
 from engine.services.execution.state import StateService
@@ -255,14 +258,12 @@ resource_service = ResourceService(
     model_service=model_service
 )
 
-tool_service = ToolService(repo_service=repo_service)
 
 # Add this with other service initializations
 profile_service = ProfileService(
     workspace_base=str(KIT_BASE_DIR),
     module_base=str(KIT_BASE_DIR),
     module_service=module_service,
-    tool_service=tool_service,
     resource_service=resource_service,
     repo_service=repo_service,
     kit_service=kit_service
@@ -300,11 +301,6 @@ resource_router = ResourceRouter(
 # Initialize router
 model_router = ModelRouter(model_service)
 
-# Add to router initialization
-operation_router = ToolRouter(
-    tool_service=tool_service,
-    prefix="/tool"
-)
 
 # Add this with other router initializations
 profile_router = ProfileRouter(
@@ -335,7 +331,6 @@ app.include_router(repo_router.router,     dependencies=[Depends(current_active_
 app.include_router(project_router.router,     dependencies=[Depends(current_active_user)])
 app.include_router(resource_router.router,     dependencies=[Depends(current_active_user)])  # Add resource router
 app.include_router(model_router.router,     dependencies=[Depends(current_active_user)])
-app.include_router(operation_router.router,     dependencies=[Depends(current_active_user)])
 app.include_router(profile_router.router,     dependencies=[Depends(current_active_user)])
 app.include_router(embedding_router.router,     dependencies=[Depends(current_active_user)])
 
@@ -349,20 +344,32 @@ gateway_app.include_router(llm_gateway_router.router)
 app.mount("/gateway", gateway_app)
 
 
+agent_runner_service = AgentRunnerService(
+    repo_service=repo_service,
+    module_service=module_service,
+    kit_service=kit_service,
+    state_service=state_service,
+)
+
 agent_services = AgentServices(
     model_service=model_service,
     profile_service=profile_service,
     state_service=state_service,
     module_service=module_service,
-    repo_service=repo_service
+    repo_service=repo_service,
+    agent_runner_service=agent_runner_service,
 )
 
 chat_router = ChatRouter(
-    agent_services=agent_services
+    agent_services=agent_services,
+    agent_runner_service=agent_runner_service
 )
 
+
 # Include the router
-app.include_router(chat_router.router,    dependencies=[Depends(current_active_user)])
+app.include_router(chat_router.router,    
+                   dependencies=[Depends(current_active_user)]
+                   )
 
 # CORS middleware
 app.add_middleware(
@@ -374,11 +381,71 @@ app.add_middleware(
 )
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+platform_rpyc_service_instance = PlatformRPyCService(services=agent_services)
+
+# Global variable for the RPyC server thread
+rpyc_server_thread = None
+rpyc_server_instance = None
+
+def start_rpyc_server():
+    global rpyc_server_instance
+    # Get host and port from environment variables
+    rpyc_host = os.getenv("RPYC_HOST", "0.0.0.0") # Listen on all interfaces
+    rpyc_port = RPC_PORT # Default RPyC port
+
+    logger.info(f"Attempting to start RPyC ThreadedServer on {rpyc_host}:{rpyc_port}")
+
+    try:
+        rpyc_server_instance = ThreadedServer(
+            platform_rpyc_service_instance,
+            hostname=rpyc_host,
+            port=rpyc_port,
+            
+            protocol_config={
+                'allow_public_attrs': False, # More secure default
+                'allow_pickle': True,       # Avoid pickle
+                'sync_request_timeout': 300, # Timeout for requests
+            }
+        )
+        # Start blocks until the server is shut down
+        rpyc_server_instance.start()
+
+    except OSError as e:
+        logger.error(f"Failed to start RPyC server on {rpyc_host}:{rpyc_port}. Port likely in use. Error: {e}")
+    except Exception as e:
+        logger.error(f"Critical error starting RPyC server: {e}", exc_info=True)
+    finally:
+        logger.info("RPyC server thread finished.")
+
+
+
+
+
 # Startup event to initialize database
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup and run migrations"""
     try:
+        global rpyc_server_thread
         logger.info("Running database migrations...")
         
         # Use subprocess to run alembic migrations
@@ -403,6 +470,23 @@ async def startup_event():
             logger.error(f"Migration output: {result.stdout}")
             
             sys.exit(1)
+
+
+
+
+
+        # Start RPyC server in a background thread
+        logger.info("Starting RPyC server thread...")
+        rpyc_server_thread = threading.Thread(target=start_rpyc_server, daemon=True)
+        rpyc_server_thread.start()
+        # Give it a moment to start up - check logs for confirmation/errors
+        await asyncio.sleep(1) # Small delay to check logs if needed
+        if rpyc_server_thread.is_alive():
+            logger.info("RPyC server thread appears to be running.")
+        else:
+            logger.error("RPyC server thread failed to start or exited immediately. Check logs.")
+
+
     except Exception as e:
         logger.error(f"Error running migrations: {str(e)}")
         logger.error(traceback.format_exc())

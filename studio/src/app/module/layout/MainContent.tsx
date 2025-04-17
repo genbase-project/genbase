@@ -5,11 +5,17 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { Tree, NodeRendererProps } from 'react-arborist';
-import CodeEditor from '../../../components/CodeEditor';
-import { ChevronRight, ChevronDown, Box, RefreshCw, Code, Eye, Package, Expand, Minimize, Network, Plus, AlertCircle } from 'lucide-react';
+import { ChevronRight, ChevronDown, FileText, Folder, RefreshCw, Code, Eye, Package, Network, Plus, AlertCircle } from 'lucide-react';
 import RightSidebar from './provide/RightSidebar';
 import { Module } from '../../../components/TreeView';
-import MarkdownToJSX from 'markdown-to-jsx';
+import FileViewer, { isMarkdownFile } from './FileTypeMapper'; // Import the new FileViewer component
+
+
+
+
+
+import localforage from 'localforage';
+
 
 import { 
   Select,
@@ -48,13 +54,22 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
 
+// Define interface for file metadata
+interface WorkspaceFileMetadata {
+  path: string;
+  name: string;
+  mime_type?: string;
+  size: number;
+  last_modified: string;
+}
+
 interface TreeItem {
   id: string;
   name: string;
   children?: TreeItem[];
   isFolder?: boolean;
-  content?: string;
   description?: string;
+  mime_type?: string; // Add mime_type to TreeItem
 }
 
 interface ApiResponse {
@@ -71,8 +86,52 @@ interface EnvironmentVariable {
   default?: string;
 }
 
-const RESOURCE_TYPES = ['workspace', 'provide-instructions', ];
+interface FileContent {
+  data: string | ArrayBuffer;
+  mimeType: string | null;
+  isBinary: boolean;
+  fileSize?: number;
+}
 
+
+const RESOURCE_TYPES = ['workspace', 'provide-instructions'];
+
+// Function to build tree structure from flat file paths with mime type
+const buildTreeFromFilePaths = (items: WorkspaceFileMetadata[]): TreeItem[] => {
+  const root: { [key: string]: TreeItem } = {};
+
+  items.forEach(item => {
+    const parts = item.path.split('/');
+    let currentLevel = root;
+
+    parts.forEach((part, index) => {
+      const isLast = index === parts.length - 1;
+      const id = parts.slice(0, index + 1).join('/');
+
+      if (!currentLevel[id]) {
+        currentLevel[id] = {
+          id,
+          name: part,
+          isFolder: !isLast,
+          children: isLast ? undefined : [],
+          description: isLast ? undefined : undefined,
+          mime_type: isLast ? item.mime_type : undefined  // Store mime type in tree item
+        };
+
+        const parentId = parts.slice(0, index).join('/');
+        if (index > 0 && root[parentId]) {
+          root[parentId].children?.push(currentLevel[id]);
+        }
+      }
+
+      currentLevel = currentLevel[id].children ? root : {};
+    });
+  });
+
+  return Object.values(root).filter(item => !item.id.includes('/'));
+};
+
+// Function to build tree from API response for provide-instructions
 const buildTreeFromPaths = (items: ApiResponse[]): TreeItem[] => {
   const root: { [key: string]: TreeItem } = {};
 
@@ -90,7 +149,6 @@ const buildTreeFromPaths = (items: ApiResponse[]): TreeItem[] => {
           name: part,
           isFolder: !isLast,
           children: isLast ? undefined : [],
-          content: isLast ? item.content : undefined,
           description: isLast ? item.description : undefined
         };
 
@@ -107,98 +165,17 @@ const buildTreeFromPaths = (items: ApiResponse[]): TreeItem[] => {
   return Object.values(root).filter(item => !item.id.includes('/'));
 };
 
-const ContentViewer = ({ 
-  content, 
-  isMarkdown, 
-  onChange,
-  viewMode = 'code'
-}: { 
-  content: string; 
-  isMarkdown: boolean; 
-  onChange: (value: string) => void;
-  viewMode: 'preview' | 'code';
-}) => {
-  if (!isMarkdown) {
-    return (
-      <CodeEditor 
-        value={content}
-        onChange={onChange}
-      />
-    );
-  }
-
-  return viewMode === 'preview' ? (
-    <div className="h-full w-full overflow-hidden">
-      <ScrollArea className="h-full w-full overflow-auto" scrollHideDelay={0}>
-        <div className="prose max-w-none p-4">
-          <MarkdownToJSX options={{
-            overrides: {
-              h1: {
-                props: {
-                  className: 'text-2xl font-bold my-4',
-                },
-              },
-              h2: {
-                props: {
-                  className: 'text-xl font-bold my-3',
-                },
-              },
-              h3: {
-                props: {
-                  className: 'text-lg font-bold my-2',
-                },
-              },
-              p: {
-                props: {
-                  className: 'my-2',
-                },
-              },
-              ul: {
-                props: {
-                  className: 'list-disc ml-5 my-2',
-                },
-              },
-              ol: {
-                props: {
-                  className: 'list-decimal ml-5 my-2',
-                },
-              },
-              li: {
-                props: {
-                  className: 'my-1',
-                },
-              },
-              blockquote: {
-                props: {
-                  className: 'border-l-4 border-gray-200 pl-4 italic my-2',
-                },
-              },
-              code: {
-                props: {
-                  className: 'bg-gray-100 rounded px-1 font-mono text-sm',
-                },
-              },
-              pre: {
-                props: {
-                  className: 'bg-gray-100 rounded p-3 my-2 overflow-auto',
-                },
-              },
-            },
-          }}>
-            {content}
-          </MarkdownToJSX>
-        </div>
-      </ScrollArea>
-    </div>
-  ) : (
-    <CodeEditor 
-      value={content}
-      onChange={onChange}
-    />
-  );
+// Function to check if content is likely binary
+const isContentBinary = (content: string): boolean => {
+  // Check for common binary signatures or non-printable characters
+  const nonPrintableRegex = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\xFF]/;
+  
+  // If the string is too long, check just a sample
+  const sampleSize = Math.min(1000, content.length);
+  const sample = content.substring(0, sampleSize);
+  
+  return nonPrintableRegex.test(sample);
 };
-
-
 
 const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
   const [resourceStateCache, setResourceStateCache] = useState<{ 
@@ -208,23 +185,47 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
     } 
   }>({});
   
+  // Track current tab selection
   const [selectedResourceType, setSelectedResourceType] = useState<string>(RESOURCE_TYPES[0]);
+  
+  // Track selected file node
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  
+  // Store tree structure for UI
   const [treeData, setTreeData] = useState<TreeItem[]>([]);
-  const [resourceData, setResourceData] = useState<ApiResponse[]>([]);
+  
+  // Store workspace file metadata
+  const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFileMetadata[]>([]);
+  
+  // Store provide-instructions resources
+  const [provideInstructionResources, setProvideInstructionResources] = useState<ApiResponse[]>([]);
+  
+  // Track currently loaded file content (enhanced to handle binary files)
+  const [currentFileContent, setCurrentFileContent] = useState<FileContent>({
+    data: "",
+    mimeType: null,
+    isBinary: false
+  });
+  
+  // Loading states
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingContent, setIsLoadingContent] = useState(false);
+  
+  // UI state
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('code');
   const [showRelations, setShowRelations] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  
+  // Environment variable state
   const [envVarName, setEnvVarName] = useState('');
   const [envVarValue, setEnvVarValue] = useState('');
   const [kitEnvironmentVars, setKitEnvironmentVars] = useState<EnvironmentVariable[]>([]);
-  // New state for adding environment variables
   const [isAddingEnvVar, setIsAddingEnvVar] = useState(false);
   const [newEnvVarName, setNewEnvVarName] = useState('');
   const [newEnvVarValue, setNewEnvVarValue] = useState('');
+  
   const deleteInputRef = useRef<HTMLInputElement>(null);
 
   const handleEnvVarUpdate = async () => {
@@ -326,6 +327,7 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
     }
   };
 
+  // Restore cached state when module changes
   useEffect(() => {
     if (selectedModule?.module_id) {
       const cachedState = resourceStateCache[selectedModule.module_id];
@@ -339,6 +341,7 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
     }
   }, [selectedModule?.module_id]);
 
+  // Save state to cache when relevant state changes
   useEffect(() => {
     if (selectedModule?.module_id) {
       setResourceStateCache(prev => ({
@@ -351,37 +354,383 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
     }
   }, [selectedModule?.module_id, selectedResourceType, selectedNodeId]);
 
-  const fetchResources = async () => {
+
+
+
+
+
+  const getFileCacheKey = (moduleId: string, filePath: string) => {
+    return `file_${moduleId}_${filePath}`;
+  };
+  
+  // Generate a unique cache key for a file's metadata
+  const getFileMetaCacheKey = (moduleId: string, filePath: string) => {
+    return `file_meta_${moduleId}_${filePath}`;
+  };
+  
+  // Add a new state to track background loading
+  const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
+  
+  // Initial load of workspace paths - shows loading UI
+  const fetchWorkspacePaths = async () => {
     if (!selectedModule) return;
     
     setIsLoading(true);
     try {
       const response = await fetchWithAuth(
-        `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/${selectedResourceType}`
+        `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/workspace/paths`
+      );
+      const data: WorkspaceFileMetadata[] = await response.json();
+      
+      // Store the metadata of each file for caching purposes
+      data.forEach(async file => {
+        await localforage.setItem(
+          getFileMetaCacheKey(selectedModule.module_id, file.path), 
+          { lastModified: file.last_modified }
+        );
+      });
+      
+      setWorkspaceFiles(data);
+      const tree = buildTreeFromFilePaths(data);
+      setTreeData(tree);
+      
+      // Don't clear current file content on initial load
+      if (!selectedNodeId) {
+        setCurrentFileContent({
+          data: "",
+          mimeType: null,
+          isBinary: false
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching workspace paths:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Background refresh of workspace paths - doesn't show loading UI
+  const backgroundRefreshWorkspacePaths = async () => {
+    if (!selectedModule || isBackgroundLoading) return;
+    
+    setIsBackgroundLoading(true);
+    try {
+      const response = await fetchWithAuth(
+        `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/workspace/paths`
+      );
+      
+      if (!response.ok) {
+        console.error("Background refresh failed:", response.status);
+        return;
+      }
+      
+      const newData: WorkspaceFileMetadata[] = await response.json();
+      
+      // Compare with existing data to see if anything changed
+      const hasChanges = checkForFileChanges(workspaceFiles, newData);
+      
+      // Store the metadata regardless
+      newData.forEach(async file => {
+        await localforage.setItem(
+          getFileMetaCacheKey(selectedModule.module_id, file.path), 
+          { lastModified: file.last_modified }
+        );
+      });
+      
+      // Only update state if there are actual changes
+      if (hasChanges) {
+        console.log("Background refresh detected changes, updating file list");
+        
+        // Update file list but preserve the current tree expansion state
+        setWorkspaceFiles(newData);
+        const newTree = buildTreeFromFilePaths(newData);
+        setTreeData(newTree);
+        
+        // If selected file was modified, refresh its content
+        const selectedFile = newData.find(f => f.path === selectedNodeId);
+        const oldFile = workspaceFiles.find(f => f.path === selectedNodeId);
+        
+        if (selectedFile && oldFile && selectedFile.last_modified !== oldFile.last_modified) {
+          console.log("Selected file was modified, refreshing content");
+          fetchFileContentWithCache(selectedNodeId!);
+        }
+      }
+    } catch (error) {
+      console.error('Background refresh error:', error);
+    } finally {
+      setIsBackgroundLoading(false);
+    }
+  };
+  
+  // Helper function to check if file metadata changed
+  const checkForFileChanges = (oldFiles: WorkspaceFileMetadata[], newFiles: WorkspaceFileMetadata[]): boolean => {
+    // Quick check: different number of files
+    if (oldFiles.length !== newFiles.length) return true;
+    
+    // Create maps for faster lookup
+    const oldMap = new Map(oldFiles.map(f => [f.path, f]));
+    const newMap = new Map(newFiles.map(f => [f.path, f]));
+    
+    // Check if any files were added or removed
+    for (const file of oldFiles) {
+      if (!newMap.has(file.path)) return true;
+    }
+    
+    for (const file of newFiles) {
+      const oldFile = oldMap.get(file.path);
+      if (!oldFile) return true; // New file added
+      
+      // Check if file was modified
+      if (file.last_modified !== oldFile.last_modified ||
+          file.size !== oldFile.size) {
+        return true;
+      }
+    }
+    
+    return false; // No changes detected
+  };
+  
+  // Enhanced function to fetch file content with caching
+  const fetchFileContentWithCache = async (filePath: string) => {
+    if (!selectedModule) return;
+    
+    setIsLoadingContent(true);
+    try {
+      // For workspace files
+      if (selectedResourceType === 'workspace') {
+        // Check if we have metadata for this file
+        const fileMetadata = workspaceFiles.find(f => f.path === filePath);
+        const cacheKey = getFileCacheKey(selectedModule.module_id, filePath);
+        const metaCacheKey = getFileMetaCacheKey(selectedModule.module_id, filePath);
+        
+        // Check if we have cached metadata
+        const cachedMeta = await localforage.getItem(metaCacheKey) as { lastModified: string } | null;
+        const cachedContent = await localforage.getItem(cacheKey) as { 
+          data: string | ArrayBuffer,
+          mimeType: string | null,
+          isBinary: boolean
+        } | null;
+        
+        // If we have both cached content and metadata, and the last_modified hasn't changed, use cached content
+        if (
+          cachedContent && 
+          cachedMeta && 
+          fileMetadata && 
+          cachedMeta.lastModified === fileMetadata.last_modified
+        ) {
+          console.log('Using cached file content for', filePath);
+          setCurrentFileContent(cachedContent);
+          setIsLoadingContent(false);
+          return;
+        }
+        
+        // Otherwise fetch fresh content
+        const response = await fetchWithAuth(
+          `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/workspace/file?relative_path=${encodeURIComponent(filePath)}`
+        );
+        
+        if (response.ok) {
+          // Try to read as text first
+          try {
+            const textContent = await response.clone().text();
+            
+            // Check if content is binary
+            const likelyBinary = isContentBinary(textContent);
+            
+            if (likelyBinary) {
+              // If it looks binary, get the content as ArrayBuffer
+              const blob = await response.blob();
+              const reader = new FileReader();
+              
+              // Wrap the FileReader in a promise
+              const arrayBuffer = await new Promise<ArrayBuffer>((resolve) => {
+                reader.onload = () => {
+                  if (reader.result instanceof ArrayBuffer) {
+                    resolve(reader.result);
+                  }
+                };
+                reader.readAsArrayBuffer(blob);
+              });
+              
+              const newContent = {
+                data: arrayBuffer,
+                mimeType: fileMetadata?.mime_type || response.headers.get('content-type'),
+                isBinary: true
+              };
+              
+              // Update the cache
+              await localforage.setItem(cacheKey, newContent);
+              
+              setCurrentFileContent(newContent);
+            } else {
+              // If it looks like text, use the text content
+              const newContent = {
+                data: textContent,
+                mimeType: fileMetadata?.mime_type || response.headers.get('content-type'),
+                isBinary: false
+              };
+              
+              // Update the cache
+              await localforage.setItem(cacheKey, newContent);
+              
+              setCurrentFileContent(newContent);
+            }
+          } catch (e) {
+            // If text extraction fails, it's probably binary
+            const blob = await response.blob();
+            const arrayBuffer = await blob.arrayBuffer();
+            
+            const newContent = {
+              data: arrayBuffer,
+              mimeType: fileMetadata?.mime_type || response.headers.get('content-type'),
+              isBinary: true
+            };
+            
+            // Update the cache
+            await localforage.setItem(cacheKey, newContent);
+            
+            setCurrentFileContent(newContent);
+          }
+        } else {
+          console.error('Failed to fetch file content');
+          setCurrentFileContent({
+            data: "Error: Failed to load file content",
+            mimeType: "text/plain",
+            isBinary: false
+          });
+        }
+      }
+      // For provide-instructions content
+      else if (selectedResourceType === 'provide-instructions') {
+        const resource = provideInstructionResources.find(res => res.path === filePath);
+        if (resource) {
+          setCurrentFileContent({
+            data: resource.content,
+            mimeType: "text/markdown", 
+            isBinary: false
+          });
+        } else {
+          setCurrentFileContent({
+            data: "File content not found",
+            mimeType: "text/plain",
+            isBinary: false
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching file content:', error);
+      setCurrentFileContent({
+        data: `Error loading file content: ${error}`,
+        mimeType: "text/plain",
+        isBinary: false
+      });
+    } finally {
+      setIsLoadingContent(false);
+    }
+  };
+  
+  // Add a periodic refresh function that doesn't disrupt the UI
+  useEffect(() => {
+    if (!selectedModule) return;
+    
+    // Fetch files initially (visible loading)
+    fetchWorkspacePaths();
+    
+    // Set up periodic background polling (every 30 seconds)
+    const intervalId = setInterval(() => {
+      if (selectedResourceType === 'workspace') {
+        backgroundRefreshWorkspacePaths();
+      }
+    }, 30000); // 30 seconds
+    
+    // Clean up interval on unmount or module change
+    return () => clearInterval(intervalId);
+  }, [selectedModule?.module_id]);
+
+
+
+
+
+
+
+
+
+
+
+
+  // Function to fetch provide instruction resources
+  const fetchProvideInstructions = async () => {
+    if (!selectedModule) return;
+    
+    setIsLoading(true);
+    try {
+      const response = await fetchWithAuth(
+        `${ENGINE_BASE_URL}/resource/${selectedModule.module_id}/provide-instructions`
       );
       const data: ApiResponse[] = await response.json();
-      setResourceData(data);
+      setProvideInstructionResources(data);
       const tree = buildTreeFromPaths(data);
       setTreeData(tree);
     } catch (error) {
-      console.error('Error fetching resources:', error);
+      console.error('Error fetching provide-instructions resources:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
+
+  
+  
+  
+
   useEffect(() => {
-    fetchResources();
+    if (selectedResourceType === 'workspace') {
+      fetchWorkspacePaths();
+    } else if (selectedResourceType === 'provide-instructions') {
+      fetchProvideInstructions();
+    }
+    
+    // Clear selected node when changing resource type
+    setSelectedNodeId(null);
+    setCurrentFileContent({
+      data: "",
+      mimeType: null,
+      isBinary: false
+    });
   }, [selectedModule, selectedResourceType]);
+  
+  
 
-
+  // Fetch file content when a node is selected
+  useEffect(() => {
+    if (selectedNodeId) {
+      fetchFileContentWithCache(selectedNodeId);
+    } else {
+      setCurrentFileContent({
+        data: "",
+        mimeType: null,
+        isBinary: false
+      });
+    }
+  }, [selectedNodeId]);
+  
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchResources();
+    if (selectedResourceType === 'workspace') {
+      await fetchWorkspacePaths(); // Use the visible loading version for manual refresh
+    } else if (selectedResourceType === 'provide-instructions') {
+      await fetchProvideInstructions();
+    }
+    
+    // If a file is selected, refresh its content too
+    if (selectedNodeId) {
+      await fetchFileContentWithCache(selectedNodeId);
+    }
+    
     setIsRefreshing(false);
   };
-
+  
   const Node = React.forwardRef<HTMLDivElement, NodeRendererProps<TreeItem>>((props, ref) => {
     const { node, style } = props;
     const isSelected = node.id === selectedNodeId;
@@ -411,15 +760,21 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
                 <ChevronDown className="h-3 w-3 text-gray-400" /> : 
                 <ChevronRight className="h-3 w-3 text-gray-400" />
               }
+              <Folder className="h-3 w-3 text-gray-400" />
             </>
           ) : (
             <>
               <span className="w-3" />
-              <Box className="h-3 w-3 text-gray-400" />
+              <FileText className="h-3 w-3 text-gray-400" />
             </>
           )}
-          <span className="text-sm">{node.data.name}</span>
-          {isSelected && isLoading && (
+<div className="flex items-center gap-1.5 flex-1 min-w-0 ">
+  {/* Icon component here */}
+  <span className="text-sm text-gray-700 truncate  text-ellipsis whitespace-nowrap flex-1">
+    {node.data.name}
+  </span>
+</div>
+          {isSelected && isLoadingContent && (
             <RefreshCw className="h-3 w-3 text-gray-400 animate-spin ml-1" />
           )}
         </div>
@@ -430,8 +785,16 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
   Node.displayName = 'Node';
 
   const handleContentChange = (newValue: string) => {
-    if (selectedNodeId) {
-      setResourceData(prev => 
+    if (typeof currentFileContent.data === 'string') {
+      setCurrentFileContent({
+        ...currentFileContent,
+        data: newValue
+      });
+    }
+    
+    // Update the content in the cache for provide-instructions
+    if (selectedResourceType === 'provide-instructions' && selectedNodeId) {
+      setProvideInstructionResources(prev => 
         prev.map(item => 
           item.path === selectedNodeId 
             ? { ...item, content: newValue }
@@ -439,9 +802,9 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
         )
       );
     }
+    // For workspace files, we would need to implement a save mechanism
+    // that sends updated content back to the server
   };
-
-  const isMarkdownFile = (path: string) => path.toLowerCase().endsWith('.md');
 
   if (!selectedModule) {
     return (
@@ -472,6 +835,32 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
   const unsetEnvVars = getUnsetEnvironmentVars();
 
   const containerClass = "h-full flex flex-col";
+
+  // Get the selected file's mime type from tree data or workspaceFiles
+  const getSelectedFileMimeType = (): string | null => {
+    if (!selectedNodeId) return null;
+    
+    // First check if we have it in the tree data
+    const findMimeTypeInTree = (nodes: TreeItem[]): string | null => {
+      for (const node of nodes) {
+        if (node.id === selectedNodeId && node.mime_type) {
+          return node.mime_type;
+        }
+        if (node.children?.length) {
+          const childResult = findMimeTypeInTree(node.children);
+          if (childResult) return childResult;
+        }
+      }
+      return null;
+    };
+    
+    const treeNodeMimeType = findMimeTypeInTree(treeData);
+    if (treeNodeMimeType) return treeNodeMimeType;
+    
+    // If not in tree, check workspace files
+    const workspaceFile = workspaceFiles.find(f => f.path === selectedNodeId);
+    return workspaceFile?.mime_type || null;
+  };
 
   return (
     <div className={containerClass}>
@@ -790,7 +1179,7 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
               onOpenChange={setShowDeleteDialog}
               
             >
-              <AlertDialogContent  className='bg-white'>
+              <AlertDialogContent className='bg-white'>
                 <AlertDialogHeader>
                   <AlertDialogTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -834,14 +1223,10 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
                           { method: 'DELETE' }
                         );
                         
-                        
-
                         window.location.reload();
-
                       } catch (error) {
                         console.error('Error deleting module:', error);
                       }
-                 
                     }}
                     className="bg-destructive hover:bg-destructive/90 bg-red-600"
                   >
@@ -851,24 +1236,24 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
               </AlertDialogContent>
             </AlertDialog>
           </div>
-          <Select
-            value={selectedResourceType}
-            onValueChange={(value) => setSelectedResourceType(value)}
+          <Tabs 
+            value={selectedResourceType} 
+            onValueChange={setSelectedResourceType}
+            className="w-auto"
           >
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {RESOURCE_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {type}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <TabsList>
+              <TabsTrigger value="workspace" className="flex items-center gap-1">
+                <Folder className="h-4 w-4" />
+                Workspace
+              </TabsTrigger>
+              <TabsTrigger value="provide-instructions" className="flex items-center gap-1">
+                <FileText className="h-4 w-4" />
+                Provide Instructions
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         <div className="flex items-center gap-2">
-        
           {selectedNodeId && (
             <div className="flex space-x-1">
               {isMarkdownFile(selectedNodeId) && (
@@ -891,11 +1276,9 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
                   </Button>
                 </>
               )}
-           
             </div>
           )}
           <div className="flex items-center gap-2">
-         
             <button
               onClick={handleRefresh}
               className="p-2 hover:bg-slate-100 rounded-full"
@@ -904,14 +1287,14 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
               <RefreshCw className={`h-4 w-4 text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
             <Button
-            size="sm"
-            variant={showRelations ? "secondary" : "outline"}
-            onClick={() => setShowRelations(!showRelations)}
-            className="flex items-center gap-2"
-          >
-            <Network className="h-4 w-4" />
-            Provide
-          </Button>
+              size="sm"
+              variant={showRelations ? "secondary" : "outline"}
+              onClick={() => setShowRelations(!showRelations)}
+              className="flex items-center gap-2"
+            >
+              <Network className="h-4 w-4" />
+              Provide
+            </Button>
           </div>
         </div>
       </div>
@@ -920,28 +1303,39 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
       <div className="flex-1 overflow-hidden">
         <div className="h-full border rounded">
           <ResizablePanelGroup direction="horizontal" className="h-full">
-          <ResizablePanel defaultSize={20} minSize={15}>
-  <div className="h-full border-r">
-    <ScrollArea className="h-full w-full" scrollHideDelay={0}>
-      <Tree<TreeItem>
-        data={treeData}
-        width="100%"
-        height={800}
-        indent={16}
-        rowHeight={24}
-        overscanCount={1}
-      >
-        {Node}
-      </Tree>
-    </ScrollArea>
-  </div>
-</ResizablePanel>
+            <ResizablePanel defaultSize={20} minSize={15}>
+              <div className="h-full border-r">
+                <ScrollArea className="h-full w-full" scrollHideDelay={0}>
+                  {isLoading ? (
+                    <div className="p-4">
+                      <div className="animate-pulse space-y-2">
+                        {[...Array(8)].map((_, i) => (
+                          <div key={i} className="h-5 bg-gray-200 rounded"></div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <Tree<TreeItem>
+                      data={treeData}
+                      width="100%"
+                      height={800}
+                      indent={16}
+                      rowHeight={24}
+                      overscanCount={1}
+                      openByDefault={false}
+                    >
+                      {Node}
+                    </Tree>
+                  )}
+                </ScrollArea>
+              </div>
+            </ResizablePanel>
 
             <ResizableHandle withHandle />
             <ResizablePanel>
               <div className="h-full overflow-auto">
                 {selectedNodeId ? (
-                  isLoading ? (
+                  isLoadingContent ? (
                     <div className="p-4">
                       <div className="animate-pulse flex space-x-4">
                         <div className="flex-1 space-y-4 py-1">
@@ -954,17 +1348,23 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
                       </div>
                     </div>
                   ) : (
-                    <ContentViewer 
-                      key={`${selectedNodeId}-${viewMode}`}
-                      content={resourceData.find(item => item.path === selectedNodeId)?.content || '// No content available'}
-                      isMarkdown={isMarkdownFile(selectedNodeId)}
-                      onChange={handleContentChange}
-                      viewMode={viewMode}
-                    />
+                    <FileViewer 
+                    key={`${selectedNodeId}-${viewMode}`}
+                    content={currentFileContent.data}
+                    filePath={selectedNodeId}
+                    mimeType={currentFileContent.mimeType || getSelectedFileMimeType() || undefined}
+                    viewMode={viewMode}
+                    onChange={typeof currentFileContent.data === 'string' ? handleContentChange : undefined}
+                    fileSize={currentFileContent.fileSize}
+                  />
+                  
                   )
                 ) : (
-                  <div className="p-4 text-gray-500">
-                    Select a file to view its content
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="text-center p-4">
+                      <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                      <p>Select a file to view its content</p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -982,7 +1382,6 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
           </ResizablePanelGroup>
         </div>
       </div>
-
     </div>
   );
 };

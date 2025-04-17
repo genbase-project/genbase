@@ -85,6 +85,24 @@ interface BottomPanelProps {
   isMaximized: boolean;
 }
 
+interface ToolSchema {
+  type: string;
+  function: {
+    name: string;
+    description: string;
+    parameters: any;
+  };
+}
+
+// Add this to your existing interface definitions
+interface ProfileToolsResponse {
+  status: string;
+  profile: string;
+  module_id: string;
+  tools: ToolSchema[];
+}
+
+
 // --- Helper Functions ---
 const formatDate = (dateString: string) => {
   if (!dateString || isNaN(new Date(dateString).getTime())) {
@@ -122,6 +140,39 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
 
   // Zustand store for input value
   const { inputValue: storeInputValue, setInputValue: setStoreInputValue } = useChatPromptStore();
+
+  
+// Inside BottomPanel component, add this state:
+const [profileTools, setProfileTools] = useState<ToolSchema[]>([]);
+const [toolsLoading, setToolsLoading] = useState(false);
+
+// Add a function to fetch tools for a profile
+const fetchProfileTools = async (moduleId: string, profileName: string) => {
+  if (!moduleId || !profileName) return;
+  
+  setToolsLoading(true);
+  try {
+    const response = await fetchWithAuth(
+      `${ENGINE_BASE_URL}/chat/${moduleId}/profile/${profileName}/tools`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch tools: ${response.statusText}`);
+    }
+    
+    const data: ProfileToolsResponse = await response.json();
+    if (data.status === "success" && Array.isArray(data.tools)) {
+      setProfileTools(data.tools);
+    } else {
+      setProfileTools([]);
+    }
+  } catch (error) {
+    console.error('Error fetching profile tools:', error);
+    setProfileTools([]);
+  } finally {
+    setToolsLoading(false);
+  }
+};
 
   // Scrolling functions for tabs
   const scrollLeft = () => {
@@ -353,142 +404,174 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
   // Determine if send button should be enabled
   const canSend = !isLoading && !!storeInputValue.trim() && !!currentProfile && (!!currentSession || !!pendingSessionId);
 
-  // Main Render
-  return (
-    <div className={`${isFullscreen ? 'fixed inset-4 bg-white shadow-2xl rounded-lg z-50' : 'h-full'} flex flex-col overflow-hidden border border-gray-200`}>
-      {/* Top Bar */}
-      <div className={`border-b bg-gray-50 ${isFullscreen ? 'rounded-t-lg' : ''} flex flex-col shrink-0`}>
-        {/* Profile Selector Row */}
-        <div className="px-4 py-2 flex items-center gap-2 border-b">
-           <TooltipProvider delayDuration={300}>
-             <Tooltip>
-               <TooltipTrigger asChild>
-                 <Dialog open={isProfileDetailsOpen} onOpenChange={setIsProfileDetailsOpen}>
-                   <DropdownMenu>
-                     <DropdownMenuTrigger asChild>
-                       <Button
-                         variant="outline"
-                         size="sm"
-                         className="flex items-center gap-2 h-8 bg-white shadow-sm hover:bg-gray-50"
-                         disabled={profiles.length === 0 && !selectedModule}
-                       >
-                         <AgentIcon className="h-3.5 w-3.5 text-blue-500" />
-                         <span className="capitalize font-medium truncate max-w-[120px]">
-                           {currentProfile || (profiles.length === 0 ? "Loading..." : "Select Profile")}
-                         </span>
-                         <ChevronDown className="h-3.5 w-3.5 opacity-70 ml-auto" />
-                       </Button>
-                     </DropdownMenuTrigger>
-                     <DropdownMenuContent align="start" className="w-[180px]">
-                       {profiles.length === 0 && <DropdownMenuItem disabled>No profiles found</DropdownMenuItem>}
-                       {profiles.map((profile) => (
-                         <DropdownMenuItem
-                           key={profile.profile_type}
-                           className="flex items-center justify-between gap-2 capitalize"
-                           onClick={() => setCurrentProfile(profile.profile_type)}
-                         >
-                           <span className="truncate">{profile.profile_type}</span>
-                         </DropdownMenuItem>
-                       ))}
-                     </DropdownMenuContent>
-                   </DropdownMenu>
+// Main Render
+return (
+  <div className={`${isFullscreen ? 'fixed inset-4 bg-white shadow-2xl rounded-lg z-50' : 'h-full'} flex overflow-hidden border border-gray-200`}>
+    {/* Left Sidebar */}
+    <div className="w-60 border-r flex flex-col bg-white">
+      {/* Profile Selector */}
+      <div className="p-3 pb-2  border-neutral-200">
+        <div className="flex items-center justify-between">
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Dialog open={isProfileDetailsOpen} onOpenChange={setIsProfileDetailsOpen}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex items-center gap-2 h-9 w-[160px] hover:bg-neutral-50 justify-between"
+                        disabled={profiles.length === 0 && !selectedModule}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <AgentIcon className="h-4 w-4 text-neutral-600 flex-shrink-0" />
+                          <span className="capitalize font-medium truncate text-neutral-800">
+                            {currentProfile || (profiles.length === 0 ? "Loading..." : "Select Profile")}
+                          </span>
+                        </div>
+                        <ChevronDown className="h-3.5 w-3.5 text-neutral-500 flex-shrink-0" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-[180px]">
+                      {profiles.length === 0 && <DropdownMenuItem disabled>No profiles found</DropdownMenuItem>}
+                      {profiles.map((profile) => (
+                        <DropdownMenuItem
+                          key={profile.profile_type}
+                          className="flex items-center justify-between gap-2 capitalize"
+                          onClick={() => setCurrentProfile(profile.profile_type)}
+                        >
+                          <span className="truncate">{profile.profile_type}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
 
-                   {currentProfileData && (
-                     <DialogTrigger asChild>
-                       <Button
-                         variant="ghost"
-                         size="icon"
-                         className="ml-1 h-8 w-8 p-0"
-                         onClick={() => setIsProfileDetailsOpen(true)}
-                         title="View profile details"
-                       >
-                         <BadgeInfo className="h-4 w-4 text-gray-500" />
-                       </Button>
-                     </DialogTrigger>
-                   )}
-
-                   {/* Profile Details Dialog Content */}
-                   {currentProfileData && (
-                     <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0">
-                       <DialogHeader className="p-6 pb-4 border-b">
-                         <DialogTitle className="flex items-center gap-3">
-                           <span className="capitalize">{currentProfileData.profile_type} Profile</span>
-                            {currentProfileData.agent_type && (
-                                <Badge variant="secondary" className="flex items-center gap-1 text-xs">
-                                <AgentIcon className="h-3 w-3" />
-                                {currentProfileData.agent_type}
-                                </Badge>
+                  {currentProfileData && (
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="ml-1 h-9 w-9 p-0 hover:bg-neutral-50 rounded-full"
+                        onClick={() => {
+                          setIsProfileDetailsOpen(true);
+                          if (selectedModule?.module_id && currentProfile) {
+                            fetchProfileTools(selectedModule.module_id, currentProfile);
+                          }
+                        }}
+                        title="View profile details"
+                      >
+                        <BadgeInfo className="h-4 w-4 text-neutral-500" />
+                      </Button>
+                    </DialogTrigger>
+                  )}
+                  
+                  {/* Profile Details Dialog Content */}
+                  {currentProfileData && (
+                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0">
+                      <DialogHeader className="p-6 pb-4 border-b">
+                        <DialogTitle className="flex items-center gap-3">
+                          <span className="capitalize">{currentProfileData.profile_type} Profile</span>
+                          {currentProfileData.agent_type && (
+                            <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+                              <AgentIcon className="h-3 w-3" />
+                              {currentProfileData.agent_type}
+                            </Badge>
+                          )}
+                          {currentProfileData.kit_config?.agent && !currentProfileData.agent_type && (
+                            <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+                              <AgentIcon className="h-3 w-3" />
+                              {currentProfileData.kit_config.agent} (Kit)
+                            </Badge>
+                          )}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <Tabs defaultValue="tools" className="flex-1 overflow-hidden flex flex-col">
+                        <div className="px-6 pt-4">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="tools" className="text-xs flex items-center justify-center gap-1">
+                              <BotMessageSquare className="h-3.5 w-3.5"/> 
+                              Tools {toolsLoading ? (
+                                <span className="ml-1">
+                                  <Loader2 className="h-3 w-3 inline animate-spin" />
+                                </span>
+                              ) : (
+                                <span>({profileTools.length})</span>
+                              )}
+                            </TabsTrigger>
+                            <TabsTrigger value="requirements" className="text-xs flex items-center justify-center gap-1">
+                              <PackageCheck className="h-3.5 w-3.5"/> Requirements ({currentProfileData.metadata?.requirements?.length ?? 0})
+                            </TabsTrigger>
+                          </TabsList>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 pt-4">
+                          <TabsContent value="tools" className="m-0 space-y-3">
+                            {toolsLoading ? (
+                              <div className="flex justify-center items-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                                <span className="ml-2 text-sm text-gray-500">Loading tools...</span>
+                              </div>
+                            ) : profileTools.length > 0 ? (
+                              profileTools.map((tool, idx) => (
+                                <div key={`tool-${idx}`} className="p-3 border rounded-md bg-gray-50">
+                                  <p className="text-sm font-medium text-blue-700 flex items-center gap-1.5">
+                                    <BotMessageSquare className="h-3.5 w-3.5"/>
+                                    {tool.function.name || "Unnamed Tool"}
+                                  </p>
+                                  {tool.function.description && (
+                                    <p className="mt-1 text-xs text-gray-600 pl-5">
+                                      {tool.function.description}
+                                    </p>
+                                  )}
+                                  {tool.function.parameters && Object.keys(tool.function.parameters.properties || {}).length > 0 && (
+                                    <div className="mt-2 pl-5">
+                                      <p className="text-xs font-medium text-gray-600">Parameters:</p>
+                                      <div className="mt-1 space-y-1">
+                                        {Object.entries(tool.function.parameters.properties || {}).map(([paramName, paramInfo]: [string, any]) => (
+                                          <div key={paramName} className="text-xs">
+                                            <span className="font-mono text-blue-600">{paramName}</span>
+                                            {paramInfo.description && (
+                                              <span className="text-gray-500 ml-1">: {paramInfo.description}</span>
+                                            )}
+                                            {paramInfo.type && (
+                                              <span className="text-gray-400 ml-1">({paramInfo.type})</span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-sm text-gray-500 text-center py-6 italic">No tools available for this profile.</p>
                             )}
-                            {currentProfileData.kit_config?.agent && !currentProfileData.agent_type && (
-                                <Badge variant="secondary" className="flex items-center gap-1 text-xs">
-                                <AgentIcon className="h-3 w-3" />
-                                {currentProfileData.kit_config.agent} (Kit)
-                                </Badge>
+                          </TabsContent>
+                          <TabsContent value="requirements" className="m-0">
+                            {(currentProfileData.metadata?.requirements ?? []).length > 0 ? (
+                              <div className="flex flex-wrap gap-2 pt-2">
+                                {currentProfileData.metadata.requirements.map((req, idx) => (
+                                  <Badge key={`req-${idx}`} variant="outline" className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-normal">
+                                    <PackageCheck className="h-3.5 w-3.5" />
+                                    {req}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 text-center py-6 italic">No requirements specified.</p>
                             )}
-                         </DialogTitle>
-                       </DialogHeader>
-                        <Tabs defaultValue="tools" className="flex-1 overflow-hidden flex flex-col">
-                           <div className="px-6 pt-4">
-                             <TabsList className="grid w-full grid-cols-2">
-                               <TabsTrigger value="tools" className="text-xs flex items-center justify-center gap-1">
-                                    <BotMessageSquare className="h-3.5 w-3.5"/> Tools ({currentProfileData.metadata?.tools?.length ?? 0})
-                               </TabsTrigger>
-                               <TabsTrigger value="requirements" className="text-xs flex items-center justify-center gap-1">
-                                    <PackageCheck className="h-3.5 w-3.5"/> Requirements ({currentProfileData.metadata?.requirements?.length ?? 0})
-                                </TabsTrigger>
-                             </TabsList>
-                           </div>
-                           <div className="flex-1 overflow-y-auto p-6 pt-4">
-                             <TabsContent value="tools" className="m-0 space-y-3">
-                               {(currentProfileData.metadata?.tools ?? []).length > 0 ? (
-                                 currentProfileData.metadata.tools.map((toolItem, idx) => {
-                                   const tool = toolItem.tool;
-                                   if (!tool) return null;
-                                   return (
-                                     <div key={`tool-${idx}`} className="p-3 border rounded-md bg-gray-50/50">
-                                       <p className="text-sm font-medium text-blue-700 flex items-center gap-1.5">
-                                          <BotMessageSquare className="h-3.5 w-3.5"/>
-                                          {tool.name || "Unnamed Tool"}
-                                       </p>
-                                       {tool.description && (
-                                         <p className="mt-1 text-xs text-gray-600 pl-5">
-                                           {tool.description}
-                                         </p>
-                                       )}
-                                     </div>
-                                   );
-                                 })
-                               ) : (
-                                 <p className="text-sm text-gray-500 text-center py-6 italic">No tools defined for this profile.</p>
-                               )}
-                             </TabsContent>
-                             <TabsContent value="requirements" className="m-0">
-                               { (currentProfileData.metadata?.requirements ?? []).length > 0 ? (
-                                 <div className="flex flex-wrap gap-2 pt-2">
-                                   {currentProfileData.metadata.requirements.map((req, idx) => (
-                                     <Badge key={`req-${idx}`} variant="outline" className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-normal">
-                                       <PackageCheck className="h-3.5 w-3.5" />
-                                       {req}
-                                     </Badge>
-                                   ))}
-                                 </div>
-                               ) : (
-                                 <p className="text-sm text-gray-500 text-center py-6 italic">No requirements specified.</p>
-                               )}
-                             </TabsContent>
-                           </div>
-                        </Tabs>
-                     </DialogContent>
-                   )}
-                 </Dialog>
-               </TooltipTrigger>
-               <TooltipContent side="bottom">
-                 <p>{currentProfile ? `View/Switch Profile (${currentProfile})` : "Select Profile"}</p>
-               </TooltipContent>
-             </Tooltip>
-           </TooltipProvider>
-
-          <div className="flex-1"></div>
+                          </TabsContent>
+                        </div>
+                      </Tabs>
+                    </DialogContent>
+                  )}
+                </Dialog>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>{currentProfile ? `View/Switch Profile (${currentProfile})` : "Select Profile"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <TooltipProvider delayDuration={300}>
             <Tooltip>
@@ -496,10 +579,10 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 p-0"
+                  className="h-9 w-9 p-0 hover:bg-neutral-50 rounded-full"
                   onClick={toggleViewMode}
                 >
-                  {isFullscreen ? <Minimize className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
+                  {isFullscreen ? <Minimize className="h-4 w-4 text-neutral-500" /> : <Expand className="h-4 w-4 text-neutral-500" />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
@@ -514,52 +597,44 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
             </Tooltip>
           </TooltipProvider>
         </div>
+      </div>
 
-        {/* Session Tabs Row */}
-        <div className="relative flex items-center border-b bg-white">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 w-8 p-0 flex-shrink-0 rounded-none border-r hover:bg-gray-100 z-10"
-            onClick={scrollLeft}
-            aria-label="Scroll tabs left"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-
-          <div
-            ref={tabsRef}
-            className="flex-1 overflow-x-auto scrollbar-hide flex items-center h-9"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {currentProfileData?.allow_multiple && (
-              <button
-                className={`flex-shrink-0 h-full px-3 flex items-center gap-1.5 border-r text-xs font-medium transition-colors ${
-                  pendingSessionId
-                    ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-500'
-                    : 'hover:bg-gray-100 text-gray-600'
-                }`}
-                onClick={() => {
-                  setPendingSessionId('pending');
-                  setCurrentSession(null);
-                  setChatMessages([]);
-                }}
-                disabled={!currentProfile}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New
-              </button>
-            )}
-
+      {/* Sessions List */}
+      <div className="flex-1 overflow-y-auto pt-3">
+        <div className="px-3 pb-2">
+          <p className="text-xs font-semibold text-neutral-500 px-3 mb-2">Sessions</p>
+          
+          {/* New Session Button */}
+          {currentProfileData?.allow_multiple && (
+            <button
+              className={`w-full mb-2 px-3 py-2 flex items-center gap-1.5 text-sm font-normal rounded-md transition-colors ${
+                pendingSessionId
+                  ? 'bg-neutral-50 text-neutral-800'
+                  : 'hover:bg-neutral-50 text-neutral-700'
+              }`}
+              onClick={() => {
+                setPendingSessionId('pending');
+                setCurrentSession(null);
+                setChatMessages([]);
+              }}
+              disabled={!currentProfile}
+            >
+              <Plus className="h-4 w-4" />
+              New Session
+            </button>
+          )}
+          
+          {/* Session List */}
+          <div className="space-y-0.5">
             {sessions.map((session) => {
               const isActive = !pendingSessionId && currentSession === session.session_id;
               return (
                 <button
                   key={session.session_id}
-                  className={`flex-shrink-0 h-full px-3 border-r cursor-pointer transition-colors ${
+                  className={`w-full px-3 py-2 rounded-md text-left transition-colors ${
                     isActive
-                      ? 'bg-white border-b-2 border-blue-500'
-                      : 'hover:bg-gray-100'
+                      ? 'bg-neutral-50 text-neutral-800'
+                      : 'hover:bg-neutral-50 text-neutral-700'
                   }`}
                   onClick={() => {
                     setPendingSessionId(null);
@@ -567,48 +642,43 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
                   }}
                   title={`Session from ${formatDate(session.last_updated)}\nLast message: ${session.last_message}`}
                 >
-                  <div className="flex items-center gap-1.5 max-w-xs">
-                    <MessageSquare className={`h-3 w-3 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
-                    <div className="flex flex-col items-start">
-                      <span className={`text-xs font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-700'}`}>
-                        {session.is_default ? "Default" : formatDate(session.last_updated)}
-                      </span>
+                  <div className="flex items-center gap-1.5 max-w-full">
+                    <div className="flex flex-col items-start overflow-hidden">
+                
                       {session.last_message && (
-                         <span className="text-[10px] text-gray-500 truncate mt-[-2px]">
-                           {truncateText(session.last_message, 25)}
-                         </span>
-                       )}
+                        <span className="text-sm  truncate w-full">
+                          {truncateText(session.last_message, 25)}
+                        </span>
+                      )}
+                            <span className={`text-xs font-normal   text-neutral-500 truncate w-full`}>
+                        {session.is_default ? "Default Session" : formatDate(session.last_updated)}
+                      </span>
                     </div>
                   </div>
                 </button>
               );
             })}
-             {sessions.length === 0 && !currentProfileData?.allow_multiple && !pendingSessionId && currentProfile && (
-                 <div className="h-full px-3 flex items-center text-xs text-gray-400 italic">
-                     No sessions. Send a message to start.
-                 </div>
-             )}
-              {sessions.length === 0 && !currentProfile && (
-                 <div className="h-full px-3 flex items-center text-xs text-gray-400 italic">
-                     Select a profile to view sessions.
-                 </div>
-             )}
           </div>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 w-8 p-0 flex-shrink-0 rounded-none border-l hover:bg-gray-100 z-10"
-            onClick={scrollRight}
-             aria-label="Scroll tabs right"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          
+          {/* Session Status Messages */}
+          {sessions.length === 0 && !currentProfileData?.allow_multiple && !pendingSessionId && currentProfile && (
+            <div className="p-3 text-xs text-neutral-500 italic text-center">
+              No sessions. Send a message to start.
+            </div>
+          )}
+          {sessions.length === 0 && !currentProfile && (
+            <div className="p-3 text-xs text-neutral-500 italic text-center">
+              Select a profile to view sessions.
+            </div>
+          )}
         </div>
       </div>
+    </div>
 
-      {/* Main Content Area (Chat) */}
-      <div className="flex-1 min-h-0 overflow-hidden bg-gray-50">
+    {/* Main Content */}
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Chat Area */}
+      <div className="flex-1 min-h-0 overflow-hidden bg-white">
         {pendingSessionId ? (
           <div className="h-full flex flex-col items-center justify-center space-y-3 text-gray-500 px-4">
             <MessageSquare className="w-10 h-10 text-gray-400 mb-1" strokeWidth={1.5} />
@@ -623,30 +693,30 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
             onMessagesUpdate={handleMessagesUpdate}
           />
         ) : (
-            <div className="h-full flex flex-col items-center justify-center space-y-3 text-gray-500 px-4">
-                 <MessageSquare className="w-10 h-10 text-gray-400 mb-1" strokeWidth={1.5} />
-                 <h3 className="text-md font-medium text-gray-700">
-                    {currentProfile ? "No Session Selected" : "Select Profile and Session"}
-                 </h3>
-                 <p className="text-sm text-gray-500 text-center">
-                    {currentProfile ? "Select a session tab above or start a new one." : "Choose a profile to see available sessions."}
-                 </p>
-           </div>
+          <div className="h-full flex flex-col items-center justify-center space-y-3 text-gray-500 px-4">
+            <MessageSquare className="w-10 h-10 text-gray-400 mb-1" strokeWidth={1.5} />
+            <h3 className="text-md font-medium text-gray-700">
+              {currentProfile ? "No Session Selected" : "Select Profile and Session"}
+            </h3>
+            <p className="text-sm text-gray-500 text-center">
+              {currentProfile ? "Select a session from the sidebar or start a new one." : "Choose a profile to see available sessions."}
+            </p>
+          </div>
         )}
       </div>
 
-      {/* Input Area - Redesigned */}
-      <div className="p-4 bg-gray-50 border-0  shrink-0">
-         {error && ( // Display general errors
-           <Alert variant="destructive" className="mb-3">
-             <AlertCircle className="h-4 w-4" />
-             <AlertDescription className="text-xs">
-               {error}
-             </AlertDescription>
-           </Alert>
-         )}
-        {/* Container with relative positioning */}
-        <div className="relative w-full  mx-auto">
+      {/* Input Area */}
+      <div className="p-4 bg-white border-0 border-neutral-200 shrink-0">
+        {error && (
+          <Alert variant="destructive" className="mb-3">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        <div className="relative w-full mx-auto bg-neutral-50">
           <Textarea
             ref={textareaRef}
             value={storeInputValue}
@@ -660,48 +730,44 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
               }
             }}
             placeholder={
-                !currentProfile ? "Select a profile to begin..." :
-                (!currentSession && !pendingSessionId && !currentProfileData?.allow_multiple) ? "Send a message to start the default session..." :
-                (!currentSession && !pendingSessionId && currentProfileData?.allow_multiple) ? "Select or start a new session..." :
-                 "Send a message..." // Simplified placeholder
+              !currentProfile ? "Select a profile to begin..." :
+              (!currentSession && !pendingSessionId && !currentProfileData?.allow_multiple) ? "Send a message to start the default session..." :
+              (!currentSession && !pendingSessionId && currentProfileData?.allow_multiple) ? "Select or start a new session..." :
+               "Send a message..."
             }
             disabled={isLoading || !currentProfile || (!currentSession && !pendingSessionId)}
             className="
-              w-full resize-none min-h-[52px] max-h-[200px] text-sm shadow-sm
-              border border-gray-300 rounded-lg  /* Outer appearance */
-              bg-white /* Use white or gray-50 */
-              focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:border-blue-500 /* Focus style */
-              pl-3 pr-14 py-3 /* Padding: left, RIGHT (for button), top/bottom */
-              overflow-y-auto /* Ensure scrolling works within textarea */
+              w-full resize-none min-h-[52px] max-h-[200px] text-sm 
+               border-0 rounded-lg
+              
+              focus-visible:ring-1 focus-visible:ring-neutral-400 focus-visible:border-neutral-400
+              pl-3 pr-14 py-3
+              overflow-y-auto
             "
             rows={1}
-            style={{
-                // Height is managed by adjustTextareaHeight, but overflow needs to be auto/scroll
-            }}
           />
           <Button
             onClick={() => handleSend(storeInputValue)}
-            disabled={!canSend || isLoading} // Use combined canSend flag
+            disabled={!canSend || isLoading}
             size="icon"
             className={`
               absolute bottom-2 right-2 h-8 w-8 rounded-full z-10
-              ${canSend ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
+              ${canSend ? 'bg-blue-600 text-white' : 'bg-neutral-50 text-neutral-400 cursor-not-allowed'}
               transition-colors
-            `} // Positioned bottom-right, circular, Z-index
+            `}
             aria-label="Send message"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              // Use ArrowUp or Send icon
               <ArrowUp className="h-4 w-4" />
-              // <Send className="h-4 w-4" />
             )}
           </Button>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default BottomPanel;

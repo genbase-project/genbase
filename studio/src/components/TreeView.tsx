@@ -5,6 +5,7 @@ import { ChevronRight, ChevronDown, Plus, Pencil, Box, Search, Moon, Sun } from 
 import { ScrollArea, ScrollBar } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Input } from './ui/input';
+import { OpenMap } from 'react-arborist/dist/module/state/open-slice';
 
 export interface EnvVar {
   name: string;
@@ -62,6 +63,7 @@ export interface TreeViewProps {
   onRename?: (moduleId: string, currentName: string) => void;
   isLoading?: boolean;
   selectedModuleId?: string | null;
+  defaultOpened?: boolean; // Add this new prop
 }
 
 // Helper function to recursively filter tree nodes
@@ -94,10 +96,20 @@ export const TreeView: React.FC<TreeViewProps> = ({
   onEditPath,
   onRename,
   isLoading = false,
-  selectedModuleId = null
+  selectedModuleId = null,
+  defaultOpened = true,
 }) => {
   const [searchText, setSearchText] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(true);
+
+
+  const initialOpenState = useMemo(() => {
+    const openMap: OpenMap = {};
+    // If defaultOpened is true, we could populate with open nodes
+    // Otherwise leave empty for all closed
+    return openMap;
+  }, [defaultOpened]);
+
 
   const filteredData = useMemo(() => {
     if (!searchText.trim()) return data;
@@ -317,6 +329,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
                   indent={16}
                   rowHeight={32}
                   overscanCount={5}
+               initialOpenState={initialOpenState}
                 >
                   {Node}
                 </Tree>

@@ -5,12 +5,14 @@ interface CodeEditorProps {
   language?: string;
   value?: string;
   onChange?: (value: string) => void;
+  readOnly?: boolean;
 }
 
 const CodeEditor: React.FC<CodeEditorProps> = ({ 
   language = 'javascript',
   value = '// Start coding here',
-  onChange 
+  onChange ,
+  readOnly = true
 }) => {
   const handleEditorChange = (value: string | undefined) => {
     if (onChange && value !== undefined) {

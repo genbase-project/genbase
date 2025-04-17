@@ -1,0 +1,54 @@
+{
+    "supported_content_types": [
+      {
+        "type": "text/plain",
+        "description": "Simple plain text.",
+        "notes": []
+      },
+      {
+        "type": "text/markdown",
+        "description": "Markdown formatted text.",
+        "notes": []
+      },
+      {
+        "type": "text/html",
+        "description": "HTML content for rich formatting or UI elements. Requires a sandboxed renderer for safety.",
+        "notes": ["Security risk: requires sandboxing/sanitization."]
+      },
+      {
+        "type": "application/json",
+        "description": "Raw JSON data.",
+        "notes": []
+      },
+      {
+        "type": "image/png",
+        "description": "PNG image file.",
+        "notes": ["Content must be Base64 encoded. Use type='image/png;encoding=base64'."]
+      },
+      {
+        "type": "image/jpeg",
+        "description": "JPEG image file.",
+        "notes": ["Content must be Base64 encoded. Use type='image/jpeg;encoding=base64'."]
+      },
+      {
+        "type": "image/gif",
+        "description": "GIF image file.",
+        "notes": ["Content must be Base64 encoded. Use type='image/gif;encoding=base64'."]
+      },
+      {
+        "type": "image/svg+xml",
+        "description": "SVG image file (XML vector graphics).",
+        "notes": []
+      },
+      {
+        "type": "text/vnd.mermaid",
+        "description": "Mermaid diagram definition (https://mermaid.js.org/). Requires a Mermaid renderer.",
+        "notes": []
+      },
+      {
+        "type": "application/vnd.vegalite.v5+json",
+        "description": "Vega-Lite chart specification (https://vega.github.io/vega-lite/). Requires a Vega-Lite renderer.",
+        "notes": []
+      }
+    ]
+  }

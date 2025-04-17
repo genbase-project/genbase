@@ -198,42 +198,6 @@ class ProfileRouter:
             raise HTTPException(status_code=400, detail=str(e))
 
 
-# TODO: Check if this is needed
-    async def _execute_profile_tool( 
-        self,
-        module_id: str = Query(..., description="Module ID"),
-        profile: str = Query(..., description="profile (initialize/maintain/remove/edit)"),
-        step_name: str = Query(..., description="Name of the step to execute"),
-        request: ExecuteStepRequest = None,
-        session_id: Optional[str] = Query(None, description="Optional session ID")
-    ) -> Dict[str, Any]:
-        """
-        Execute a profile step with provided parameters.
-
-        This endpoint executes a specific step in a profile. The step must be available
-        in the profile's configuration. Parameters for the step can be provided in the
-        request body.
-
-        If no parameters are provided, an empty parameter set will be used.
-        
-        Returns:
-            Dict[str, Any]: Execution result containing:
-                - result: The result of the execution
-                May also include error details if execution fails
-        """
-        try:
-            if request is None:
-                request = ExecuteStepRequest()
-
-            result = self.service.execute_profile_tool(
-                tool_name=step_name,
-                parameters=request.parameters
-            )
-            return {"result": result}
-        except ProfileError as e:
-            logger.error(f"Failed to execute step {step_name} in profile {profile} for module {module_id}: {str(e)}")
-            raise HTTPException(status_code=400, detail=str(e))
-
     async def _get_profile_sessions(
         self,
         module_id: str = Query(..., description="Module ID"),
@@ -314,14 +278,6 @@ class ProfileRouter:
             description="Get list of chat sessions including their IDs and latest messages"
         )
 
-        self.router.add_api_route(
-            "/execute",
-            self._execute_profile_tool,
-            methods=["POST"],
-            response_model=Dict[str, Any],
-            summary="Execute a specific step in a profile",
-            description="Execute a profile step with optional parameters provided in the request body"
-        )
 
         self.router.add_api_route(
             "/profiles",

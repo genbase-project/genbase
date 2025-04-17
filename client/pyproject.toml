@@ -1,0 +1,47 @@
+[project]
+name = "genbase-client"
+version = "0.1.6"
+description = "RPyC client library for building Genbase agents."
+authors = [
+    {name = "Genbase", email = "utkarshkanwat@email.com"},
+]
+dependencies = [
+    "rpyc>=6.0.1",
+    "pydantic>=2.0.0",
+    "loguru>=0.7.0",
+    "litellm>=1.35.0",    # For ModelResponse, ChatCompletionMessageToolCall types
+    "dataclasses-json>=0.6.0", # Useful for dataclass serialization if needed
+]
+requires-python = ">=3.9"
+readme = "README.md"
+license = {file = "LICENSE"} # Or {text = "MIT"} if using a standard short identifier
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+
+[project.urls]
+Homepage = "https://github.com/genbase-project/genbase"
+
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[dependency-groups]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+    "mock>=5.0.0",
+    "twine",
+]
+dev = [
+    "twine>=6.1.0",
+]

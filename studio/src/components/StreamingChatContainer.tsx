@@ -119,7 +119,7 @@ const ToolResultDisplay = ({ message }: { message: Message }) => {
   const isError = typeof resultData === 'object' && resultData !== null && ('error' in resultData || 'parse_error' in resultData);
 
   return (
-    <Card className={`mt-1.5 mb-1.5 shadow-sm ${isError ? 'bg-red-50/50 border-red-200' : 'bg-green-50/50 border-green-200'}`}>
+    <Card className={`mt-1.5 mb-1.5 mx-4   shadow-sm ${isError ? 'bg-red-50/50 border-red-200' : 'bg-green-50/50 border-green-200'}`}>
       <CardContent className="p-2">
         <div className="flex items-center gap-1.5 mb-1">
            {isError ? ( <XCircle className="w-3.5 h-3.5 text-red-600" /> )
@@ -152,6 +152,7 @@ const StreamingChatContainer = ({ moduleId, profile, sessionId, onMessagesUpdate
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null); // This stays the same
   const eventSourceRef = useRef<EventSource | null>(null);
   const stableOnMessagesUpdate = useCallback((newMessages: Message[]) => {
       if (onMessagesUpdate) {
@@ -243,8 +244,8 @@ const StreamingChatContainer = ({ moduleId, profile, sessionId, onMessagesUpdate
                 try {
                     const data = JSON.parse(msgEvent.data);
                     if (data.history && Array.isArray(data.history)) {
-                        setMessages(data.history);
-                        stableOnMessagesUpdate(data.history);
+                        setMessages([]);
+                        stableOnMessagesUpdate([]);
                     } else {
                         console.warn("SSE Data: 'initial' event received, but history data is missing or invalid.", data);
                     }
@@ -322,6 +323,8 @@ const StreamingChatContainer = ({ moduleId, profile, sessionId, onMessagesUpdate
   }, [moduleId, profile, sessionId, stableOnMessagesUpdate]);
 
 
+  
+
   useEffect(() => {
      if (scrollRef.current) {
        const scrollContainer = document.getElementById('chat-scroll-container');
@@ -389,7 +392,7 @@ const StreamingChatContainer = ({ moduleId, profile, sessionId, onMessagesUpdate
 
   return (
     // **** ADDED h-full HERE ****
-    <ScrollArea className="h-full overflow-x-hidden bg-gray-50" id="chat-scroll-container">
+    <ScrollArea className="h-full overflow-x-hidden bg-white" id="chat-scroll-container">
       {error && (
         <Alert variant="destructive" className="m-4 sticky top-0 z-10">
           <AlertCircle className="h-4 w-4" />
@@ -413,7 +416,7 @@ const StreamingChatContainer = ({ moduleId, profile, sessionId, onMessagesUpdate
       )}
 
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4"           ref={viewportRef} >
         {messages.length === 0 && !error && !isConnecting && (
           <div className="flex flex-col items-center justify-center pt-10 text-gray-500">
             <MessageSquare className="w-12 h-12 mb-3 text-gray-400" strokeWidth={1}/>
@@ -434,29 +437,30 @@ const StreamingChatContainer = ({ moduleId, profile, sessionId, onMessagesUpdate
           // Render user or assistant message
           return (
             <div
-              key={`message-${index}`} // Consider using a more stable ID if available from backend
-              className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
+              key={`message-${index}`}
+              className="w-full mb-2"
             >
-              <div
-                 className={`max-w-[85%] md:max-w-[75%] px-3 py-1.5 rounded-lg shadow-sm ${
-                    message.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-800 border border-gray-200'
-                  }`}
-              >
-                 {/* Render message content using Markdown */}
-                 {message.content && (
-                    <div className="prose prose-sm max-w-none text-inherit prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:my-1.5 prose-blockquote:my-1.5">
-                       <Markdown options={{ overrides: markdownOverrides, forceWrapper: true }}>
-                          {message.content}
-                       </Markdown>
-                    </div>
-                 )}
-
-                 {/* Render tool calls for assistant messages */}
-                 {message.role === 'assistant' && message.tool_calls?.map((toolCall) => (
-                    <ToolCallDisplay key={toolCall.id} toolCall={toolCall} />
-                 ))}
+              <div className={`w-full py-2 px-4 rounded-lg ${
+                message.role === 'user'
+                  ? 'bg-gray-50' 
+                  : 'bg-white'
+              }`}>
+                <div className="text-xs text-gray-500 mb-1">
+                  {message.role === 'user' ? 'User' : 'Agent'}
+                </div>
+                {/* Render message content using Markdown */}
+                {message.content && (
+                  <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:my-1.5 prose-blockquote:my-1.5">
+                    <Markdown options={{ overrides: markdownOverrides, forceWrapper: true }}>
+                      {message.content}
+                    </Markdown>
+                  </div>
+                )}
+          
+                {/* Render tool calls for assistant messages */}
+                {message.role === 'assistant' && message.tool_calls?.map((toolCall) => (
+                  <ToolCallDisplay key={toolCall.id} toolCall={toolCall} />
+                ))}
               </div>
             </div>
           );

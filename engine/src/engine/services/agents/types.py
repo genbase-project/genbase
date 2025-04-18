@@ -8,7 +8,7 @@ from engine.services.execution.agent_execution import AgentRunnerService
 from engine.services.execution.model import ModelService
 from engine.services.execution.profile import ProfileService
 from engine.services.execution.state import StateService
-from engine.services.storage.repository import WorkspaceService
+from engine.services.storage.workspace import WorkspaceService
 
 
 @dataclass
@@ -18,7 +18,7 @@ class AgentServices:
     profile_service: ProfileService  # For profile execution
     module_service: ModuleService   # For module management
     state_service: StateService     # For agent state management
-    repo_service: WorkspaceService       # For repository operations
+    workspace_service: WorkspaceService       # For workspace operations
     agent_runner_service: AgentRunnerService  # For running agent tasks
 
 

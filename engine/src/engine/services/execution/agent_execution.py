@@ -22,7 +22,7 @@ import json
 from engine.const import RPC_PORT, VENV_BASE_DIR
 from engine.services.agents.context import AgentContext
 from engine.services.execution.function_parser import FunctionParser
-from engine.services.storage.repository import WorkspaceService
+from engine.services.storage.workspace import WorkspaceService
 from engine.services.core.module import ModuleService, ModuleMetadata
 from engine.services.core.kit import KitService, KitConfig
 from engine.services.execution.state import AgentState, StateService
@@ -46,13 +46,13 @@ class AgentRunnerService:
     
     def __init__(
         self,
-        repo_service: WorkspaceService,
+        workspace_service: WorkspaceService,
         module_service: ModuleService,
         state_service: StateService,
         kit_service: KitService,
         default_container_timeout: int = 600
     ):
-        self.repo_service = repo_service
+        self.workspace_service = workspace_service
         self.module_service = module_service
         self.kit_service = kit_service
         self.state_service = state_service
@@ -351,11 +351,11 @@ class AgentRunnerService:
         
         # Get paths for volume mounts and ensure they are absolute
         module_path = os.path.abspath(self.module_service.get_module_path(module_metadata.module_id))
-        repo_path = os.path.abspath(self.repo_service.get_repo_path(module_metadata.repo_name))
+        workspace_path = os.path.abspath(self.workspace_service.get_workspace_path(module_metadata.workspace_name))
         result_path = os.path.abspath(result_file_path)
         
         logger.debug(f"Module path: {module_path}")
-        logger.debug(f"Repo path: {repo_path}")
+        logger.debug(f"Workspace path: {workspace_path}")
         logger.debug(f"Result path: {result_path}")
         
         # Get the agent class name for this profile
@@ -574,7 +574,7 @@ echo "Agent execution completed"
         
         # Configure Docker volume mounts with absolute paths
         volumes = {
-            repo_path: {'bind': '/repo', 'mode': 'rw'},
+            workspace_path: {'bind': '/workspace', 'mode': 'rw'},
             module_path: {'bind': '/module', 'mode': 'ro'},
             str(venv_path): {'bind': '/venv', 'mode': 'rw'},
             setup_script_path: {'bind': '/setup.sh', 'mode': 'ro'},
@@ -606,7 +606,7 @@ echo "Agent execution completed"
                     'profile': context.profile
                 },
                 extra_hosts={"host.docker.internal": "host-gateway"},
-                working_dir="/repo"
+                working_dir="/workspace"
             )
             
             logger.info(f"Container {container.short_id} started with agent runner")
@@ -1023,11 +1023,11 @@ echo "Tool execution completed"
         
         # Get paths for volume mounts and ensure they are absolute
         module_path = os.path.abspath(self.module_service.get_module_path(module_id))
-        repo_path = os.path.abspath(self.repo_service.get_repo_path(module_metadata.repo_name))
+        workspace_path = os.path.abspath(self.workspace_service.get_workspace_path(module_metadata.workspace_name))
         
         # Configure Docker volume mounts with absolute paths
         volumes = {
-            repo_path: {'bind': '/repo', 'mode': 'rw'},
+            workspace_path: {'bind': '/workspace', 'mode': 'rw'},
             module_path: {'bind': '/module', 'mode': 'ro'},
             str(venv_path): {'bind': '/venv', 'mode': 'rw'},
             setup_script_path: {'bind': '/setup.sh', 'mode': 'ro'},
@@ -1053,7 +1053,7 @@ echo "Tool execution completed"
                     'tool_name': tool_name
                 },
                 extra_hosts={"host.docker.internal": "host-gateway"},
-                working_dir="/repo"
+                working_dir="/workspace"
             )
             
             logger.info(f"Container {container.short_id} started for tool execution")

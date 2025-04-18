@@ -14,7 +14,7 @@ from engine.db.session import SessionLocal
 from engine.services.execution.model import ModelService
 from engine.services.execution.state import StateService, AgentState
 from engine.services.core.module import ModuleService
-from engine.services.storage.repository import WorkspaceService
+from engine.services.storage.workspace import WorkspaceService
 from loguru import logger
 from pathlib import Path
 

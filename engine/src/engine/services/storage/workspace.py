@@ -44,7 +44,7 @@ class WorkspaceExistsError(WorkspaceError):
     pass
 
 class WorkspaceService:
-    """Service for managing Git repositories"""
+    """Service for managing Workspaces (Git repositories)"""
 
     def __init__(
         self,
@@ -54,7 +54,7 @@ class WorkspaceService:
         Initialize workspace service
         
         Args:
-            base_path: Base directory for storing repositories
+            base_path: Base directory for storing workspaces
             create_index_func: Function to create search index
         """
         self.base_path = Path(base_path)
@@ -63,27 +63,27 @@ class WorkspaceService:
         # Create necessary directories
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-    def get_repo_path(self, workspace_name: str) -> Path:
+    def get_workspace_path(self, workspace_name: str) -> Path:
         """Get workspace path"""
         return self.base_path / workspace_name
 
 
 
-    def _init_git_repo(self, repo_path: Path) -> Repo:
+    def _init_git_workspace(self, workspace_path: Path) -> Repo:
         """Initialize git workspace with default configuration"""
-        repo = Repo.init(repo_path)
+        workspace = Repo.init(workspace_path)
 
-        with repo.config_writer() as git_config:
+        with workspace.config_writer() as git_config:
             if not git_config.has_section('core'):
                 git_config.add_section('core')
-            git_config.set_value('core', 'worktree', str(repo_path.absolute()).replace('\\', '/'))
+            git_config.set_value('core', 'worktree', str(workspace_path.absolute()).replace('\\', '/'))
 
             if not git_config.has_section('user'):
                 git_config.add_section('user')
             git_config.set_value('user', 'name', 'Genbase Agent')
             git_config.set_value('user', 'email', 'genbase@localhost')
 
-        return repo
+        return workspace
 
     def create_workspace(
         self,
@@ -105,17 +105,17 @@ class WorkspaceService:
             dict: Workspace creation info
             
         Raises:
-            RepoExistsError: If workspace already exists
+            WorkspaceExistsError: If workspace already exists
         """
-        repo_path = self.get_repo_path(workspace_name)
+        workspace_path = self.get_workspace_path(workspace_name)
 
-        if repo_path.exists():
+        if workspace_path.exists():
             raise WorkspaceExistsError(f"Workspace {workspace_name} already exists")
 
         try:
             # Create workspace directory
-            repo_path.mkdir(parents=True)
-            temp_file = repo_path / filename
+            workspace_path.mkdir(parents=True)
+            temp_file = workspace_path / filename
 
             # Save uploaded file
             with temp_file.open("wb") as buffer:
@@ -123,14 +123,14 @@ class WorkspaceService:
 
             # Extract if zip file
             if filename.endswith('.zip'):
-                extract_func(temp_file, repo_path)
+                extract_func(temp_file, workspace_path)
                 temp_file.unlink()
 
             # Initialize git workspace
             try:
-                repo = self._init_git_repo(repo_path)
-                repo.git.add(A=True)
-                repo.index.commit("Initial commit")
+                workspace = self._init_git_workspace(workspace_path)
+                workspace.git.add(A=True)
+                workspace.index.commit("Initial commit")
             except Exception as e:
                 print(f"Git initialization error: {str(e)}")
 
@@ -142,12 +142,12 @@ class WorkspaceService:
             }
 
         except Exception as e:
-            if repo_path.exists():
-                shutil.rmtree(repo_path)
+            if workspace_path.exists():
+                shutil.rmtree(workspace_path)
             raise WorkspaceError(f"Failed to create workspace: {str(e)}")
 
-    def list_repositories(self) -> List[str]:
-        """List all repositories"""
+    def list_workspaces(self) -> List[str]:
+        """List all workspaces"""
         return [d.name for d in self.base_path.iterdir() if d.is_dir()]
 
 
@@ -162,22 +162,22 @@ class WorkspaceService:
             List[str]: List of file paths relative to the workspace root
 
         Raises:
-            RepoNotFoundError: If workspace doesn't exist
+            WorkspaceNotFoundError: If workspace doesn't exist
         """
-        repo_path = self.get_repo_path(workspace_name)
+        workspace_path = self.get_workspace_path(workspace_name)
 
-        if not repo_path.exists():
+        if not workspace_path.exists():
             raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
 
         files = []
-        # Iterate through items in the repo_path, skipping .git explicitly
-        for item in repo_path.rglob("*"):
+        # Iterate through items in the workspace_path, skipping .git explicitly
+        for item in workspace_path.rglob("*"):
             try:
                 # Check if item is within .git directory
-                if '.git' == item.relative_to(repo_path).parts[0]:
+                if '.git' == item.relative_to(workspace_path).parts[0]:
                     continue
                 if item.is_file(): # Keep it simple for now, list all non-.git files
-                    files.append(str(item.relative_to(repo_path)))
+                    files.append(str(item.relative_to(workspace_path)))
             except ValueError:
                 continue
         return files
@@ -190,15 +190,15 @@ class WorkspaceService:
             workspace_name: Workspace to delete
             
         Raises:
-            RepoNotFoundError: If workspace doesn't exist
+            WorkspaceNotFoundError: If workspace doesn't exist
         """
-        repo_path = self.get_repo_path(workspace_name)
+        workspace_path = self.get_workspace_path(workspace_name)
 
-        if not repo_path.exists():
+        if not workspace_path.exists():
             raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
 
         try:
-            shutil.rmtree(repo_path)
+            shutil.rmtree(workspace_path)
         except Exception as e:
             raise WorkspaceError(f"Failed to delete workspace: {str(e)}")
 
@@ -218,22 +218,22 @@ class WorkspaceService:
             dict: Commit result info
             
         Raises:
-            RepoNotFoundError: If workspace doesn't exist
+            WorkspaceNotFoundError: If workspace doesn't exist
         """
-        repo_path = self.get_repo_path(workspace)
+        workspace_path = self.get_workspace_path(workspace)
 
-        if not repo_path.exists():
+        if not workspace_path.exists():
             raise WorkspaceNotFoundError(f"Workspace {workspace} not found")
 
         try:
             # Get or initialize workspace
             try:
-                repo = Repo(repo_path)
+                workspace = Repo(workspace_path)
             except Exception:
-                repo = self._init_git_repo(repo_path)
+                workspace = self._init_git_workspace(workspace_path)
 
             # Check for changes
-            status = repo.git.status(porcelain=True)
+            status = workspace.git.status(porcelain=True)
             if not status:
                 return {
                     "status": "success",
@@ -242,7 +242,7 @@ class WorkspaceService:
                 }
 
             # Stage changes
-            repo.git.add(A=True)
+            workspace.git.add(A=True)
 
             # Create commit
             author = Actor(
@@ -250,7 +250,7 @@ class WorkspaceService:
                 commit_info.author_email or "fastapi@localhost"
             )
 
-            commit = repo.index.commit(
+            commit = workspace.index.commit(
                 commit_info.commit_message,
                 author=author,
                 committer=author
@@ -303,18 +303,18 @@ class WorkspaceService:
             dict: Update result info
             
         Raises:
-            RepoNotFoundError: If workspace doesn't exist
+            WorkspaceNotFoundError: If workspace doesn't exist
         """
-        repo_path = self.get_repo_path(workspace_name)
+        workspace_path = self.get_workspace_path(workspace_name)
 
-        if not repo_path.exists():
+        if not workspace_path.exists():
             raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
 
-        if not path_validator(repo_path, file_path):
+        if not path_validator(workspace_path, file_path):
             raise WorkspaceError("Invalid file path")
 
         try:
-            full_file_path = (repo_path / file_path).resolve()
+            full_file_path = (workspace_path / file_path).resolve()
             full_file_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Create backup if file exists
@@ -358,24 +358,24 @@ class WorkspaceService:
             str: Name of the default branch (usually 'master' or 'main')
             
         Raises:
-            RepoNotFoundError: If workspace doesn't exist
+            WorkspaceNotFoundError: If workspace doesn't exist
         """
 
         logger.info(f"Getting active branch for {workspace_name}")
-        repo_path = self.get_repo_path(workspace_name)
+        workspace_path = self.get_workspace_path(workspace_name)
         
-        if not repo_path.exists():
+        if not workspace_path.exists():
             raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
         
             
         try:
-            repo = Repo(repo_path)
+            workspace = Repo(workspace_path)
 
-            logger.info(f"Repo: {repo}")
+            logger.info(f"Repo: {workspace}")
 
-            logger.info(f"Active branch: {repo.active_branch.name}")
+            logger.info(f"Active branch: {workspace.active_branch.name}")
             
-            return repo.active_branch.name
+            return workspace.active_branch.name
 
             
         except Exception as e:
@@ -400,16 +400,16 @@ class WorkspaceService:
             dict: Result information
         
         Raises:
-            RepoNotFoundError: If either workspace doesn't exist
+            WorkspaceNotFoundError: If either workspace doesn't exist
             WorkspaceError: If any error occurs during the operation
         """
-        parent_repo_path = self.get_repo_path(parent_workspace_name)
-        child_repo_path = self.get_repo_path(child_workspace_name)
+        parent_workspace_path = self.get_workspace_path(parent_workspace_name)
+        child_workspace_path = self.get_workspace_path(child_workspace_name)
         
-        # Validate repositories exist
-        if not parent_repo_path.exists():
+        # Validate workspaces exist
+        if not parent_workspace_path.exists():
             raise WorkspaceNotFoundError(f"Parent workspace {parent_workspace_name} not found")
-        if not child_repo_path.exists():
+        if not child_workspace_path.exists():
             raise WorkspaceNotFoundError(f"Child workspace {child_workspace_name} not found")
         
         # Determine submodule path
@@ -417,10 +417,10 @@ class WorkspaceService:
         
         try:
             # Get workspace objects
-            parent_repo = Repo(parent_repo_path)
+            parent_workspace = Repo(parent_workspace_path)
             
-            # Get absolute path to child repo
-            child_repo_abs_path = child_repo_path.absolute()
+            # Get absolute path to child workspace
+            child_workspace_abs_path = child_workspace_path.absolute()
             
             # Get default branch name
             default_branch = self.get_active_branch(child_workspace_name)
@@ -429,16 +429,16 @@ class WorkspaceService:
             logger.info(f"Adding {child_workspace_name} as submodule to {parent_workspace_name} at {submodule_path}")
             
             # Add the submodule
-            submodule = parent_repo.create_submodule(
+            submodule = parent_workspace.create_submodule(
                 name=submodule_path,
                 path=submodule_path,
-                url=str(child_repo_abs_path),
+                url=str(child_workspace_abs_path),
                 branch=default_branch
             )
             
             # Commit the change
             author = Actor("Admin", "admin@genbase")
-            commit = parent_repo.index.commit(
+            commit = parent_workspace.index.commit(
                 f"Add {child_workspace_name} as submodule at {submodule_path}",
                 author=author,
                 committer=author
@@ -447,8 +447,8 @@ class WorkspaceService:
             return {
                 "status": "success",
                 "message": f"Added {child_workspace_name} as submodule to {parent_workspace_name}",
-                "parent_repo": parent_workspace_name,
-                "child_repo": child_workspace_name,
+                "parent_workspace": parent_workspace_name,
+                "child_workspace": child_workspace_name,
                 "submodule_path": submodule_path,
                 "commit_hash": commit.hexsha
             }
@@ -474,44 +474,44 @@ class WorkspaceService:
             dict: Result information
             
         Raises:
-            RepoNotFoundError: If workspace doesn't exist
+            WorkspaceNotFoundError: If workspace doesn't exist
             WorkspaceError: If any error occurs during the operation
         """
-        repo_path = self.get_repo_path(workspace_name)
+        workspace_path = self.get_workspace_path(workspace_name)
         
-        if not repo_path.exists():
+        if not workspace_path.exists():
             raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
             
-        full_submodule_path = (repo_path / submodule_path).resolve()
+        full_submodule_path = (workspace_path / submodule_path).resolve()
         
         if not full_submodule_path.exists():
             raise WorkspaceError(f"Submodule at path '{submodule_path}' not found")
             
         try:
-            repo = Repo(repo_path)
+            workspace = Repo(workspace_path)
             
             # Check if it's actually a submodule
-            submodules = [sm.path for sm in repo.submodules]
+            submodules = [sm.path for sm in workspace.submodules]
             if submodule_path not in submodules:
                 raise WorkspaceError(f"Path '{submodule_path}' is not a submodule")
                 
             # 1. Deinit the submodule
-            repo.git.submodule('deinit', '-f', submodule_path)
+            workspace.git.submodule('deinit', '-f', submodule_path)
             
             # 2. Remove from .git/modules
-            git_modules_path = repo_path / '.git' / 'modules' / submodule_path
+            git_modules_path = workspace_path / '.git' / 'modules' / submodule_path
             if git_modules_path.exists():
                 shutil.rmtree(git_modules_path)
                 
             # 3. Remove the submodule entry from .git/config
-            repo.git.config('--remove-section', f'submodule.{submodule_path}', ignore_errors=True)
+            workspace.git.config('--remove-section', f'submodule.{submodule_path}', ignore_errors=True)
             
             # 4. Remove from index
-            repo.git.rm('--cached', submodule_path)
+            workspace.git.rm('--cached', submodule_path)
             
             # 5. Commit the removal
             author = Actor("Admin", "genbase@localhost")
-            commit = repo.index.commit(
+            commit = workspace.index.commit(
                 f"Remove submodule {submodule_path}",
                 author=author,
                 committer=author
@@ -522,12 +522,12 @@ class WorkspaceService:
                 shutil.rmtree(full_submodule_path)
                 
             # 7. Remove .gitmodules file if it's the last submodule
-            if not repo.submodules:
-                gitmodules_path = repo_path / '.gitmodules'
+            if not workspace.submodules:
+                gitmodules_path = workspace_path / '.gitmodules'
                 if gitmodules_path.exists():
                     gitmodules_path.unlink()
-                    repo.git.add('.gitmodules')
-                    repo.index.commit(
+                    workspace.git.add('.gitmodules')
+                    workspace.index.commit(
                         "Remove .gitmodules file",
                         author=author,
                         committer=author

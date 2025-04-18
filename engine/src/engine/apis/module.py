@@ -114,7 +114,7 @@ class ModuleResponse(BaseModel):
     version: str
     created_at: str
     env_vars: Dict[str, str]
-    repo_name: str
+    workspace_name: str
     path: str
 
     @classmethod
@@ -128,7 +128,7 @@ class ModuleResponse(BaseModel):
             version=metadata.version,
             created_at=metadata.created_at,
             env_vars=metadata.env_vars,
-            repo_name=metadata.repo_name,
+            workspace_name=metadata.workspace_name,
             path=metadata.path
         )
 
@@ -283,7 +283,7 @@ class ModuleRouter:
                         version=attrs['version'],
                         created_at=attrs['created_at'].isoformat(),
                         env_vars=attrs['env_vars'],
-                        repo_name=attrs['repo_name'],
+                        workspace_name=attrs['workspace_name'],
                         project_id=attrs['project_id'],
                         path=attrs['path']
                     )
@@ -485,7 +485,7 @@ class ModuleRouter:
                     version=m.version,
                     created_at=m.created_at.isoformat(),
                     env_vars=m.env_vars,
-                    repo_name=m.repo_name,
+                    workspace_name=m.workspace_name,
                     path=m.project_mappings[0].path if m.project_mappings else ""
                 )
             ) for m in modules]
@@ -514,7 +514,7 @@ class ModuleRouter:
                     version=m.version,
                     created_at=m.created_at.isoformat(),
                     env_vars=m.env_vars,
-                    repo_name=m.repo_name,
+                    workspace_name=m.workspace_name,
                     path=m.project_mappings[0].path if m.project_mappings else ""
                 )
             ) for m in modules]

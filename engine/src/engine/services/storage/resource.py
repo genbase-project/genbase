@@ -34,15 +34,13 @@ class ResourceService:
 
     def __init__(
         self,
-        workspace_base: str | Path,
         module_base: str | Path,
-        repo_base: str | Path,
+        workspace_base: str | Path,
         module_service: ModuleService,
         model_service: ModelService
     ):
-        self.workspace_base = Path(workspace_base)
         self.module_base = Path(module_base)
-        self.repo_base = Path(repo_base)
+        self.workspace_base = Path(workspace_base)
         self.module_service = module_service
         self.model_service = model_service
         mimetypes.init()
@@ -66,7 +64,7 @@ class ResourceService:
             if not kit.get('workspace', {}).get('files'):
                 return []
 
-            workspace_path = self.repo_base / module_info.repo_name
+            workspace_path = self.workspace_base / module_info.workspace_name
             if not workspace_path.exists():
                 return []
 
@@ -161,7 +159,7 @@ class ResourceService:
         """
         try:
             module_info = self.module_service.get_module_metadata(module_id)
-            workspace_path = self.repo_base / module_info.repo_name
+            workspace_path = self.workspace_base / module_info.workspace_name
             full_path = (workspace_path / relative_path).resolve()
 
             # Security Check: Ensure the path is within the workspace
@@ -216,7 +214,7 @@ class ResourceService:
             if not kit.get('workspace', {}).get('files'):
                 return []
 
-            workspace_path = self.repo_base / module_info.repo_name
+            workspace_path = self.workspace_base / module_info.workspace_name
 
             if not workspace_path.exists():
                 logger.warning(f"Workspace path does not exist: {workspace_path}")

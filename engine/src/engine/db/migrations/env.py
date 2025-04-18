@@ -27,6 +27,12 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Add this function to exclude casbin_rule table from migrations
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table" and name == "casbin_rule":
+        return False
+    return True
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
     context.configure(
@@ -34,6 +40,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -49,7 +56,8 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         context.configure(
             connection=connection, 
-            target_metadata=target_metadata
+            target_metadata=target_metadata,
+            include_object=include_object,  # Add this line
         )
 
         with context.begin_transaction():

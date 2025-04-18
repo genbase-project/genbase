@@ -29,12 +29,12 @@ from engine.apis.kit import KitRouter
 from engine.apis.model import ModelRouter
 from engine.apis.module import ModuleRouter
 from engine.apis.project import ProjectRouter
-from engine.apis.repository import WorkspaceRouter
+from engine.apis.workspace import WorkspaceRouter
 from engine.apis.resource import ResourceRouter
 from engine.apis.profile import ProfileRouter
 from engine.auth.schemas import UserCreate, UserRead, UserUpdate
 from engine.auth.superuser import create_default_superuser
-from engine.const import BASE_DATA_DIR, KIT_BASE_DIR, REPO_BASE_DIR, RPC_PORT
+from engine.const import BASE_DATA_DIR, KIT_BASE_DIR, WORKSPACE_BASE_DIR, RPC_PORT
 from engine.db.models import User
 from engine.db.session import SessionLocal
 from engine.services.agents.types import AgentServices
@@ -47,8 +47,8 @@ from engine.services.core.kit import KitService
 from engine.services.execution.model import ModelService
 from engine.services.core.module import ModuleService
 from engine.services.core.project import ProjectService
-from engine.services.platform_rpyc_service import PlatformRPyCService
-from engine.services.storage.repository import WorkspaceService
+from engine.services.platform_service import PlatformService
+from engine.services.storage.workspace import WorkspaceService
 from engine.services.storage.resource import ResourceService
 from engine.services.execution.state import StateService
 from engine.services.execution.profile import ProfileService
@@ -224,15 +224,15 @@ app.include_router(
 
 # Create necessary directories
 BASE_DATA_DIR.mkdir(exist_ok=True)
-REPO_BASE_DIR.mkdir(exist_ok=True)
+WORKSPACE_BASE_DIR.mkdir(exist_ok=True)
 KIT_BASE_DIR.mkdir(exist_ok=True)
 
 
 
 api_key_service = ApiKeyService()
 # Initialize services
-repo_service = WorkspaceService(
-    base_path=REPO_BASE_DIR
+workspace_service = WorkspaceService(
+    base_path=WORKSPACE_BASE_DIR
 )
 
 kit_service = KitService(base_path=KIT_BASE_DIR)
@@ -245,7 +245,7 @@ state_service = StateService()
 module_service = ModuleService(
     workspace_base=str(KIT_BASE_DIR),
     module_base=str(KIT_BASE_DIR),
-    repo_service=repo_service,
+    workspace_service=workspace_service,
     state_service=state_service,
     kit_service=kit_service
 )
@@ -254,9 +254,8 @@ model_service = ModelService()
 embedding_service = EmbeddingService()
 
 resource_service = ResourceService(
-    workspace_base=str(KIT_BASE_DIR),
     module_base=str(KIT_BASE_DIR),
-    repo_base=str(REPO_BASE_DIR),  # Add repo base directory
+    workspace_base=str(WORKSPACE_BASE_DIR),
     module_service=module_service,
     model_service=model_service
 )
@@ -268,7 +267,7 @@ profile_service = ProfileService(
     module_base=str(KIT_BASE_DIR),
     module_service=module_service,
     resource_service=resource_service,
-    repo_service=repo_service,
+    workspace_service=workspace_service,
     kit_service=kit_service
 )
 
@@ -283,9 +282,9 @@ kit_router = KitRouter(
     
 )
 
-repo_router = WorkspaceRouter(
-    repo_service=repo_service,
-    prefix="/repository"
+workspace_router = WorkspaceRouter(
+    workspace_service=workspace_service,
+    prefix="/workspace"
 )
 
 project_router = ProjectRouter(
@@ -335,7 +334,7 @@ llm_gateway_router = LLMGatewayRouter(
 # Include routers
 app.include_router(kit_router.router,     dependencies=[Depends(current_active_user)])
 app.include_router(module_router.router,     dependencies=[Depends(current_active_user)])
-app.include_router(repo_router.router,     dependencies=[Depends(current_active_user)])
+app.include_router(workspace_router.router,     dependencies=[Depends(current_active_user)])
 app.include_router(project_router.router,     dependencies=[Depends(current_active_user)])
 app.include_router(resource_router.router,     dependencies=[Depends(current_active_user)])  # Add resource router
 app.include_router(model_router.router,     dependencies=[Depends(current_active_user)])
@@ -354,7 +353,7 @@ app.mount("/gateway", gateway_app)
 
 
 agent_runner_service = AgentRunnerService(
-    repo_service=repo_service,
+    workspace_service=workspace_service,
     module_service=module_service,
     kit_service=kit_service,
     state_service=state_service,
@@ -365,7 +364,7 @@ agent_services = AgentServices(
     profile_service=profile_service,
     state_service=state_service,
     module_service=module_service,
-    repo_service=repo_service,
+    workspace_service=workspace_service,
     agent_runner_service=agent_runner_service,
 )
 
@@ -409,7 +408,7 @@ app.add_middleware(
 
 
 
-platform_rpyc_service_instance = PlatformRPyCService(services=agent_services)
+platform_rpyc_service_instance = PlatformService(services=agent_services)
 
 # Global variable for the RPyC server thread
 rpyc_server_thread = None

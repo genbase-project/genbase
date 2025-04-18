@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from git import Repo, Actor, GitCommandError
 
-from engine.services.storage.repository import (
+from engine.services.storage.workspace import (
     WorkspaceService,
     WorkspaceExistsError,
     WorkspaceNotFoundError,
@@ -45,7 +45,7 @@ def create_test_repo(repo_service: WorkspaceService, create_zip_content: bytes):
         filename="test.zip",
         extract_func=extract_zip
     )
-    repo_path = repo_service.get_repo_path(repo_name)
+    repo_path = repo_service.get_workspace_path(repo_name)
     return repo_name, repo_path, result
 
 @pytest.fixture
@@ -55,7 +55,7 @@ def create_parent_child_repos(repo_service: WorkspaceService):
     child_name = "child_repo"
 
     # Create parent repo (can be empty initially)
-    parent_path = repo_service.get_repo_path(parent_name)
+    parent_path = repo_service.get_workspace_path(parent_name)
     parent_path.mkdir()
     parent_git_repo = Repo.init(parent_path)
     # Add a dummy file and commit to have a branch
@@ -65,7 +65,7 @@ def create_parent_child_repos(repo_service: WorkspaceService):
 
 
     # Create child repo with some content
-    child_path = repo_service.get_repo_path(child_name)
+    child_path = repo_service.get_workspace_path(child_name)
     child_path.mkdir()
     child_git_repo = Repo.init(child_path)
     (child_path / "child_file.txt").write_text("child content")
@@ -81,7 +81,7 @@ class TestRepoService:
     def test_get_repo_path(self, repo_service: WorkspaceService):
         repo_name = "my_repo"
         expected_path = repo_service.base_path / repo_name
-        assert repo_service.get_repo_path(repo_name) == expected_path
+        assert repo_service.get_workspace_path(repo_name) == expected_path
 
     def test_create_repository_success(self, repo_service: WorkspaceService, create_zip_content: bytes):
         repo_name = "new_repo"
@@ -95,7 +95,7 @@ class TestRepoService:
 
         assert result["status"] == "success"
         assert result["repo_name"] == repo_name
-        repo_path = repo_service.get_repo_path(repo_name)
+        repo_path = repo_service.get_workspace_path(repo_name)
         assert repo_path.exists()
         assert (repo_path / ".git").exists() # Check if git repo was initialized
         assert (repo_path / "file1.txt").exists()
@@ -118,18 +118,18 @@ class TestRepoService:
             )
 
     def test_list_repositories_empty(self, repo_service: WorkspaceService):
-        assert repo_service.list_repositories() == []
+        assert repo_service.list_workspaces() == []
 
     def test_list_repositories_single(self, repo_service: WorkspaceService, create_test_repo):
         repo_name, _, _ = create_test_repo
-        assert repo_service.list_repositories() == [repo_name]
+        assert repo_service.list_workspaces() == [repo_name]
 
     def test_list_repositories_multiple(self, repo_service: WorkspaceService, create_zip_content: bytes):
         repo_name1 = "repo1"
         repo_name2 = "repo2"
         repo_service.create_workspace(repo_name1, io.BytesIO(create_zip_content), "r1.zip", extract_zip)
         repo_service.create_workspace(repo_name2, io.BytesIO(create_zip_content), "r2.zip", extract_zip)
-        assert sorted(repo_service.list_repositories()) == sorted([repo_name1, repo_name2])
+        assert sorted(repo_service.list_workspaces()) == sorted([repo_name1, repo_name2])
 
     def test_list_files_success(self, repo_service: WorkspaceService, create_test_repo):
         repo_name, repo_path, _ = create_test_repo
@@ -248,7 +248,7 @@ class TestRepoService:
         assert result["status"] == "success"
         assert result["submodule_path"] == submodule_rel_path
 
-        parent_repo_path = repo_service.get_repo_path(parent_name)
+        parent_repo_path = repo_service.get_workspace_path(parent_name)
         submodule_full_path = parent_repo_path / submodule_rel_path
         assert submodule_full_path.exists()
         assert (submodule_full_path / "child_file.txt").exists() # Check content

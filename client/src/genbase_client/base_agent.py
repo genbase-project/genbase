@@ -301,11 +301,6 @@ class RemoteAgentUtilsRPyC(AgentUtilsInterface):
         except Exception as e:
             logger.error(f"RPyC list_files failed: {e}"); raise RuntimeError from e
 
-    def get_repo_tree(self, path_str: Optional[str] = None) -> str:
-        try:
-            return self._root.exposed_get_repo_tree(self.module_id, self.profile, path_str)
-        except Exception as e:
-            logger.error(f"RPyC get_repo_tree failed: {e}"); raise RuntimeError from e
 
     def read_files(self, relative_paths: List[str]) -> Dict[str, Optional[str]]:
         # Client-side loop calling the single-file method

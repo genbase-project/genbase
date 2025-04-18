@@ -32,7 +32,7 @@ export interface Module {
   version: string;
   created_at: string;
   env_vars: Record<string, string>;
-  repo_name: string;
+  workspace_name: string;
   path: string;
   module_name: string;
 }

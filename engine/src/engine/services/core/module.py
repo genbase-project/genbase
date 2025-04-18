@@ -14,7 +14,7 @@ from engine.db.session import SessionLocal
 from sqlalchemy.orm import Session
 import networkx as nx
 
-from engine.services.storage.repository import (
+from engine.services.storage.workspace import (
     WorkspaceNotFoundError,
     WorkspaceService,
 )
@@ -48,7 +48,7 @@ class ModuleMetadata:
     version: str
     created_at: str
     env_vars: Dict[str, str]
-    repo_name: str
+    workspace_name: str
     path: str
 
     @classmethod
@@ -66,7 +66,7 @@ class ModuleMetadata:
             version=module.version,
             created_at=module.created_at.isoformat(),
             env_vars=module.env_vars,
-            repo_name=module.repo_name,
+            workspace_name=module.workspace_name,
             path=project_mapping.path
         )
 
@@ -79,12 +79,12 @@ class ModuleService:
         self,
         workspace_base: str,
         module_base: str,
-        repo_service: WorkspaceService,
+        workspace_service: WorkspaceService,
         state_service: StateService,
         kit_service: KitService
     ):
         self.workspace_base = Path(workspace_base)
-        self.repo_service = repo_service
+        self.workspace_service = workspace_service
         self.state_service = state_service
         self.module_base = module_base
         self.kit_service = kit_service
@@ -117,7 +117,7 @@ class ModuleService:
             raise ModuleError("Invalid path format. Path must be alphanumeric segments separated by dots")
 
         module_id = generate_readable_uid()
-        repo_name = f"{module_id}"
+        workspace_name = f"{module_id}"
         created_at = datetime.now(UTC)
 
         try:
@@ -137,9 +137,9 @@ class ModuleService:
 
             memory_zip.seek(0)
 
-            # Create repository
-            self.repo_service.create_workspace(
-                workspace_name=repo_name,
+            # Create workspace
+            self.workspace_service.create_workspace(
+                workspace_name=workspace_name,
                 content_file=memory_zip,
                 filename="workspace.zip",
                 extract_func=extract_zip
@@ -155,7 +155,7 @@ class ModuleService:
                     version=version,
                     created_at=created_at,
                     env_vars=env_vars,
-                    repo_name=repo_name
+                    workspace_name=workspace_name
                 )
                 db.add(module)
 
@@ -181,7 +181,7 @@ class ModuleService:
         except Exception as e:
             # Cleanup on failure
             try:
-                self.repo_service.delete_workspace(repo_name)
+                self.workspace_service.delete_workspace(workspace_name)
             except:
                 pass
             raise ModuleError(f"Failed to create module: {str(e)}")
@@ -250,7 +250,7 @@ class ModuleService:
                         module_name=module.module_name,
                         created_at=module.created_at,
                         env_vars=module.env_vars,
-                        repo_name=module.repo_name,
+                        workspace_name=module.workspace_name,
                         project_id=module.project_mappings[0].project_id,
                         path=module.project_mappings[0].path
                     )
@@ -271,15 +271,15 @@ class ModuleService:
                 if not module:
                     return
 
-                repo_name = module.repo_name
+                workspace_name = module.workspace_name
 
                 # SQLAlchemy will handle cascading deletes based on relationships
                 db.delete(module)
                 db.commit()
 
-                # Delete repository
+                # Delete workspace
                 try:
-                    self.repo_service.delete_workspace(repo_name)
+                    self.workspace_service.delete_workspace(workspace_name)
                 except WorkspaceNotFoundError:
                     pass
 
@@ -689,17 +689,17 @@ class ModuleService:
         db.commit()
         db.refresh(provide)
         
-        # If providing WORKSPACE, add provider's repo as submodule to receiver's repo
+        # If providing WORKSPACE, add provider's workspace as submodule to receiver's workspace
         if resource_type == ProvideType.WORKSPACE:
             try:
                 provider_metadata = self.get_module_metadata(provider_id)
                 receiver_metadata = self.get_module_metadata(receiver_id)
                 
-                # Add provider's repo as submodule to receiver's repo within a dedicated workspaces folder
+                # Add provider's workspace as submodule to receiver's workspace within a dedicated workspaces folder
                 submodule_path = f"workspaces/{provider_metadata.module_id}"
-                self.repo_service.add_submodule(
-                    parent_workspace_name=receiver_metadata.repo_name,
-                    child_workspace_name=provider_metadata.repo_name,
+                self.workspace_service.add_submodule(
+                    parent_workspace_name=receiver_metadata.workspace_name,
+                    child_workspace_name=provider_metadata.workspace_name,
                     path=submodule_path  # Place in workspaces/module_id
                 )
                 
@@ -749,10 +749,10 @@ class ModuleService:
                 provider_metadata = self.get_module_metadata(provider_id)
                 receiver_metadata = self.get_module_metadata(receiver_id)
                 
-                # Remove the submodule from receiver's repo
+                # Remove the submodule from receiver's workspace
                 submodule_path = f"workspaces/{provider_metadata.module_id}"
-                self.repo_service.remove_submodule(
-                    workspace_name=receiver_metadata.repo_name,
+                self.workspace_service.remove_submodule(
+                    workspace_name=receiver_metadata.workspace_name,
                     submodule_path=submodule_path  # Using workspaces/module_id path
                 )
                 

@@ -320,7 +320,7 @@ class ProfileStoreService:
 #             version="1.0.0",
 #             created_at=datetime.now(UTC),
 #             env_vars={},
-#             repo_name="test_repo"
+#             workspace_name="test_workspace"
 #         )
 #         db.add(test_module)
 #         db.commit()

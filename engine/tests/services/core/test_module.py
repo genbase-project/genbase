@@ -17,7 +17,7 @@ from engine.services.core.module import (
     ModuleMetadata,
     ModuleError
 )
-from engine.services.storage.repository import WorkspaceService, WorkspaceNotFoundError
+from engine.services.storage.workspace import WorkspaceService, WorkspaceNotFoundError
 from engine.services.execution.state import StateService
 from engine.services.core.kit import KitService, KitConfig
 from engine.db.models import Module, Project, ProjectModuleMapping, ProvideType, ModuleProvide
@@ -73,7 +73,7 @@ def module_service(
     service = ModuleService(
         workspace_base=str(workspace_base),
         module_base=str(module_base),
-        repo_service=mock_repo_service,
+        workspace_service=mock_repo_service,
         state_service=mock_state_service,
         kit_service=mock_kit_service
     )
@@ -115,7 +115,7 @@ def create_db_module(db_session: Session, create_db_project: Project) -> Module:
         version=TEST_VERSION,
         created_at=created_at_dt,
         env_vars={"KEY": "VALUE"},
-        repo_name=f"{TEST_MODULE_ID_1}-repo"
+        workspace_name=f"{TEST_MODULE_ID_1}-repo"
     )
     # Defensive check
     existing = db_session.get(Module, TEST_MODULE_ID_1)
@@ -154,7 +154,7 @@ def create_db_module_2(db_session: Session, create_db_project: Project) -> Modul
         version=TEST_VERSION,
         created_at=created_at_dt,
         env_vars={},
-        repo_name=f"{TEST_MODULE_ID_2}-repo"
+        workspace_name=f"{TEST_MODULE_ID_2}-repo"
     )
     # Defensive check
     existing = db_session.get(Module, TEST_MODULE_ID_2)
@@ -238,7 +238,7 @@ class TestModuleService:
         assert metadata.env_vars == env_vars
         assert metadata.path == path
         assert metadata.module_name == module_name
-        assert metadata.repo_name == f"{metadata.module_id}"
+        assert metadata.workspace_name == f"{metadata.module_id}"
 
         # Verify DB state
         db_module = db_session.get(Module, metadata.module_id)
@@ -249,7 +249,7 @@ class TestModuleService:
         assert db_mapping.path == path
 
         mock_repo_service.create_repository.assert_called_once_with(
-            repo_name=metadata.repo_name,
+            workspace_name=metadata.workspace_name,
             content_file=ANY,
             filename="workspace.zip",
             extract_func=extract_zip
@@ -291,7 +291,7 @@ class TestModuleService:
 
     def test_delete_module_success(self, module_service: ModuleService, create_db_module: Module, db_session: Session, mock_repo_service: MagicMock):
         module_id = create_db_module.module_id
-        repo_name = create_db_module.repo_name
+        workspace_name = create_db_module.workspace_name
         project_id = create_db_module.project_mappings[0].project_id
         assert db_session.get(Module, module_id) is not None
         assert db_session.get(ProjectModuleMapping, (project_id, module_id)) is not None
@@ -301,7 +301,7 @@ class TestModuleService:
         assert db_session.get(Module, module_id) is None
         # Cascading should delete the mapping too, verify this way
         assert db_session.query(ProjectModuleMapping).filter_by(module_id=module_id).count() == 0
-        mock_repo_service.delete_repository.assert_called_once_with(repo_name)
+        mock_repo_service.delete_repository.assert_called_once_with(workspace_name)
 
 
 

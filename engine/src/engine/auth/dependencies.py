@@ -158,7 +158,7 @@ async def setup_authorization_on_startup():
 # (Keep constants and helper function here for clarity when adding routers)
 OBJ_KIT = "kit"
 OBJ_MODULE = "module"
-OBJ_REPOSITORY = "repository"
+OBJ_WORKSPACE = "workspace"
 OBJ_PROJECT = "project"
 OBJ_RESOURCE = "resource"
 OBJ_MODEL = "model"

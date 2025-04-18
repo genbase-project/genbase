@@ -48,7 +48,7 @@ class Module(Base):
     version: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     env_vars: Mapped[Dict] = mapped_column(EncryptedJSON, nullable=False)
-    repo_name: Mapped[str] = mapped_column(String, nullable=False)
+    workspace_name: Mapped[str] = mapped_column(String, nullable=False)
     
     # Updated relationships with cascade
     project_mappings: Mapped[List["ProjectModuleMapping"]] = relationship(

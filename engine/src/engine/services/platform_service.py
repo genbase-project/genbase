@@ -65,7 +65,7 @@ def _safe_serialize_for_json(obj):
 
 
 
-class PlatformRPyCService(rpyc.Service):
+class PlatformService(rpyc.Service):
     """
     RPyC Service running in the main engine, exposing platform functionalities
     to containerized agents.
@@ -74,11 +74,11 @@ class PlatformRPyCService(rpyc.Service):
 
     def __init__(self, services: AgentServices):
         if not isinstance(services, AgentServices):
-            raise TypeError("PlatformRPyCService requires an instance of AgentServices")
+            raise TypeError("PlatformService requires an instance of AgentServices")
         self.agent_services = services
         self.history_manager = ChatHistoryManager()
 
-        logger.info("PlatformRPyCService initialized.")
+        logger.info("PlatformService initialized.")
         super().__init__()
 
     def on_connect(self, conn):
@@ -236,7 +236,7 @@ class PlatformRPyCService(rpyc.Service):
         """Helper to get utils instance dynamically based on context."""
         return AgentUtils(
             self.agent_services.module_service,
-            self.agent_services.repo_service,
+            self.agent_services.workspace_service,
             module_id,
             profile
         )
@@ -266,17 +266,6 @@ class PlatformRPyCService(rpyc.Service):
             logger.error(f"Error in exposed_list_files '{relative_path}': {e}", exc_info=True)
             raise ValueError(f"Failed to list files '{relative_path}': {e}")
 
-    def exposed_get_repo_tree(self, module_id: str, profile: str, path_str: Optional[str] = None) -> str:
-        logger.debug(f"RPyC exposed_get_repo_tree call: {module_id}/{profile} Path: {path_str}")
-        try:
-            path_obj = None
-            if path_str:
-                from pathlib import Path
-                path_obj = Path(path_str)
-            return self._get_agent_utils(module_id, profile).get_repo_tree(path_obj)
-        except Exception as e:
-            logger.error(f"Error in exposed_get_repo_tree '{path_str}': {e}", exc_info=True)
-            raise ValueError(f"Failed to get repo tree '{path_str}': {e}")
 
     # --- Profile Store ---
     def _get_profile_store_service(self, module_id: str, profile: str, collection: str) -> ProfileStoreService:

@@ -925,7 +925,7 @@ const MainContent = ({selectedModule}:{selectedModule: Module | null}) => {
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                           <span className="font-medium text-gray-500">Repository</span>
-                          <span className="col-span-3">{selectedModule.repo_name}</span>
+                          <span className="col-span-3">{selectedModule.workspace_name}</span>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                           <span className="font-medium text-gray-500">Path</span>

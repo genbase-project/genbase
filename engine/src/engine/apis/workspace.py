@@ -4,8 +4,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from engine.auth.dependencies import ACT_CREATE, ACT_DELETE, ACT_LIST, ACT_READ, ACT_UPDATE, OBJ_REPOSITORY, require_action
-from engine.services.storage.repository import (
+from engine.auth.dependencies import ACT_CREATE, ACT_DELETE, ACT_LIST, ACT_READ, ACT_UPDATE, OBJ_WORKSPACE, require_action
+from engine.services.storage.workspace import (
     CommitInfo,
     WorkspaceExistsError,
     WorkspaceNotFoundError,
@@ -38,40 +38,40 @@ class SearchResponse(BaseModel):
     file_score: float
 
 class WorkspaceCreationResponse(BaseModel):
-    repo_name: str
+    workspace_name: str
     created_at: str
     status: str
 
 class WorkspaceRouter:
-    """FastAPI router for repository management endpoints"""
+    """FastAPI router for workspace management endpoints"""
 
     def __init__(
         self,
-        repo_service: WorkspaceService,
-        prefix: str = "/repo"
+        workspace_service: WorkspaceService,
+        prefix: str = "/workspace"
     ):
         """
-        Initialize repository router
+        Initialize workspace router
         
         Args:
-            repo_service: Repository service instance
+            workspace_service: Workspace service instance
             prefix: URL prefix for routes
         """
-        self.service = repo_service
-        self.router = APIRouter(prefix=prefix, tags=["repository"])
+        self.service = workspace_service
+        self.router = APIRouter(prefix=prefix, tags=["workspace"])
         self._setup_routes()
 
-    async def _create_repo(
+    async def _create_workspace(
         self,
-        repo_file: UploadFile = File(...),
-        repo_name: str = Form(...)
+        workspace_file: UploadFile = File(...),
+        workspace_name: str = Form(...)
     ):
-        """Handle repository creation"""
+        """Handle workspace creation"""
         try:
             result = self.service.create_workspace(
-                workspace_name=repo_name,
-                content_file=repo_file.file,
-                filename=repo_file.filename,
+                workspace_name=workspace_name,
+                content_file=workspace_file.file,
+                filename=workspace_file.filename,
                 extract_func=extract_zip  # You'll need to import this
             )
             return WorkspaceCreationResponse(**result)
@@ -81,32 +81,32 @@ class WorkspaceRouter:
         except WorkspaceError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def _list_repos(self):
+    async def _list_workspaces(self):
         """List all workspaces"""
         try:
-            repos = self.service.list_repositories()
-            return {"repositories": repos}
+            workspaces = self.service.list_workspaces()
+            return {"workspaces": workspaces}
         except WorkspaceError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def _list_repo_files(self, repo_name: str):
-        """List repository files"""
+    async def _list_workspace_files(self, workspace_name: str):
+        """List workspace files"""
         try:
-            files = self.service.list_files(repo_name)
+            files = self.service.list_files(workspace_name)
             return {"files": files}
         except WorkspaceNotFoundError as e:
             raise HTTPException(status_code=404, detail=str(e))
         except WorkspaceError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def _delete_repo(self, repo_name: str):
-        """Delete repository"""
+    async def _delete_workspace(self, workspace_name: str):
+        """Delete workspace"""
         try:
-            self.service.delete_workspace(repo_name)
+            self.service.delete_workspace(workspace_name)
             return JSONResponse(
                 content={
                     "status": "success",
-                    "message": f"Repository {repo_name} deleted successfully"
+                    "message": f"Workspace {workspace_name} deleted successfully"
                 }
             )
         except WorkspaceNotFoundError as e:
@@ -116,10 +116,10 @@ class WorkspaceRouter:
 
     async def _commit_changes(
         self,
-        repo_name: str,
+        workspace_name: str,
         commit_data: CommitRequest
     ):
-        """Handle repository commit"""
+        """Handle workspace commit"""
         try:
             commit_info = CommitInfo(
                 commit_message=commit_data.commit_message,
@@ -127,7 +127,7 @@ class WorkspaceRouter:
                 author_email=commit_data.author_email
             )
 
-            result = self.service.commit_changes(repo_name, commit_info)
+            result = self.service.commit_changes(workspace_name, commit_info)
             return JSONResponse(content=result)
 
         except WorkspaceNotFoundError as e:
@@ -137,14 +137,14 @@ class WorkspaceRouter:
 
     async def _update_file(
         self,
-        repo_name: str,
+        workspace_name: str,
         file_path: str,
         update: FileUpdateRequest
     ):
         """Handle file update"""
         try:
             result = self.service.update_file(
-                workspace_name=repo_name,
+                workspace_name=workspace_name,
                 file_path=file_path,
                 content=update.content,
                 path_validator=is_safe_path  # You'll need to import this
@@ -160,52 +160,52 @@ class WorkspaceRouter:
         """Setup all routes with specific permissions."""
         self.router.add_api_route(
             "/create",
-            self._create_repo,
+            self._create_workspace,
             methods=["POST"],
             response_model=WorkspaceCreationResponse,
-            summary="Create new repository",
-            dependencies=require_action(OBJ_REPOSITORY, ACT_CREATE)
+            summary="Create new workspace",
+            dependencies=require_action(OBJ_WORKSPACE, ACT_CREATE)
         )
 
         self.router.add_api_route(
             "/list",
-            self._list_repos,
+            self._list_workspaces,
             methods=["GET"],
-            summary="List all repositories",
-            dependencies=require_action(OBJ_REPOSITORY, ACT_LIST)
+            summary="List all workspaces",
+            dependencies=require_action(OBJ_WORKSPACE, ACT_LIST)
         )
 
         self.router.add_api_route(
-            "/{repo_name}/files",
-            self._list_repo_files,
+            "/{workspace_name}/files",
+            self._list_workspace_files,
             methods=["GET"],
-            summary="List repository files",
-            # Listing files *within* a repo implies reading it
-            dependencies=require_action(OBJ_REPOSITORY, ACT_READ)
+            summary="List workspace files",
+            # Listing files *within* a workspace implies reading it
+            dependencies=require_action(OBJ_WORKSPACE, ACT_READ)
         )
 
         self.router.add_api_route(
-            "/{repo_name}",
-            self._delete_repo,
+            "/{workspace_name}",
+            self._delete_workspace,
             methods=["DELETE"],
-            summary="Delete repository",
-            dependencies=require_action(OBJ_REPOSITORY, ACT_DELETE)
+            summary="Delete workspace",
+            dependencies=require_action(OBJ_WORKSPACE, ACT_DELETE)
         )
 
         self.router.add_api_route(
-            "/{repo_name}/commit",
+            "/{workspace_name}/commit",
             self._commit_changes,
             methods=["POST"],
             summary="Commit changes",
-            # Committing changes is a form of updating the repo
-            dependencies=require_action(OBJ_REPOSITORY, ACT_UPDATE)
+            # Committing changes is a form of updating the workspace
+            dependencies=require_action(OBJ_WORKSPACE, ACT_UPDATE)
         )
 
         self.router.add_api_route(
-            "/{repo_name}/file",
+            "/{workspace_name}/file",
             self._update_file,
             methods=["PUT"],
             summary="Update file",
-            # Updating a file is a form of updating the repo
-            dependencies=require_action(OBJ_REPOSITORY, ACT_UPDATE)
+            # Updating a file is a form of updating the workspace
+            dependencies=require_action(OBJ_WORKSPACE, ACT_UPDATE)
         )

@@ -58,7 +58,7 @@ def test_module(db_session: Session) -> Module:
         version="1.0.0",
         created_at=datetime.now(UTC),
         env_vars={},
-        repo_name="test-repo"
+        workspace_name="test-repo"
     )
     existing = db_session.query(Module).filter_by(module_id=TEST_MODULE_ID).first()
     if existing:

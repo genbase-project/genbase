@@ -26,7 +26,7 @@ def create_test_module(db_session: Session) -> Module:
         version="1.0.0",
         created_at=datetime.now(UTC),
         env_vars={},
-        repo_name="test-module-1-repo"
+        workspace_name="test-module-1-workspace"
     )
     db_session.add(module)
     db_session.commit()

@@ -7,7 +7,7 @@ from loguru import logger
 
 def is_safe_path(base_path: Path, file_path: str) -> bool:
     """
-    Check if the file path is safe and within the base repository path.
+    Check if the file path is safe and within the base workspace path.
     Handles both existing and non-existent (to be created) files.
     """
     try:

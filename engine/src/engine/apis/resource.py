@@ -4,6 +4,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException, Depends, Query, Response
 from sqlalchemy.orm import Session
 
+from engine.auth.dependencies import ACT_LIST, ACT_READ, OBJ_RESOURCE, require_action
 from engine.services.storage.resource import Resource, ResourceError, ResourceService
 from engine.db.session import get_db
 
@@ -119,31 +120,33 @@ class ResourceRouter:
         """Setup all routes"""
 
 
-        # --- ADD NEW ROUTES ---
         self.router.add_api_route(
-            "/{module_id}/workspace/paths", # Changed path slightly
+            "/{module_id}/workspace/paths",
             self._list_workspace_paths,
             methods=["GET"],
-            response_model=List[WorkspaceFileMetadata], # Use the new model
-            summary="List workspace file paths and metadata"
+            response_model=List[WorkspaceFileMetadata],
+            summary="List workspace file paths and metadata",
+            # Requires LIST action on RESOURCE object
+            dependencies=require_action(OBJ_RESOURCE, ACT_LIST)
         )
 
         self.router.add_api_route(
-            "/{module_id}/workspace/file", # New endpoint for content
+            "/{module_id}/workspace/file",
             self._get_workspace_file_content,
             methods=["GET"],
-            # Response is handled directly, no specific model here
-            summary="Get content of a specific workspace file"
+            summary="Get content of a specific workspace file",
+            # Requires READ action on RESOURCE object
+            dependencies=require_action(OBJ_RESOURCE, ACT_READ)
         )
-
-
 
         self.router.add_api_route(
             "/{module_id}/workspace",
             self._get_workspace_resources,
             methods=["GET"],
             response_model=List[Resource],
-            summary="Get workspace resources"
+            summary="Get workspace resources",
+            # Requires READ action on RESOURCE object (getting content)
+            dependencies=require_action(OBJ_RESOURCE, ACT_READ)
         )
 
         self.router.add_api_route(
@@ -151,5 +154,7 @@ class ResourceRouter:
             self._get_provide_instruction_resources,
             methods=["GET"],
             response_model=List[Resource],
-            summary="Get Provide Instructions resources"
+            summary="Get Provide Instructions resources",
+            # Requires READ action on RESOURCE object
+            dependencies=require_action(OBJ_RESOURCE, ACT_READ)
         )

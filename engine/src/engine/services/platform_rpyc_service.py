@@ -162,12 +162,6 @@ class PlatformRPyCService(rpyc.Service):
         logger.debug(f"RPyC exposed_chat_completion call. Model: {effective_model}")
         
 
-        # # Add this debugging before calling the model service
-        for i, msg in enumerate(messages):
-            logger.debug(f"Message {i} type: {type(msg)}")
-            if isinstance(msg, dict):
-                for k, v in msg.items():
-                    logger.debug(f"  Key '{k}' has type: {type(v)}")
         try:
             # Use custom serialization to ensure JSON compatibility
             serialized_messages = _safe_serialize_for_json(messages)
@@ -193,9 +187,8 @@ class PlatformRPyCService(rpyc.Service):
             logger.debug(f"Chat completion response: {response}")
             return response.model_dump(mode='json')  # Return dict
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Error in exposed_chat_completion: {error_msg}", exc_info=True)
-            raise ValueError(f"Chat completion failed: {error_msg}")
+            logger.error(f"Error in exposed_chat_completion: {e}")
+            raise ValueError(f"Chat completion failed: {e}")
 
 
     def exposed_structured_output( self, messages: List[Dict[str, Any]], response_model_name: str,

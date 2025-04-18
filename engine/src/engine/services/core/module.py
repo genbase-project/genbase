@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session
 import networkx as nx
 
 from engine.services.storage.repository import (
-    RepoNotFoundError,
-    RepoService,
+    WorkspaceNotFoundError,
+    WorkspaceService,
 )
 from engine.services.execution.state import StateService
 from engine.services.core.kit import KitService, KitConfig
@@ -79,7 +79,7 @@ class ModuleService:
         self,
         workspace_base: str,
         module_base: str,
-        repo_service: RepoService,
+        repo_service: WorkspaceService,
         state_service: StateService,
         kit_service: KitService
     ):
@@ -138,8 +138,8 @@ class ModuleService:
             memory_zip.seek(0)
 
             # Create repository
-            self.repo_service.create_repository(
-                repo_name=repo_name,
+            self.repo_service.create_workspace(
+                workspace_name=repo_name,
                 content_file=memory_zip,
                 filename="workspace.zip",
                 extract_func=extract_zip
@@ -181,7 +181,7 @@ class ModuleService:
         except Exception as e:
             # Cleanup on failure
             try:
-                self.repo_service.delete_repository(repo_name)
+                self.repo_service.delete_workspace(repo_name)
             except:
                 pass
             raise ModuleError(f"Failed to create module: {str(e)}")
@@ -279,8 +279,8 @@ class ModuleService:
 
                 # Delete repository
                 try:
-                    self.repo_service.delete_repository(repo_name)
-                except RepoNotFoundError:
+                    self.repo_service.delete_workspace(repo_name)
+                except WorkspaceNotFoundError:
                     pass
 
         except Exception as e:
@@ -698,8 +698,8 @@ class ModuleService:
                 # Add provider's repo as submodule to receiver's repo within a dedicated workspaces folder
                 submodule_path = f"workspaces/{provider_metadata.module_id}"
                 self.repo_service.add_submodule(
-                    parent_repo_name=receiver_metadata.repo_name,
-                    child_repo_name=provider_metadata.repo_name,
+                    parent_workspace_name=receiver_metadata.repo_name,
+                    child_workspace_name=provider_metadata.repo_name,
                     path=submodule_path  # Place in workspaces/module_id
                 )
                 
@@ -752,7 +752,7 @@ class ModuleService:
                 # Remove the submodule from receiver's repo
                 submodule_path = f"workspaces/{provider_metadata.module_id}"
                 self.repo_service.remove_submodule(
-                    repo_name=receiver_metadata.repo_name,
+                    workspace_name=receiver_metadata.repo_name,
                     submodule_path=submodule_path  # Using workspaces/module_id path
                 )
                 

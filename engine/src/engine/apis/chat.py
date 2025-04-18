@@ -14,6 +14,7 @@ from datetime import datetime, UTC # For SSE timestamp
 from sse_starlette.sse import EventSourceResponse
 
 # Engine Imports
+from engine.auth.dependencies import ACT_EXECUTE, ACT_READ, ACT_STREAM, OBJ_CHAT, require_action
 from engine.db.models import ChatHistory # For SSE
 from engine.db.session import SessionLocal # For SSE
 from sqlalchemy import select, desc # For SSE timestamp query
@@ -406,51 +407,61 @@ class ChatRouter:
         
         
     def _setup_routes(self):
-        """Setup API routes"""
+        """Setup API routes with specific permissions."""
         self.router.add_api_route(
-            "/{module_id}/execute", # POST /chat/{module_id}/execute
+            "/{module_id}/execute",
             self._execute_profile,
             methods=["POST"],
             response_model=ProfileResponse,
             summary="Execute a module profile",
-            description="Runs the agent's process_request for the specified profile in a container."
+            description="Runs the agent's process_request for the specified profile.",
+            # Apply dependency requiring 'execute' action on 'chat' object
+            dependencies=require_action(OBJ_CHAT, ACT_EXECUTE)
         )
         self.router.add_api_route(
-            "/{module_id}/profile/{profile}/history", # GET /chat/{module_id}/profile/{profile}/history
+            "/{module_id}/profile/{profile}/history",
             self._get_profile_history,
             methods=["GET"],
             response_model=HistoryResponse,
             summary="Get chat history for a profile session",
-            description="Retrieves the conversation history from the engine's database."
+            description="Retrieves the conversation history.",
+            # Apply dependency requiring 'read' action on 'chat' object
+            dependencies=require_action(OBJ_CHAT, ACT_READ)
         )
         self.router.add_api_route(
-            "/{module_id}/status", # GET /chat/{module_id}/status
+            "/{module_id}/status",
             self._get_status,
             methods=["GET"],
             response_model=StatusResponse,
             summary="Get module execution status",
-            description="Retrieves the current state (e.g., STANDBY, EXECUTING) from the engine."
+            description="Retrieves the current execution state of the module.",
+            # Apply dependency requiring 'read' action on 'chat' object
+            dependencies=require_action(OBJ_CHAT, ACT_READ)
         )
         self.router.add_api_route(
-            "/{module_id}/profile/{profile}/stream", # GET /chat/{module_id}/profile/{profile}/stream
+            "/{module_id}/profile/{profile}/stream",
             self._stream_chat_history,
             methods=["GET"],
             summary="Stream chat history updates",
-            description="Establishes an SSE connection to receive chat history updates in real-time."
-            # No response_model needed, response_class is EventSourceResponse
+            description="Establishes an SSE connection for real-time history updates.",
+            # Apply dependency requiring 'stream' action on 'chat' object
+            dependencies=require_action(OBJ_CHAT, ACT_STREAM)
         )
-
         self.router.add_api_route(
-            "/{module_id}/profile/{profile}/tool/{tool_name}", # POST /chat/{module_id}/profile/{profile}/tool/{tool_name}
+            "/{module_id}/profile/{profile}/tool/{tool_name}",
             self._execute_profile_tool,
             methods=["POST"],
             summary="Execute a specific tool/action from a profile",
-            description="Directly execute a tool/action from an agent profile with provided parameters."
+            description="Directly execute a tool/action with provided parameters.",
+            # Apply dependency requiring 'execute' action on 'chat' object
+            dependencies=require_action(OBJ_CHAT, ACT_EXECUTE)
         )
         self.router.add_api_route(
-            "/{module_id}/profile/{profile}/tools", # GET /chat/{module_id}/profile/{profile}/tools
+            "/{module_id}/profile/{profile}/tools",
             self._get_profile_tools,
             methods=["GET"],
             summary="Get tools available in a profile",
-            description="Returns a list of tools with their descriptions and parameter schemas for a specific profile."
+            description="Returns tool schemas for a specific profile.",
+            # Apply dependency requiring 'read' action on 'chat' object
+            dependencies=require_action(OBJ_CHAT, ACT_READ)
         )

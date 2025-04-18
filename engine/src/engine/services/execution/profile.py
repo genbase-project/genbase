@@ -6,7 +6,7 @@ import yaml
 import os
 from engine.db.models import ProvideType
 from engine.services.execution.function_parser import FunctionMetadata
-from engine.services.storage.repository import RepoService
+from engine.services.storage.repository import WorkspaceService
 from engine.utils.yaml import YAMLUtils
 from pydantic import BaseModel
 from engine.services.core.kit import InstructionItem, KitConfig, KitService
@@ -94,7 +94,7 @@ class ProfileService:
         module_base: str | Path,
         module_service: ModuleService,
         resource_service: ResourceService,
-        repo_service: RepoService,
+        repo_service: WorkspaceService,
         kit_service: KitService
     ):
         self.workspace_base = Path(workspace_base)

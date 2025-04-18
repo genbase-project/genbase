@@ -1,4 +1,4 @@
-// BottomPanel.tsx
+// Updated BottomPanel.tsx with larger textarea and API response button
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useChatPromptStore } from '@/stores/chatPromptStore';
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,10 @@ import {
   BadgeInfo,
   Loader2,
   AlertCircle,
-  ArrowUp // Use ArrowUp icon like Grok? Or keep Send
+  ArrowUp,
+  Code, // New icon for API response button
+  Network,
+  Activity
 } from 'lucide-react';
 import { StreamingChatContainer, Message } from '@/components/StreamingChatContainer';
 import type { Module } from '@/components/TreeView';
@@ -42,8 +45,11 @@ import {
 import { ENGINE_BASE_URL, fetchWithAuth } from '@/config';
 import type { KitInstruction } from '@/app/registry/RegistryPage';
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { JsonView, allExpanded, defaultStyles } from 'react-json-view-lite';
+import 'react-json-view-lite/dist/index.css';
 
 // --- Interfaces (Profile, Session) ---
+// [Interfaces remain the same]
 interface Profile {
   profile_type: string;
   agent_type: string;
@@ -94,7 +100,6 @@ interface ToolSchema {
   };
 }
 
-// Add this to your existing interface definitions
 interface ProfileToolsResponse {
   status: string;
   profile: string;
@@ -102,6 +107,17 @@ interface ProfileToolsResponse {
   tools: ToolSchema[];
 }
 
+// Interface for API response data
+interface ApiResponseData {
+  timestamp: string;
+  request: {
+    endpoint: string;
+    method: string;
+    body?: any;
+  };
+  response: any;
+  status: number;
+}
 
 // --- Helper Functions ---
 const formatDate = (dateString: string) => {
@@ -117,12 +133,12 @@ const truncateText = (text: string, maxLength: number = 30) => {
   return text.slice(0, maxLength) + '...';
 };
 
-
 // --- Component ---
 const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelProps) => {
   // UI State
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isProfileDetailsOpen, setIsProfileDetailsOpen] = useState(false);
+  const [isApiResponseDialogOpen, setIsApiResponseDialogOpen] = useState(false);
 
   // Data State
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -133,6 +149,7 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
   const [error, setError] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [lastApiResponse, setLastApiResponse] = useState<ApiResponseData | null>(null);
 
   // References
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -140,39 +157,38 @@ const BottomPanel = ({ selectedModule, onMaximize, isMaximized }: BottomPanelPro
 
   // Zustand store for input value
   const { inputValue: storeInputValue, setInputValue: setStoreInputValue } = useChatPromptStore();
-
   
-// Inside BottomPanel component, add this state:
-const [profileTools, setProfileTools] = useState<ToolSchema[]>([]);
-const [toolsLoading, setToolsLoading] = useState(false);
+  // States for profile tools
+  const [profileTools, setProfileTools] = useState<ToolSchema[]>([]);
+  const [toolsLoading, setToolsLoading] = useState(false);
 
-// Add a function to fetch tools for a profile
-const fetchProfileTools = async (moduleId: string, profileName: string) => {
-  if (!moduleId || !profileName) return;
-  
-  setToolsLoading(true);
-  try {
-    const response = await fetchWithAuth(
-      `${ENGINE_BASE_URL}/chat/${moduleId}/profile/${profileName}/tools`
-    );
+  // Add a function to fetch tools for a profile
+  const fetchProfileTools = async (moduleId: string, profileName: string) => {
+    if (!moduleId || !profileName) return;
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch tools: ${response.statusText}`);
-    }
-    
-    const data: ProfileToolsResponse = await response.json();
-    if (data.status === "success" && Array.isArray(data.tools)) {
-      setProfileTools(data.tools);
-    } else {
+    setToolsLoading(true);
+    try {
+      const response = await fetchWithAuth(
+        `${ENGINE_BASE_URL}/chat/${moduleId}/profile/${profileName}/tools`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch tools: ${response.statusText}`);
+      }
+      
+      const data: ProfileToolsResponse = await response.json();
+      if (data.status === "success" && Array.isArray(data.tools)) {
+        setProfileTools(data.tools);
+      } else {
+        setProfileTools([]);
+      }
+    } catch (error) {
+      console.error('Error fetching profile tools:', error);
       setProfileTools([]);
+    } finally {
+      setToolsLoading(false);
     }
-  } catch (error) {
-    console.error('Error fetching profile tools:', error);
-    setProfileTools([]);
-  } finally {
-    setToolsLoading(false);
-  }
-};
+  };
 
   // Scrolling functions for tabs
   const scrollLeft = () => {
@@ -183,15 +199,15 @@ const fetchProfileTools = async (moduleId: string, profileName: string) => {
     tabsRef.current?.scrollBy({ left: 100, behavior: 'smooth' });
   };
 
-  // Adjust textarea height dynamically
+  // Adjust textarea height dynamically - modified to handle larger textarea
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
       const scrollHeight = textarea.scrollHeight;
-      // Ensure minimum height matches initial rows prop if needed, e.g., 40px for rows={1}
-      const minHeight = 40;
-      textarea.style.height = `${Math.max(minHeight, Math.min(scrollHeight, 200))}px`;
+      // Increased minimum height to 80px (from 40px) and max height to 300px (from 200px)
+      const minHeight = 80;
+      textarea.style.height = `${Math.max(minHeight, Math.min(scrollHeight, 300))}px`;
     }
   };
 
@@ -229,8 +245,8 @@ const fetchProfileTools = async (moduleId: string, profileName: string) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProfile, selectedModule?.module_id]);
 
-
   const fetchProfiles = async () => {
+    // [Implementation unchanged]
     if (!selectedModule?.module_id) return;
     try {
       setError(null);
@@ -254,6 +270,7 @@ const fetchProfileTools = async (moduleId: string, profileName: string) => {
   };
 
   const fetchSessions = async () => {
+    // [Implementation unchanged]
     if (!selectedModule?.module_id || !currentProfile) return;
     try {
       setError(null);
@@ -292,6 +309,7 @@ const fetchProfileTools = async (moduleId: string, profileName: string) => {
   };
 
   const createNewSession = async (): Promise<string | null> => {
+     // [Implementation unchanged]
      if (!selectedModule?.module_id || !currentProfile) {
          setError("Cannot create session: Module or profile not selected.");
          return null;
@@ -320,7 +338,7 @@ const fetchProfileTools = async (moduleId: string, profileName: string) => {
      }
   };
 
-
+  // Modified handleSend to capture API response
   const handleSend = async (text: string) => {
     const trimmedText = text.trim();
     if (!trimmedText) return;
@@ -350,15 +368,32 @@ const fetchProfileTools = async (moduleId: string, profileName: string) => {
 
     try {
       const url = new URL(`${ENGINE_BASE_URL}/chat/${selectedModule.module_id}/execute`);
-      await fetchWithAuth(url.toString(), {
+      const requestBody = {
+        profile: currentProfile,
+        input: trimmedText,
+        session_id: targetSessionId
+      };
+      
+      const startTime = new Date();
+      const response = await fetchWithAuth(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profile: currentProfile,
-          input: trimmedText,
-          session_id: targetSessionId
-        })
+        body: JSON.stringify(requestBody)
       });
+      
+      // Store the API response data
+      const responseData = await response.json();
+      setLastApiResponse({
+        timestamp: startTime.toISOString(),
+        request: {
+          endpoint: url.toString(),
+          method: 'POST',
+          body: requestBody
+        },
+        response: responseData,
+        status: response.status
+      });
+      
       setStoreInputValue('');
       // Trigger height adjustment after clearing input
       requestAnimationFrame(() => adjustTextareaHeight());
@@ -387,7 +422,6 @@ const fetchProfileTools = async (moduleId: string, profileName: string) => {
     }
   };
 
-
   // Render Loading or No Module Selected states
   if (!selectedModule) {
     return (
@@ -410,7 +444,7 @@ return (
     {/* Left Sidebar */}
     <div className="w-60 border-r flex flex-col bg-white">
       {/* Profile Selector */}
-      <div className="p-3 pb-2  border-neutral-200">
+      <div className="p-3 pb-2 border-neutral-200">
         <div className="flex items-center justify-between">
           <TooltipProvider delayDuration={300}>
             <Tooltip>
@@ -646,11 +680,11 @@ return (
                     <div className="flex flex-col items-start overflow-hidden">
                 
                       {session.last_message && (
-                        <span className="text-sm  truncate w-full">
+                        <span className="text-sm truncate w-full">
                           {truncateText(session.last_message, 25)}
                         </span>
                       )}
-                            <span className={`text-xs font-normal   text-neutral-500 truncate w-full`}>
+                      <span className={`text-xs font-normal text-neutral-500 truncate w-full`}>
                         {session.is_default ? "Default Session" : formatDate(session.last_updated)}
                       </span>
                     </div>
@@ -716,53 +750,139 @@ return (
           </Alert>
         )}
         
-        <div className="relative w-full mx-auto bg-neutral-50">
-          <Textarea
-            ref={textareaRef}
-            value={storeInputValue}
-            onChange={(e) => setStoreInputValue(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (canSend) {
-                  handleSend(storeInputValue);
+        {/* Updated Input Area with larger textarea and API response button */}
+        <div className="relative w-full mx-auto">
+          <div className="min-h-[120px] relative rounded-lg bg-neutral-50 border border-neutral-200">
+            <Textarea
+              ref={textareaRef}
+              value={storeInputValue}
+              onChange={(e) => setStoreInputValue(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (canSend) {
+                    handleSend(storeInputValue);
+                  }
                 }
+              }}
+              placeholder={
+                !currentProfile ? "Select a profile to begin..." :
+                (!currentSession && !pendingSessionId && !currentProfileData?.allow_multiple) ? "Send a message to start the default session..." :
+                (!currentSession && !pendingSessionId && currentProfileData?.allow_multiple) ? "Select or start a new session..." :
+                "Send a message..."
               }
-            }}
-            placeholder={
-              !currentProfile ? "Select a profile to begin..." :
-              (!currentSession && !pendingSessionId && !currentProfileData?.allow_multiple) ? "Send a message to start the default session..." :
-              (!currentSession && !pendingSessionId && currentProfileData?.allow_multiple) ? "Select or start a new session..." :
-               "Send a message..."
-            }
-            disabled={isLoading || !currentProfile || (!currentSession && !pendingSessionId)}
-            className="
-              w-full resize-none min-h-[52px] max-h-[200px] text-sm 
-               border-0 rounded-lg
+              disabled={isLoading || !currentProfile || (!currentSession && !pendingSessionId)}
+              className="
+                w-full resize-none min-h-[80px] max-h-[300px] text-sm 
+                border-0 rounded-lg
+                focus-visible:ring-1 focus-visible:ring-neutral-400 focus-visible:border-neutral-400
+                pl-3 pr-3 py-3 pb-12
+                overflow-y-auto
+                bg-transparent
+              "
+              rows={3}
+            />
+            
+            {/* Action buttons positioned at the bottom of the textarea */}
+            <div className="absolute bottom-2 right-2 flex items-center space-x-2">
+              {/* API Response Viewer Button */}
+              <Dialog open={isApiResponseDialogOpen} onOpenChange={setIsApiResponseDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className={`h-8 w-8 rounded-full ${lastApiResponse ? 'text-blue-600 hover:bg-blue-100' : 'text-neutral-400 cursor-not-allowed'}`}
+                    disabled={!lastApiResponse}
+                    aria-label="View last API response"
+                  >
+                    <Activity                className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                
+                <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+                  <DialogHeader className="pb-4 border-b">
+                    <DialogTitle className="flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-blue-600" />
+                      Last API Response
+                      <Badge variant="outline" className="ml-2">
+                        {lastApiResponse?.timestamp ? new Date(lastApiResponse.timestamp).toLocaleString() : 'Unknown'}
+                      </Badge>
+                    </DialogTitle>
+                  </DialogHeader>
+                  
+                  <div className="flex-1 overflow-y-auto p-4">
+                    {lastApiResponse ? (
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="text-sm font-medium mb-2 text-neutral-700">Request</h3>
+                          <div className="bg-neutral-50 p-3 rounded border border-neutral-200">
+                            <p className="text-xs font-medium mb-1 text-blue-700">
+                              {lastApiResponse.request.method} {lastApiResponse.request.endpoint}
+                            </p>
+                            {lastApiResponse.request.body && (
+                              <div className="mt-2">
+                                <p className="text-xs font-medium mb-1 text-neutral-600">Body:</p>
+                                <div className="bg-white rounded p-2 border border-neutral-200">
+                                  <JsonView 
+                                    data={lastApiResponse.request.body} 
+                                    shouldExpandNode={allExpanded} 
+                                    style={defaultStyles} 
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <h3 className="text-sm font-medium mb-2 text-neutral-700">
+                            Response 
+                            <Badge variant={lastApiResponse.status < 400 ? "default" : "destructive"} className="ml-2">
+                              Status: {lastApiResponse.status}
+                            </Badge>
+                          </h3>
+                          <div className="bg-neutral-50 p-3 rounded border border-neutral-200">
+                            <div className="bg-white rounded p-2 border border-neutral-200">
+                              <JsonView 
+                                data={lastApiResponse.response} 
+                                shouldExpandNode={allExpanded} 
+                                style={defaultStyles} 
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full py-8 text-neutral-500">
+                        <AlertCircle className="h-10 w-10 mb-3 text-neutral-400" />
+                        <p>No API response data available</p>
+                        <p className="text-sm mt-1">Send a message to generate API data</p>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
               
-              focus-visible:ring-1 focus-visible:ring-neutral-400 focus-visible:border-neutral-400
-              pl-3 pr-14 py-3
-              overflow-y-auto
-            "
-            rows={1}
-          />
-          <Button
-            onClick={() => handleSend(storeInputValue)}
-            disabled={!canSend || isLoading}
-            size="icon"
-            className={`
-              absolute bottom-2 right-2 h-8 w-8 rounded-full z-10
-              ${canSend ? 'bg-blue-600 text-white' : 'bg-neutral-50 text-neutral-400 cursor-not-allowed'}
-              transition-colors
-            `}
-            aria-label="Send message"
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ArrowUp className="h-4 w-4" />
-            )}
-          </Button>
+              {/* Send Button */}
+              <Button
+                onClick={() => handleSend(storeInputValue)}
+                disabled={!canSend || isLoading}
+                size="icon"
+                className={`
+                  h-8 w-8 rounded-full z-10
+                  ${canSend ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'}
+                  transition-colors
+                `}
+                aria-label="Send message"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

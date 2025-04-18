@@ -4,6 +4,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from engine.auth.dependencies import ACT_CREATE, ACT_DELETE, ACT_LIST, ACT_READ, OBJ_KIT, require_action
 from engine.services.core.kit import (
     InvalidVersionError,
     KitError,
@@ -262,34 +263,37 @@ class KitRouter:
     
 
     def _setup_routes(self):
-        """Setup all routes"""
+        """Setup all routes with specific permissions."""
         self.router.add_api_route(
             "/",
             self._upload_kit,
             methods=["POST"],
-            summary="Upload kit"
+            summary="Upload kit",
+            dependencies=require_action(OBJ_KIT, ACT_CREATE)
         )
-
 
         self.router.add_api_route(
             "/upload",
             self._upload_install_kit,
             methods=["POST"],
-            summary="Upload and install kit from tar.gz file"
+            summary="Upload and install kit from tar.gz file",
+            dependencies=require_action(OBJ_KIT, ACT_CREATE)
         )
 
         self.router.add_api_route(
             "/install/{owner}/{kit_id}/{version}",
             self._install_kit,
             methods=["POST"],
-            summary="Install kit from registry with specific version"
+            summary="Install kit from registry with specific version",
+            dependencies=require_action(OBJ_KIT, ACT_CREATE)
         )
 
         self.router.add_api_route(
             "/install/{owner}/{kit_id}",
             self._install_kit,
             methods=["POST"],
-            summary="Install kit from registry with latest version"
+            summary="Install kit from registry with latest version",
+            dependencies=require_action(OBJ_KIT, ACT_CREATE)
         )
 
         self.router.add_api_route(
@@ -297,7 +301,8 @@ class KitRouter:
             self._list_kits,
             methods=["GET"],
             response_model=KitListResponse,
-            summary="List all kits"
+            summary="List all kits",
+            dependencies=require_action(OBJ_KIT, ACT_LIST)
         )
 
         self.router.add_api_route(
@@ -305,52 +310,50 @@ class KitRouter:
             self._list_kit_versions,
             methods=["GET"],
             response_model=KitVersionsResponse,
-            summary="List kit versions"
+            summary="List kit versions",
+            dependencies=require_action(OBJ_KIT, ACT_READ)
         )
 
         self.router.add_api_route(
             "/{owner}/{kit_id}/{version}",
             self._delete_kit_version,
             methods=["DELETE"],
-            summary="Delete kit version"
+            summary="Delete kit version",
+            dependencies=require_action(OBJ_KIT, ACT_DELETE)
         )
 
         self.router.add_api_route(
             "/{owner}/{kit_id}",
             self._delete_kit,
             methods=["DELETE"],
-            summary="Delete kit"
+            summary="Delete kit",
+            dependencies=require_action(OBJ_KIT, ACT_DELETE)
         )
 
-
-
-            # Add this route in the _setup_routes method
         self.router.add_api_route(
-                "/registry",
-                self._get_registry_kits,
-                methods=["GET"],
-                response_model=RegistryKitsResponse,
-                summary="Get all kits from registry"
+            "/registry",
+            self._get_registry_kits,
+            methods=["GET"],
+            response_model=RegistryKitsResponse,
+            summary="Get all kits from registry",
+            dependencies=require_action(OBJ_KIT, ACT_LIST)
         )
-
-
-
 
         self.router.add_api_route(
             "/registry/config/{owner}/{kit_id}/{version}",
             self._get_kit_config,
             methods=["GET"],
-            summary="Get kit configuration (kit.yaml contents)"
+            summary="Get kit configuration (kit.yaml contents)",
+            dependencies=require_action(OBJ_KIT, ACT_READ)
         )
-        
-        # Add registry versions route using our get_registry_kit_versions implementation
+
         self.router.add_api_route(
             "/registry/versions/{owner}/{kit_id}",
             self._get_registry_kit_versions,
             methods=["GET"],
-            summary="Get available versions of a kit from registry"
+            summary="Get available versions of a kit from registry",
+            dependencies=require_action(OBJ_KIT, ACT_READ)
         )
-        
 
 
 

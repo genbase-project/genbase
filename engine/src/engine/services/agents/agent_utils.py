@@ -4,14 +4,14 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from engine.const import REPO_BASE_DIR
 from engine.services.core.module import ModuleService
-from engine.services.storage.repository import RepoService
+from engine.services.storage.repository import WorkspaceService
 from loguru import logger
 from directory_tree import DisplayTree, display_tree
 
 class AgentUtils:
     """Utility class for common agent operations"""
 
-    def __init__(self, module_service: ModuleService, repo_service: RepoService, module_id: str, profile: str):
+    def __init__(self, module_service: ModuleService, repo_service: WorkspaceService, module_id: str, profile: str):
         """
         Initialize AgentUtils for a specific module and profile
         

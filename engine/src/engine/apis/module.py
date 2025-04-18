@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_serializer, validator
 from sqlalchemy import UUID
 
+from engine.auth.dependencies import ACT_CREATE, ACT_DELETE, ACT_LIST, ACT_READ, ACT_UPDATE, OBJ_MODULE, require_action
 from engine.db.models import ProvideType
 from engine.services.core.api_key import ApiKeyService
 from engine.services.core.module import (
@@ -583,108 +584,114 @@ class ModuleRouter:
 
 
 
-
+    # --- Setup Routes with Permissions ---
     def add_provide_routes(self):
-        """Add provide-related routes to the router"""
-        
+        """Add provide-related routes to the router with permissions"""
+
         self.router.add_api_route(
             "/provide",
             self._create_module_provide,
             methods=["POST"],
             response_model=ModuleProvideResponse,
-            summary="Create a provide relationship between modules"
+            summary="Create a provide relationship between modules",
+            dependencies=require_action(OBJ_MODULE, ACT_CREATE)
         )
-        
+
         self.router.add_api_route(
             "/provide/{provider_id}/{receiver_id}/{resource_type}",
             self._delete_module_provide,
             methods=["DELETE"],
-            summary="Delete a provide relationship"
+            summary="Delete a provide relationship",
+            dependencies=require_action(OBJ_MODULE, ACT_DELETE)
         )
-        
+
         self.router.add_api_route(
             "/{module_id}/providing",
             self.get_providing,
             methods=["GET"],
             response_model=List[ModuleProvideResponse],
-            summary="Get all resources this module provides to other modules"
+            summary="Get all resources this module provides to other modules",
+            dependencies=require_action(OBJ_MODULE, ACT_LIST)
         )
-        
+
         self.router.add_api_route(
             "/{module_id}/receiving",
             self.get_receiving,
             methods=["GET"],
             response_model=List[ModuleProvideResponse],
-            summary="Get all resources this module receives from other modules"
+            summary="Get all resources this module receives from other modules",
+            dependencies=require_action(OBJ_MODULE, ACT_LIST)
         )
-        
+
         self.router.add_api_route(
             "/{module_id}/receiving/{resource_type}",
             self.get_receiving_by_type,
             methods=["GET"],
             response_model=List[ModuleProvideResponse],
-            summary="Get specific resources this module receives from other modules"
+            summary="Get specific resources this module receives from other modules",
+            dependencies=require_action(OBJ_MODULE, ACT_READ)
         )
-        
+
         self.router.add_api_route(
             "/{module_id}/providing/{resource_type}",
             self.get_providing_by_type,
             methods=["GET"],
             response_model=List[ModuleProvideResponse],
-            summary="Get specific resources this module provides to other modules"
+            summary="Get specific resources this module provides to other modules",
+            dependencies=require_action(OBJ_MODULE, ACT_READ)
         )
-        
+
         self.router.add_api_route(
             "/{module_id}/with-access-to/{resource_type}",
             self._get_modules_with_access_to,
             methods=["GET"],
             response_model=List[ModuleResponse],
-            summary="Get modules with access to this module's resources"
+            summary="Get modules with access to this module's resources",
+            dependencies=require_action(OBJ_MODULE, ACT_READ)
         )
-        
+
         self.router.add_api_route(
             "/{module_id}/providers/{resource_type}",
             self._get_modules_providing_to,
             methods=["GET"],
             response_model=List[ModuleResponse],
-            summary="Get modules providing resources to this module"
+            summary="Get modules providing resources to this module",
+            dependencies=require_action(OBJ_MODULE, ACT_READ)
         )
-        
+
         self.router.add_api_route(
             "/provide/{provider_id}/{receiver_id}/{resource_type}/description",
             self._update_module_provide_description,
             methods=["PUT"],
-            summary="Update provide relationship description"
+            summary="Update provide relationship description",
+            dependencies=require_action(OBJ_MODULE, ACT_UPDATE)
         )
 
-
-
-
-
-
-
     def _setup_routes(self):
-        """Setup all routes"""
+        """Setup all core module routes with permissions"""
         self.router.add_api_route(
             "/",
             self._create_module,
             methods=["POST"],
             response_model=ModuleResponse,
-            summary="Create module"
+            summary="Create module",
+            dependencies=require_action(OBJ_MODULE, ACT_CREATE)
         )
 
         self.router.add_api_route(
             "/{module_id}",
             self._delete_module,
             methods=["DELETE"],
-            summary="Delete module"
+            summary="Delete module",
+            dependencies=require_action(OBJ_MODULE, ACT_DELETE)
         )
 
         self.router.add_api_route(
             "/{module_id}/path",
             self._update_module_path,
             methods=["PUT"],
-            summary="Update module path"
+            summary="Update module path",
+            dependencies=require_action(OBJ_MODULE, ACT_UPDATE)
         )
 
         self.router.add_api_route(
@@ -692,26 +699,28 @@ class ModuleRouter:
             self._get_project_modules,
             methods=["GET"],
             response_model=List[ModuleResponse],
-            summary="Get all modules in a project"
+            summary="Get all modules in a project",
+            # Requires LIST on MODULE object (listing modules within a project)
+            dependencies=require_action(OBJ_MODULE, ACT_LIST)
         )
-
 
         self.router.add_api_route(
             "/graph",
             self.get_module_graph,
             methods=["GET"],
             response_model=ModuleGraphResponse,
-            summary="Get module graph"
+            summary="Get module graph",
+            # Requires LIST on MODULE object (viewing the overall structure)
+            dependencies=require_action(OBJ_MODULE, ACT_LIST)
         )
-
-
 
         self.router.add_api_route(
             "/{module_id}/name",
             self._update_module_name,
             methods=["PUT"],
             response_model=ModuleResponse,
-            summary="Update module name"
+            summary="Update module name",
+            dependencies=require_action(OBJ_MODULE, ACT_UPDATE)
         )
 
         self.router.add_api_route(
@@ -719,20 +728,19 @@ class ModuleRouter:
             self._update_module_env_var,
             methods=["PUT"],
             response_model=ModuleResponse,
-            summary="Update module environment variable"
+            summary="Update module environment variable",
+            dependencies=require_action(OBJ_MODULE, ACT_UPDATE)
         )
-
-
-
 
         self.router.add_api_route(
             "/{module_id}/api-key",
             self._create_or_reset_module_api_key,
             methods=["POST"],
             response_model=ApiKeyResponse,
-            summary="Create or reset API key for a module"
+            summary="Create or reset API key for a module",
+            # Requires UPDATE on the MODULE object (managing its API key)
+            dependencies=require_action(OBJ_MODULE, ACT_UPDATE)
         )
 
-
-
+        # Call the method to add provide-related routes
         self.add_provide_routes()

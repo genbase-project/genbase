@@ -17,7 +17,7 @@ from engine.services.core.module import (
     ModuleMetadata,
     ModuleError
 )
-from engine.services.storage.repository import RepoService, RepoNotFoundError
+from engine.services.storage.repository import WorkspaceService, WorkspaceNotFoundError
 from engine.services.execution.state import StateService
 from engine.services.core.kit import KitService, KitConfig
 from engine.db.models import Module, Project, ProjectModuleMapping, ProvideType, ModuleProvide
@@ -36,7 +36,7 @@ TEST_MODULE_ID_2 = "mod-def"
 
 @pytest.fixture
 def mock_repo_service() -> MagicMock:
-    service = MagicMock(spec=RepoService)
+    service = MagicMock(spec=WorkspaceService)
     service.create_repository = MagicMock()
     service.delete_repository = MagicMock()
     service.add_submodule = MagicMock()

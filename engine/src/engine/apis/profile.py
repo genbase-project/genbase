@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, insert
 
+from engine.auth.dependencies import ACT_CREATE, ACT_LIST, ACT_READ, OBJ_PROFILE, require_action
 from engine.db.models import ChatHistory
 from engine.db.session import SessionLocal
 from engine.services.execution.profile import ProfileError, ProfileService
@@ -250,14 +251,15 @@ class ProfileRouter:
             raise HTTPException(status_code=400, detail=str(e))
 
     def _setup_routes(self):
-        """Setup all routes"""
+        """Setup all routes with specific permissions."""
         self.router.add_api_route(
             "/session/create",
             self._create_session,
             methods=["POST"],
             response_model=CreateSessionResponse,
             summary="Create a new chat session",
-            description="Create a new chat session for a profile"
+            description="Create a new chat session for a profile.",
+            dependencies=require_action(OBJ_PROFILE, ACT_CREATE)
         )
 
         self.router.add_api_route(
@@ -266,7 +268,8 @@ class ProfileRouter:
             methods=["GET"],
             response_model=Dict[str, Any],
             summary="Get detailed metadata for a specific profile",
-            description="Get profile-specific information including instructions, available steps, and requirements"
+            description="Get profile-specific information including instructions, available steps, and requirements.",
+            dependencies=require_action(OBJ_PROFILE, ACT_READ)
         )
 
         self.router.add_api_route(
@@ -275,9 +278,9 @@ class ProfileRouter:
             methods=["GET"],
             response_model=List[Dict[str, Any]],
             summary="Get all available sessions for a profile",
-            description="Get list of chat sessions including their IDs and latest messages"
+            description="Get list of chat sessions including their IDs and latest messages.",
+            dependencies=require_action(OBJ_PROFILE, ACT_LIST)
         )
-
 
         self.router.add_api_route(
             "/profiles",
@@ -285,5 +288,7 @@ class ProfileRouter:
             methods=["GET"],
             response_model=List[Dict[str, Any]],
             summary="Get all available profiles for a module",
-            description="Get comprehensive configuration for all profiles including base config, metadata, and module customizations"
+            description="Get comprehensive configuration for all profiles.",
+            dependencies=require_action(OBJ_PROFILE, ACT_LIST)
         )
+

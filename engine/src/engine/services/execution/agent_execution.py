@@ -22,7 +22,7 @@ import json
 from engine.const import RPC_PORT, VENV_BASE_DIR
 from engine.services.agents.context import AgentContext
 from engine.services.execution.function_parser import FunctionParser
-from engine.services.storage.repository import RepoService
+from engine.services.storage.repository import WorkspaceService
 from engine.services.core.module import ModuleService, ModuleMetadata
 from engine.services.core.kit import KitService, KitConfig
 from engine.services.execution.state import AgentState, StateService
@@ -46,7 +46,7 @@ class AgentRunnerService:
     
     def __init__(
         self,
-        repo_service: RepoService,
+        repo_service: WorkspaceService,
         module_service: ModuleService,
         state_service: StateService,
         kit_service: KitService,

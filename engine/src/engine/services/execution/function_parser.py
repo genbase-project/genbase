@@ -14,7 +14,7 @@ import cloudpickle
 from pydantic import BaseModel, create_model
 
 from engine.services.core.kit import Port
-from engine.services.storage.repository import RepoService
+from engine.services.storage.repository import WorkspaceService
 from loguru import logger
 import docker
 import tempfile

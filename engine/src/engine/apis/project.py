@@ -3,6 +3,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from engine.auth.dependencies import ACT_CREATE, ACT_LIST, ACT_READ, OBJ_PROJECT, require_action
 from engine.services.core.project import ProjectError, ProjectMetadata, ProjectService
 
 
@@ -70,26 +71,31 @@ class ProjectRouter:
 
     def _setup_routes(self):
         """Setup all routes"""
+
         self.router.add_api_route(
-            "",
+            "", # Corresponds to POST /project
             self._create_project,
             methods=["POST"],
             response_model=ProjectResponse,
-            summary="Create project"
+            summary="Create project",
+            dependencies=require_action(OBJ_PROJECT, ACT_CREATE)
         )
 
         self.router.add_api_route(
-            "/{project_id}",
+            "/{project_id}", # Corresponds to GET /project/{project_id}
             self._get_project,
             methods=["GET"],
             response_model=ProjectResponse,
-            summary="Get project by ID"
+            summary="Get project by ID",
+            dependencies=require_action(OBJ_PROJECT, ACT_READ)
         )
 
         self.router.add_api_route(
-            "",
+            "", # Corresponds to GET /project
             self._get_all_projects,
             methods=["GET"],
             response_model=List[ProjectResponse],
-            summary="Get all projects"
+            summary="Get all projects",
+            dependencies=require_action(OBJ_PROJECT, ACT_LIST)
         )
+

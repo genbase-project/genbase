@@ -31,19 +31,19 @@ class SearchResult:
     total_matches: int
     file_score: float
 
-class RepositoryError(Exception):
-    """Base exception for repository operations"""
+class WorkspaceError(Exception):
+    """Base exception for workspace operations"""
     pass
 
-class RepoNotFoundError(RepositoryError):
-    """Repository not found"""
+class WorkspaceNotFoundError(WorkspaceError):
+    """Workspace not found"""
     pass
 
-class RepoExistsError(RepositoryError):
-    """Repository already exists"""
+class WorkspaceExistsError(WorkspaceError):
+    """Workspace already exists"""
     pass
 
-class RepoService:
+class WorkspaceService:
     """Service for managing Git repositories"""
 
     def __init__(
@@ -51,7 +51,7 @@ class RepoService:
         base_path: str | Path
     ):
         """
-        Initialize repository service
+        Initialize workspace service
         
         Args:
             base_path: Base directory for storing repositories
@@ -63,14 +63,14 @@ class RepoService:
         # Create necessary directories
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-    def get_repo_path(self, repo_name: str) -> Path:
-        """Get repository path"""
-        return self.base_path / repo_name
+    def get_repo_path(self, workspace_name: str) -> Path:
+        """Get workspace path"""
+        return self.base_path / workspace_name
 
 
 
     def _init_git_repo(self, repo_path: Path) -> Repo:
-        """Initialize git repository with default configuration"""
+        """Initialize git workspace with default configuration"""
         repo = Repo.init(repo_path)
 
         with repo.config_writer() as git_config:
@@ -85,35 +85,35 @@ class RepoService:
 
         return repo
 
-    def create_repository(
+    def create_workspace(
         self,
-        repo_name: str,
+        workspace_name: str,
         content_file,
         filename: str,
         extract_func
     ) -> dict:
         """
-        Create a new repository from uploaded content
+        Create a new workspace from uploaded content
         
         Args:
-            repo_name: Name of the repository
-            content_file: File-like object containing repository content
+            workspace_name: Name of the workspace
+            content_file: File-like object containing workspace content
             filename: Original filename
             extract_func: Function to extract zip files
             
         Returns:
-            dict: Repository creation info
+            dict: Workspace creation info
             
         Raises:
-            RepoExistsError: If repository already exists
+            RepoExistsError: If workspace already exists
         """
-        repo_path = self.get_repo_path(repo_name)
+        repo_path = self.get_repo_path(workspace_name)
 
         if repo_path.exists():
-            raise RepoExistsError(f"Repository {repo_name} already exists")
+            raise WorkspaceExistsError(f"Workspace {workspace_name} already exists")
 
         try:
-            # Create repository directory
+            # Create workspace directory
             repo_path.mkdir(parents=True)
             temp_file = repo_path / filename
 
@@ -126,7 +126,7 @@ class RepoService:
                 extract_func(temp_file, repo_path)
                 temp_file.unlink()
 
-            # Initialize git repository
+            # Initialize git workspace
             try:
                 repo = self._init_git_repo(repo_path)
                 repo.git.add(A=True)
@@ -136,7 +136,7 @@ class RepoService:
 
 
             return {
-                "repo_name": repo_name,
+                "workspace_name": workspace_name,
                 "created_at": datetime.now().isoformat(),
                 "status": "success"
             }
@@ -144,30 +144,30 @@ class RepoService:
         except Exception as e:
             if repo_path.exists():
                 shutil.rmtree(repo_path)
-            raise RepositoryError(f"Failed to create repository: {str(e)}")
+            raise WorkspaceError(f"Failed to create workspace: {str(e)}")
 
     def list_repositories(self) -> List[str]:
         """List all repositories"""
         return [d.name for d in self.base_path.iterdir() if d.is_dir()]
 
 
-    def list_files(self, repo_name: str) -> List[str]:
+    def list_files(self, workspace_name: str) -> List[str]:
         """
-        List all non-hidden files in a repository, excluding the .git directory.
+        List all non-hidden files in a workspace, excluding the .git directory.
 
         Args:
-            repo_name: Repository name
+            workspace_name: Workspace name
 
         Returns:
-            List[str]: List of file paths relative to the repository root
+            List[str]: List of file paths relative to the workspace root
 
         Raises:
-            RepoNotFoundError: If repository doesn't exist
+            RepoNotFoundError: If workspace doesn't exist
         """
-        repo_path = self.get_repo_path(repo_name)
+        repo_path = self.get_repo_path(workspace_name)
 
         if not repo_path.exists():
-            raise RepoNotFoundError(f"Repository {repo_name} not found")
+            raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
 
         files = []
         # Iterate through items in the repo_path, skipping .git explicitly
@@ -182,51 +182,51 @@ class RepoService:
                 continue
         return files
 
-    def delete_repository(self, repo_name: str) -> None:
+    def delete_workspace(self, workspace_name: str) -> None:
         """
-        Delete a repository and its search index
+        Delete a workspace and its search index
         
         Args:
-            repo_name: Repository to delete
+            workspace_name: Workspace to delete
             
         Raises:
-            RepoNotFoundError: If repository doesn't exist
+            RepoNotFoundError: If workspace doesn't exist
         """
-        repo_path = self.get_repo_path(repo_name)
+        repo_path = self.get_repo_path(workspace_name)
 
         if not repo_path.exists():
-            raise RepoNotFoundError(f"Repository {repo_name} not found")
+            raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
 
         try:
             shutil.rmtree(repo_path)
         except Exception as e:
-            raise RepositoryError(f"Failed to delete repository: {str(e)}")
+            raise WorkspaceError(f"Failed to delete workspace: {str(e)}")
 
     def commit_changes(
         self,
-        repo_name: str,
+        workspace: str,
         commit_info: CommitInfo
     ) -> dict:
         """
-        Stage and commit changes in repository
+        Stage and commit changes in workspace
         
         Args:
-            repo_name: Repository name
+            workspace_name: Workspace name
             commit_info: Commit information
             
         Returns:
             dict: Commit result info
             
         Raises:
-            RepoNotFoundError: If repository doesn't exist
+            RepoNotFoundError: If workspace doesn't exist
         """
-        repo_path = self.get_repo_path(repo_name)
+        repo_path = self.get_repo_path(workspace)
 
         if not repo_path.exists():
-            raise RepoNotFoundError(f"Repository {repo_name} not found")
+            raise WorkspaceNotFoundError(f"Workspace {workspace} not found")
 
         try:
-            # Get or initialize repository
+            # Get or initialize workspace
             try:
                 repo = Repo(repo_path)
             except Exception:
@@ -278,23 +278,23 @@ class RepoService:
             }
 
         except GitCommandError as e:
-            raise RepositoryError(f"Git error: {str(e)}")
+            raise WorkspaceError(f"Git error: {str(e)}")
         except Exception as e:
-            raise RepositoryError(f"Failed to commit changes: {str(e)}")
+            raise WorkspaceError(f"Failed to commit changes: {str(e)}")
 
 
     def update_file(
         self,
-        repo_name: str,
+        workspace_name: str,
         file_path: str,
         content: str,
         path_validator
     ) -> dict:
         """
-        Update file content in repository
+        Update file content in workspace
         
         Args:
-            repo_name: Repository name
+            workspace_name: Workspace name
             file_path: Path to file
             content: New file content
             path_validator: Function to validate file path
@@ -303,15 +303,15 @@ class RepoService:
             dict: Update result info
             
         Raises:
-            RepoNotFoundError: If repository doesn't exist
+            RepoNotFoundError: If workspace doesn't exist
         """
-        repo_path = self.get_repo_path(repo_name)
+        repo_path = self.get_repo_path(workspace_name)
 
         if not repo_path.exists():
-            raise RepoNotFoundError(f"Repository {repo_name} not found")
+            raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
 
         if not path_validator(repo_path, file_path):
-            raise RepositoryError("Invalid file path")
+            raise WorkspaceError("Invalid file path")
 
         try:
             full_file_path = (repo_path / file_path).resolve()
@@ -344,28 +344,28 @@ class RepoService:
             if backup_path and backup_path.exists():
                 shutil.copy2(backup_path, full_file_path)
                 backup_path.unlink()
-            raise RepositoryError(f"Failed to update file: {str(e)}")
+            raise WorkspaceError(f"Failed to update file: {str(e)}")
 
 
-    def get_active_branch(self, repo_name: str) -> str:
+    def get_active_branch(self, workspace_name: str) -> str:
         """
-        Get the default branch name of a repository
+        Get the default branch name of a workspace
         
         Args:
-            repo_name: Name of the repository
+            workspace_name: Name of the workspace
             
         Returns:
             str: Name of the default branch (usually 'master' or 'main')
             
         Raises:
-            RepoNotFoundError: If repository doesn't exist
+            RepoNotFoundError: If workspace doesn't exist
         """
 
-        logger.info(f"Getting active branch for {repo_name}")
-        repo_path = self.get_repo_path(repo_name)
+        logger.info(f"Getting active branch for {workspace_name}")
+        repo_path = self.get_repo_path(workspace_name)
         
         if not repo_path.exists():
-            raise RepoNotFoundError(f"Repository {repo_name} not found")
+            raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
         
             
         try:
@@ -379,54 +379,54 @@ class RepoService:
 
             
         except Exception as e:
-            raise RepositoryError(f"Failed to get default branch: {str(e)}")
+            raise WorkspaceError(f"Failed to get default branch: {str(e)}")
 
     def add_submodule(
         self,
-        parent_repo_name: str,
-        child_repo_name: str,
+        parent_workspace_name: str,
+        child_workspace_name: str,
         path: str = None,
     ) -> dict:
         """
-        Add a repository as a submodule to another repository
+        Add a workspace as a submodule to another workspace
         
         Args:
-            parent_repo_name: Name of the parent repository
-            child_repo_name: Name of the repository to add as a submodule
-            path: Path within the parent repository where the submodule should be placed
-                If None, uses the child_repo_name as the path
+            parent_workspace_name: Name of the parent workspace
+            child_workspace_name: Name of the workspace to add as a submodule
+            path: Path within the parent workspace where the submodule should be placed
+                If None, uses the child_workspace_name as the path
         
         Returns:
             dict: Result information
         
         Raises:
-            RepoNotFoundError: If either repository doesn't exist
-            RepositoryError: If any error occurs during the operation
+            RepoNotFoundError: If either workspace doesn't exist
+            WorkspaceError: If any error occurs during the operation
         """
-        parent_repo_path = self.get_repo_path(parent_repo_name)
-        child_repo_path = self.get_repo_path(child_repo_name)
+        parent_repo_path = self.get_repo_path(parent_workspace_name)
+        child_repo_path = self.get_repo_path(child_workspace_name)
         
         # Validate repositories exist
         if not parent_repo_path.exists():
-            raise RepoNotFoundError(f"Parent repository {parent_repo_name} not found")
+            raise WorkspaceNotFoundError(f"Parent workspace {parent_workspace_name} not found")
         if not child_repo_path.exists():
-            raise RepoNotFoundError(f"Child repository {child_repo_name} not found")
+            raise WorkspaceNotFoundError(f"Child workspace {child_workspace_name} not found")
         
         # Determine submodule path
-        submodule_path = path or child_repo_name
+        submodule_path = path or child_workspace_name
         
         try:
-            # Get repository objects
+            # Get workspace objects
             parent_repo = Repo(parent_repo_path)
             
             # Get absolute path to child repo
             child_repo_abs_path = child_repo_path.absolute()
             
             # Get default branch name
-            default_branch = self.get_active_branch(child_repo_name)
+            default_branch = self.get_active_branch(child_workspace_name)
 
 
-            logger.info(f"Adding {child_repo_name} as submodule to {parent_repo_name} at {submodule_path}")
+            logger.info(f"Adding {child_workspace_name} as submodule to {parent_workspace_name} at {submodule_path}")
             
             # Add the submodule
             submodule = parent_repo.create_submodule(
@@ -439,53 +439,53 @@ class RepoService:
             # Commit the change
             author = Actor("Admin", "admin@genbase")
             commit = parent_repo.index.commit(
-                f"Add {child_repo_name} as submodule at {submodule_path}",
+                f"Add {child_workspace_name} as submodule at {submodule_path}",
                 author=author,
                 committer=author
             )
             
             return {
                 "status": "success",
-                "message": f"Added {child_repo_name} as submodule to {parent_repo_name}",
-                "parent_repo": parent_repo_name,
-                "child_repo": child_repo_name,
+                "message": f"Added {child_workspace_name} as submodule to {parent_workspace_name}",
+                "parent_repo": parent_workspace_name,
+                "child_repo": child_workspace_name,
                 "submodule_path": submodule_path,
                 "commit_hash": commit.hexsha
             }
             
         except GitCommandError as e:
-            raise RepositoryError(f"Git error while adding submodule: {str(e)}")
+            raise WorkspaceError(f"Git error while adding submodule: {str(e)}")
         except Exception as e:
-            raise RepositoryError(f"Failed to add submodule: {str(e)}")
+            raise WorkspaceError(f"Failed to add submodule: {str(e)}")
             
     def remove_submodule(
         self,
-        repo_name: str,
+        workspace_name: str,
         submodule_path: str
     ) -> dict:
         """
-        Remove a submodule from a repository
+        Remove a submodule from a workspace
         
         Args:
-            repo_name: Name of the repository containing the submodule
-            submodule_path: Path to the submodule within the repository
+            workspace_name: Name of the workspace containing the submodule
+            submodule_path: Path to the submodule within the workspace
             
         Returns:
             dict: Result information
             
         Raises:
-            RepoNotFoundError: If repository doesn't exist
-            RepositoryError: If any error occurs during the operation
+            RepoNotFoundError: If workspace doesn't exist
+            WorkspaceError: If any error occurs during the operation
         """
-        repo_path = self.get_repo_path(repo_name)
+        repo_path = self.get_repo_path(workspace_name)
         
         if not repo_path.exists():
-            raise RepoNotFoundError(f"Repository {repo_name} not found")
+            raise WorkspaceNotFoundError(f"Workspace {workspace_name} not found")
             
         full_submodule_path = (repo_path / submodule_path).resolve()
         
         if not full_submodule_path.exists():
-            raise RepositoryError(f"Submodule at path '{submodule_path}' not found")
+            raise WorkspaceError(f"Submodule at path '{submodule_path}' not found")
             
         try:
             repo = Repo(repo_path)
@@ -493,7 +493,7 @@ class RepoService:
             # Check if it's actually a submodule
             submodules = [sm.path for sm in repo.submodules]
             if submodule_path not in submodules:
-                raise RepositoryError(f"Path '{submodule_path}' is not a submodule")
+                raise WorkspaceError(f"Path '{submodule_path}' is not a submodule")
                 
             # 1. Deinit the submodule
             repo.git.submodule('deinit', '-f', submodule_path)
@@ -535,13 +535,13 @@ class RepoService:
                     
             return {
                 "status": "success",
-                "message": f"Removed submodule {submodule_path} from {repo_name}",
-                "repo_name": repo_name,
+                "message": f"Removed submodule {submodule_path} from {workspace_name}",
+                "workspace_name": workspace_name,
                 "submodule_path": submodule_path,
                 "commit_hash": commit.hexsha
             }
             
         except GitCommandError as e:
-            raise RepositoryError(f"Git error while removing submodule: {str(e)}")
+            raise WorkspaceError(f"Git error while removing submodule: {str(e)}")
         except Exception as e:
-            raise RepositoryError(f"Failed to remove submodule: {str(e)}")
+            raise WorkspaceError(f"Failed to remove submodule: {str(e)}")

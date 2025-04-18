@@ -271,7 +271,6 @@ class InternalToolManager:
                 
             # Get parameter type
             param_type = type_hints.get(param_name, Any)
-            logger.debug(f"Parameter '{param_name}' has type: {param_type}")
             
             # Convert type to JSON schema type
             try:

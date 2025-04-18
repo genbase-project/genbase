@@ -21,6 +21,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 
 # Import routers
+from engine.apis.authz import AuthzRouter
 from engine.apis.chat import ChatRouter
 from engine.apis.kit import KitRouter
 
@@ -28,7 +29,7 @@ from engine.apis.kit import KitRouter
 from engine.apis.model import ModelRouter
 from engine.apis.module import ModuleRouter
 from engine.apis.project import ProjectRouter
-from engine.apis.repository import RepositoryRouter
+from engine.apis.repository import WorkspaceRouter
 from engine.apis.resource import ResourceRouter
 from engine.apis.profile import ProfileRouter
 from engine.auth.schemas import UserCreate, UserRead, UserUpdate
@@ -47,7 +48,7 @@ from engine.services.execution.model import ModelService
 from engine.services.core.module import ModuleService
 from engine.services.core.project import ProjectService
 from engine.services.platform_rpyc_service import PlatformRPyCService
-from engine.services.storage.repository import RepoService
+from engine.services.storage.repository import WorkspaceService
 from engine.services.storage.resource import ResourceService
 from engine.services.execution.state import StateService
 from engine.services.execution.profile import ProfileService
@@ -77,7 +78,8 @@ class LogMiddleware(BaseHTTPMiddleware):
             if request.method in ["POST", "PUT", "PATCH"]:
                 try:
                     body = await request.body()
-                    logger.debug(f"Request body: {body.decode()}")
+                    if os.environ.get("DEV_MODE"):
+                        logger.debug(f"Request body: {body.decode()}")
                 except:
                     pass
                     
@@ -155,6 +157,7 @@ app.include_router(
     fastapi_users.get_register_router(UserRead, UserCreate),
     prefix="/auth",
     tags=["auth"],
+        dependencies=[Depends(fastapi_users.current_user(active=True, superuser=True))]
 )
 app.include_router(
     fastapi_users.get_reset_password_router(),
@@ -228,7 +231,7 @@ KIT_BASE_DIR.mkdir(exist_ok=True)
 
 api_key_service = ApiKeyService()
 # Initialize services
-repo_service = RepoService(
+repo_service = WorkspaceService(
     base_path=REPO_BASE_DIR
 )
 
@@ -269,14 +272,18 @@ profile_service = ProfileService(
     kit_service=kit_service
 )
 
+
 # Initialize routers
+authz_router = AuthzRouter()
+
+
 kit_router = KitRouter(
    kit_service=kit_service,
     prefix="/kit",
     
 )
 
-repo_router = RepositoryRouter(
+repo_router = WorkspaceRouter(
     repo_service=repo_service,
     prefix="/repository"
 )
@@ -324,6 +331,7 @@ llm_gateway_router = LLMGatewayRouter(
 
 
 
+
 # Include routers
 app.include_router(kit_router.router,     dependencies=[Depends(current_active_user)])
 app.include_router(module_router.router,     dependencies=[Depends(current_active_user)])
@@ -334,6 +342,7 @@ app.include_router(model_router.router,     dependencies=[Depends(current_active
 app.include_router(profile_router.router,     dependencies=[Depends(current_active_user)])
 app.include_router(embedding_router.router,     dependencies=[Depends(current_active_user)])
 
+app.include_router(authz_router.router,      dependencies=[Depends(current_active_user)])
 
 
 

@@ -82,7 +82,7 @@ class WorkspaceRouter:
             raise HTTPException(status_code=500, detail=str(e))
 
     async def _list_repos(self):
-        """List all repositories"""
+        """List all workspaces"""
         try:
             repos = self.service.list_repositories()
             return {"repositories": repos}

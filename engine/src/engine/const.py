@@ -12,8 +12,8 @@ load_dotenv()
 
 
 BASE_DATA_DIR = Path(os.getenv("DATA_DIR"))
-REPO_BASE_DIR = BASE_DATA_DIR / "repositories"
-KIT_BASE_DIR = BASE_DATA_DIR / "kit"
+REPO_BASE_DIR = BASE_DATA_DIR / "workspaces"
+KIT_BASE_DIR = BASE_DATA_DIR / "kits"
 VENV_BASE_DIR = BASE_DATA_DIR / "venvs"
 RPC_PORT = int(os.getenv("RPC_PORT", 18861))
 
